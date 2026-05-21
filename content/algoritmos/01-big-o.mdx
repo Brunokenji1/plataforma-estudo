@@ -1,0 +1,71 @@
+---
+titulo: "Big O Notation"
+trilha: "algoritmos"
+duracaoMin: 25
+dificuldade: "iniciante"
+referencias:
+  - "CLRS, cap. 3"
+  - "MIT OCW 6.006 — Lecture 1"
+---
+
+## Por que medimos algoritmos
+
+Quando dois algoritmos resolvem o mesmo problema, precisamos de uma forma objetiva de comparar
+qual deles escala melhor. Cronometrar não basta: o tempo depende do hardware, da linguagem, da
+carga do sistema. A notação Big O abstrai esses detalhes e olha apenas para como o número de
+operações cresce em função do tamanho da entrada `n`.
+
+<Insight>
+  Big O descreve o **comportamento assintótico** — o que acontece quando `n` cresce, não em casos
+  pequenos. Para `n` pequeno, um algoritmo `O(n²)` pode até ser mais rápido que um `O(n log n)`.
+</Insight>
+
+## Definição informal
+
+Dizemos que um algoritmo é `O(f(n))` quando, a partir de algum `n` suficientemente grande, o
+número de operações cresce no máximo proporcionalmente a `f(n)`. Em outras palavras, `f(n)` é um
+**limite superior** assintótico.
+
+<ComplexidadeBox melhor="O(1)" media="O(n)" pior="O(n²)" espaco="O(n)" />
+
+## Famílias mais comuns
+
+- `O(1)` — constante. Acesso por índice em array.
+- `O(log n)` — logarítmica. Busca binária.
+- `O(n)` — linear. Percorrer uma lista uma vez.
+- `O(n log n)` — log-linear. Merge sort, heap sort.
+- `O(n²)` — quadrática. Bubble sort, par-a-par.
+- `O(2ⁿ)` — exponencial. Subconjuntos, força bruta em problemas NP.
+
+<Aviso>
+  Cuidado com loops aninhados sobre a mesma entrada. Dois `for` sobre `n` elementos viram `O(n²)`
+  mesmo quando o corpo do laço é simples.
+</Aviso>
+
+## Exemplo prático
+
+```ts
+function temDuplicado(arr: number[]): boolean {
+  for (let i = 0; i < arr.length; i++) {
+    for (let j = i + 1; j < arr.length; j++) {
+      if (arr[i] === arr[j]) return true;
+    }
+  }
+  return false;
+}
+```
+
+A versão acima é `O(n²)` no pior caso. Usando um `Set`, conseguimos reduzir para `O(n)` em troca
+de `O(n)` de espaço extra.
+
+<Quiz
+  pergunta="Qual a complexidade de tempo da busca binária em um array ordenado de tamanho n?"
+  opcoes={["O(1)", "O(log n)", "O(n)", "O(n log n)"]}
+  resposta={1}
+  explicacao="A cada iteração, a busca binária descarta metade do espaço de busca, levando a log₂(n) passos."
+/>
+
+## Próximos passos
+
+Nas próximas lições vamos analisar algoritmos de ordenação, estruturas de dados e como combinar a
+análise de tempo com a de espaço para escolher a implementação certa.

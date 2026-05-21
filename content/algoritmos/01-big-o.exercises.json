@@ -1,0 +1,25 @@
+[
+  {
+    "id": "bigo-1",
+    "enunciado": "Qual é a complexidade de tempo de um laço único que percorre todos os elementos de um array de tamanho n?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+    "resposta": 2,
+    "explicacao": "Um único loop que executa n iterações é linear: O(n)."
+  },
+  {
+    "id": "bigo-2",
+    "enunciado": "Dois laços aninhados, cada um indo de 0 a n, geram uma complexidade O(n log n).",
+    "tipo": "verdadeiro-falso",
+    "resposta": "falso",
+    "explicacao": "Loops aninhados sobre n produzem n × n = O(n²), não O(n log n)."
+  },
+  {
+    "id": "bigo-3",
+    "enunciado": "Qual é a complexidade da busca binária em um array ordenado de tamanho n?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    "resposta": 1,
+    "explicacao": "A busca binária divide o espaço de busca pela metade a cada passo, totalizando log₂(n) operações."
+  }
+]
