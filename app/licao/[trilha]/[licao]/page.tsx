@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { LicaoNav } from '@/components/LicaoNav';
 import {
   extractHeadings,
@@ -76,8 +77,11 @@ export default async function LicaoPage({
       </Link>
 
       <header className="mb-10 border-b border-zinc-900 pb-6">
-        <h1 className="mb-3 text-4xl font-bold tracking-tight text-zinc-50">{licao.titulo}</h1>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <h1 className="text-4xl font-bold tracking-tight text-zinc-50">{licao.titulo}</h1>
+          <LanguageToggle />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-zinc-500">
           <Badge variant={difVariant[licao.dificuldade]}>{difLabel[licao.dificuldade]}</Badge>
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />

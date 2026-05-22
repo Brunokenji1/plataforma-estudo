@@ -67,11 +67,16 @@ mdx-components.tsx                  # hook do @next/mdx
   "titulo": "Banco de Dados",
   "descricao": "Modelagem relacional, SQL e normalização.",
   "cor": "#a78bfa",
-  "ordem": ["01-modelo-relacional", "02-sql-basico"]
+  "licoes": [
+    { "slug": "01-modelo-relacional", "ordem": 1 },
+    { "slug": "02-sql-basico", "ordem": 2, "prerequisitos": ["01-modelo-relacional"] }
+  ]
 }
 ```
 
-3. Adicione lições conforme a próxima seção. Apenas lições listadas em `ordem` aparecem na trilha.
+- `cor` é opcional (default `#06b6d4`).
+- `prerequisitos` (opcional) lista slugs que precisam estar concluídos antes da lição ficar liberada.
+- A ordem na lista é dada pelo campo `ordem`; só lições presentes aqui aparecem na trilha.
 
 A trilha vai aparecer automaticamente na home na próxima execução de `pnpm dev` ou `pnpm build`.
 
@@ -146,8 +151,43 @@ Estes componentes ficam globais dentro de qualquer `.mdx` em `content/` — não
 - `<Insight>...</Insight>` — callout ciano para insights
 - `<Aviso>...</Aviso>` — callout âmbar para alertas
 - `<ComplexidadeBox melhor media pior espaco? />` — caixa de complexidade
+- `<CodeSwap>` + `<Code lang="...">` — toggle de linguagem em blocos de código (Java / C++ / Python / TypeScript)
 
 Para registrar mais, edite [components/MDXComponents.tsx](components/MDXComponents.tsx).
+
+### `<CodeSwap>` — código em múltiplas linguagens
+
+Use quando o mesmo conceito tem implementação em mais de uma linguagem. O componente renderiza tabs e a escolha do usuário persiste em `localStorage` (`techstudy-language`), valendo para todas as lições.
+
+````mdx
+<CodeSwap>
+  <Code lang="java">
+```java
+public int somar(int[] arr) {
+    int s = 0;
+    for (int x : arr) s += x;
+    return s;
+}
+```
+  </Code>
+  <Code lang="cpp">
+```cpp
+int somar(const std::vector<int>& v) {
+    int s = 0;
+    for (int x : v) s += x;
+    return s;
+}
+```
+  </Code>
+</CodeSwap>
+````
+
+Regras:
+
+- Se você incluir só uma linguagem dentro do `<CodeSwap>`, o componente renderiza sem tabs.
+- Linguagens suportadas: `java`, `cpp`, `python`, `typescript`.
+- A página de lição também expõe um `<LanguageToggle>` no header, que controla o mesmo store.
+- **Não use** `<CodeSwap>` para código específico de uma linguagem (ex.: trecho do OpenJDK, header da STL). Nesses casos, use um bloco markdown normal.
 
 ## Sistema de progresso
 

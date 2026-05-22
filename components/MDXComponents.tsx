@@ -1,6 +1,8 @@
 import type { MDXComponents } from 'mdx/types';
 import { Aviso } from './Aviso';
+import { Code } from './Code';
 import { CodeBlock } from './CodeBlock';
+import { CodeSwap } from './CodeSwap';
 import { ComplexidadeBox } from './ComplexidadeBox';
 import { Insight } from './Insight';
 import { Quiz } from './Quiz';
@@ -10,6 +12,8 @@ export const mdxComponents: MDXComponents = {
   Insight,
   Aviso,
   ComplexidadeBox,
+  CodeSwap,
+  Code,
   h1: (props) => (
     <h1
       {...props}
