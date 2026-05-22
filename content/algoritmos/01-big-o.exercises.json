@@ -1,25 +1,87 @@
 [
   {
-    "id": "bigo-1",
-    "enunciado": "Qual é a complexidade de tempo de um laço único que percorre todos os elementos de um array de tamanho n?",
+    "id": "bigo-01",
+    "enunciado": "Qual a complexidade de tempo do código abaixo?\n\n```java\nfor (int i = 0; i < n; i++) {\n    System.out.println(i);\n}\nfor (int j = 0; j < n; j++) {\n    System.out.println(j);\n}\n```",
     "tipo": "multipla-escolha",
-    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+    "opcoes": ["O(1)", "O(n)", "O(n²)", "O(2n²)"],
+    "resposta": 1,
+    "explicacao": "Dois loops sequenciais (não aninhados) executam n + n = 2n operações. Big O ignora constantes, então 2n = O(n). Loops em sequência SOMAM iterações, não multiplicam — multiplicar só acontece quando estão aninhados."
+  },
+  {
+    "id": "bigo-02",
+    "enunciado": "Qual a complexidade deste código?\n\n```java\nfor (int i = 0; i < n; i++) {\n    for (int j = 0; j < n; j++) {\n        System.out.println(i + j);\n    }\n}\n```",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(n)", "O(n log n)", "O(n²)", "O(2n)"],
     "resposta": 2,
-    "explicacao": "Um único loop que executa n iterações é linear: O(n)."
+    "explicacao": "Loop externo executa n vezes. Para cada iteração do externo, o interno executa n vezes. Total: n × n = n² operações. Loops aninhados multiplicam o número de iterações."
   },
   {
-    "id": "bigo-2",
-    "enunciado": "Dois laços aninhados, cada um indo de 0 a n, geram uma complexidade O(n log n).",
-    "tipo": "verdadeiro-falso",
-    "resposta": "falso",
-    "explicacao": "Loops aninhados sobre n produzem n × n = O(n²), não O(n log n)."
+    "id": "bigo-03",
+    "enunciado": "Sobre Big O, é correto afirmar:",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Big O mede o tempo exato de execução em milissegundos",
+      "Big O descreve o comportamento do algoritmo no melhor caso por padrão",
+      "Big O descreve o limite superior de crescimento, ignorando constantes",
+      "Big O depende da linguagem e do hardware usado"
+    ],
+    "resposta": 2,
+    "explicacao": "Big O é uma medida assintótica do crescimento da função, independente de hardware, linguagem ou implementação. Por padrão, refere-se ao pior caso, e ignora constantes multiplicativas e termos de menor ordem."
   },
   {
-    "id": "bigo-3",
-    "enunciado": "Qual é a complexidade da busca binária em um array ordenado de tamanho n?",
+    "id": "bigo-04",
+    "enunciado": "Qual a complexidade deste código?\n\n```java\nint i = n;\nwhile (i > 1) {\n    System.out.println(i);\n    i /= 2;\n}\n```",
     "tipo": "multipla-escolha",
     "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
     "resposta": 1,
-    "explicacao": "A busca binária divide o espaço de busca pela metade a cada passo, totalizando log₂(n) operações."
+    "explicacao": "A cada iteração, i é dividido por 2. Partindo de n, após k iterações temos i = n/2^k. O loop para quando i ≤ 1, ou seja, quando k = log₂(n). Sempre que uma variável é dividida ou multiplicada por uma constante a cada iteração, temos comportamento logarítmico."
+  },
+  {
+    "id": "bigo-05",
+    "enunciado": "Verdadeiro ou falso: se um algoritmo é O(n), ele também é O(n²).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Big O é um limite SUPERIOR, não uma estimativa exata. Se f(n) cresce no máximo como n, então também cresce no máximo como n² (que cresce mais rápido). Tecnicamente correto, mas pouco útil — por isso na prática usamos o limite mais apertado possível. Para limites apertados existe a notação Θ (Theta)."
+  },
+  {
+    "id": "bigo-06",
+    "enunciado": "Um problema de competição informa que `n ≤ 10⁵` e o tempo limite é 1 segundo. Qual a MAIOR complexidade que provavelmente passará dentro do tempo?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(n!)", "O(n²)", "O(n log n)", "O(2ⁿ)"],
+    "resposta": 2,
+    "explicacao": "Para n = 10⁵, uma solução O(n²) faria 10¹⁰ operações — muito além das ~10⁸ operações/segundo de um juiz típico. O(n log n) faz ~10⁵ × 17 ≈ 1,7 × 10⁶ operações, confortavelmente dentro do limite. O(n²) só funciona até cerca de n = 5.000 num limite de 1s."
+  },
+  {
+    "id": "bigo-07",
+    "enunciado": "Qual a complexidade do código abaixo?\n\n```java\nfor (int i = 0; i < n; i++) {\n    for (int j = i; j < n; j++) {\n        System.out.println(i + j);\n    }\n}\n```",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(n)", "O(n log n)", "O(n²)", "O(n³)"],
+    "resposta": 2,
+    "explicacao": "O loop interno começa em j = i, não em 0. O total de iterações é n + (n-1) + (n-2) + ... + 1 = n(n+1)/2. Big O ignora constantes, então isso é O(n²). É um erro comum achar que 'metade do trabalho' significa metade da complexidade — em Big O, n²/2 e n² são equivalentes."
+  },
+  {
+    "id": "bigo-08",
+    "enunciado": "Qual a complexidade de buscar uma chave em um `HashMap<String, Integer>` do Java, no caso médio?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    "resposta": 0,
+    "explicacao": "HashMap usa hashing para acesso direto: a chave é convertida em um índice de array e acessada em tempo constante. No caso médio, get() e put() são O(1). No PIOR caso (muitas colisões), pode degradar — desde o Java 8, quando um bucket vira árvore, vai pra O(log n) em vez de O(n)."
+  },
+  {
+    "id": "bigo-09",
+    "enunciado": "Qual a complexidade total deste código?\n\n```java\nfor (int i = 0; i < n; i++) {       // loop A\n    System.out.println(i);\n}\nfor (int i = 0; i < n; i++) {       // loop B\n    for (int j = 0; j < n; j++) {\n        System.out.println(i * j);\n    }\n}\n```",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(n)", "O(n + n²)", "O(n²)", "O(n³)"],
+    "resposta": 2,
+    "explicacao": "Loop A é O(n), loop B é O(n²). Quando temos blocos em sequência, somamos: O(n) + O(n²) = O(n² + n). Big O fica com o termo dominante: O(n²). Para n grande, n² supera completamente n, então o termo linear é absorvido. Escrever 'O(n + n²)' é correto mas não está na forma simplificada."
+  },
+  {
+    "id": "bigo-10",
+    "enunciado": "Verdadeiro ou falso: O(n log n) é mais rápido que O(n²) para n grande.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Para n = 10⁶: n log n ≈ 2 × 10⁷, enquanto n² = 10¹². Diferença de 5 ordens de magnitude. Isso é exatamente o motivo de algoritmos como Merge Sort (O(n log n)) serem usados em vez de Bubble Sort (O(n²)) para datasets grandes. Cuidado: para n PEQUENO, o oposto pode ser verdade por causa das constantes."
   }
 ]

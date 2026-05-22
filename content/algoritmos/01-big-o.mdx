@@ -1,71 +1,290 @@
 ---
-titulo: "Big O Notation"
+titulo: "Big O Notation: Como Medir Algoritmos Sem Cronômetro"
 trilha: "algoritmos"
-duracaoMin: 25
+duracaoMin: 35
 dificuldade: "iniciante"
 referencias:
-  - "CLRS, cap. 3"
-  - "MIT OCW 6.006 — Lecture 1"
+  - "MIT 6.006 Introduction to Algorithms (Spring 2020), Lecture 1 — Jason Ku"
+  - "MIT 6.046J Lecture 2 — Erik Demaine"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 3 (Asymptotic Notation)"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 1.4"
 ---
 
-## Por que medimos algoritmos
+## Por que isso importa
 
-Quando dois algoritmos resolvem o mesmo problema, precisamos de uma forma objetiva de comparar
-qual deles escala melhor. Cronometrar não basta: o tempo depende do hardware, da linguagem, da
-carga do sistema. A notação Big O abstrai esses detalhes e olha apenas para como o número de
-operações cresce em função do tamanho da entrada `n`.
+Imagina dois programadores resolvendo o mesmo problema: buscar um nome em uma lista de 100 milhões de usuários do Instagram.
+
+- **Algoritmo A**: percorre a lista do início ao fim. Para 100M de usuários, faz 100M de comparações.
+- **Algoritmo B**: usa busca binária em uma lista ordenada. Para 100M de usuários, faz ~27 comparações.
+
+A diferença não é "B é um pouco mais rápido". É **B termina antes do A começar**. E quando a lista cresce pra 1 bilhão? A vira lento demais pra ser usado em produção. B continua fazendo ~30 comparações.
+
+**Big O é a linguagem que descreve esse comportamento.** Não mede segundos no cronômetro — mede **como o tempo cresce conforme a entrada cresce**.
 
 <Insight>
-  Big O descreve o **comportamento assintótico** — o que acontece quando `n` cresce, não em casos
-  pequenos. Para `n` pequeno, um algoritmo `O(n²)` pode até ser mais rápido que um `O(n log n)`.
+Cronômetro mede uma execução em uma máquina específica, num dia específico, com uma carga específica. Big O mede o algoritmo em si — independente de hardware, linguagem ou compilador. É por isso que entrevistas, artigos científicos e o ICPC falam em Big O, não em milissegundos.
 </Insight>
+
+---
 
 ## Definição informal
 
-Dizemos que um algoritmo é `O(f(n))` quando, a partir de algum `n` suficientemente grande, o
-número de operações cresce no máximo proporcionalmente a `f(n)`. Em outras palavras, `f(n)` é um
-**limite superior** assintótico.
+Big O descreve **o limite superior da taxa de crescimento** de uma função.
 
-<ComplexidadeBox melhor="O(1)" media="O(n)" pior="O(n²)" espaco="O(n)" />
+Quando dizemos que um algoritmo é **O(n)**, estamos dizendo: "o tempo de execução cresce **no máximo proporcionalmente** ao tamanho da entrada n, ignorando constantes e termos menores".
 
-## Famílias mais comuns
+Por que ignorar constantes? Porque para entradas grandes, elas somem na conta:
 
-- `O(1)` — constante. Acesso por índice em array.
-- `O(log n)` — logarítmica. Busca binária.
-- `O(n)` — linear. Percorrer uma lista uma vez.
-- `O(n log n)` — log-linear. Merge sort, heap sort.
-- `O(n²)` — quadrática. Bubble sort, par-a-par.
-- `O(2ⁿ)` — exponencial. Subconjuntos, força bruta em problemas NP.
+- Função real: `f(n) = 5n + 100`
+- Para n = 10: f(n) = 150 → a constante 100 domina
+- Para n = 1.000.000: f(n) ≈ 5.000.100 → o 100 é irrelevante
+
+Conforme **n → ∞**, o termo dominante é o que importa. Big O captura isso.
+
+---
+
+## Definição formal
+
+> Dizemos que **f(n) = O(g(n))** se existem constantes positivas **c** e **n₀** tais que **0 ≤ f(n) ≤ c · g(n)** para todo **n ≥ n₀**.
+
+Em português claro: a partir de um certo ponto (n₀), a função f nunca passa de uma versão escalada (por c) da função g.
+
+```java
+// Exemplo: provar que f(n) = 5n + 100 é O(n)
+// Escolha c = 6, n₀ = 100
+// Para n ≥ 100:  5n + 100 ≤ 5n + n = 6n  ✓
+// Logo, f(n) = O(n)
+```
 
 <Aviso>
-  Cuidado com loops aninhados sobre a mesma entrada. Dois `for` sobre `n` elementos viram `O(n²)`
-  mesmo quando o corpo do laço é simples.
+Big O é um **limite superior**, não uma estimativa exata. Tecnicamente, qualquer algoritmo O(n) também é O(n²) e O(n³) — a afirmação continua verdadeira, só não é apertada. Na prática, quando alguém diz "é O(n)", normalmente quer dizer Θ(n) — limite apertado dos dois lados. Não vamos brigar com a convenção, mas é bom saber.
 </Aviso>
 
-## Exemplo prático
+### As três notações (para você reconhecer)
 
-```ts
-function temDuplicado(arr: number[]): boolean {
-  for (let i = 0; i < arr.length; i++) {
-    for (let j = i + 1; j < arr.length; j++) {
-      if (arr[i] === arr[j]) return true;
-    }
-  }
-  return false;
+| Notação | Significado | Analogia |
+|---|---|---|
+| **O(g(n))** | Limite superior | "no máximo isso" |
+| **Ω(g(n))** | Limite inferior | "no mínimo isso" |
+| **Θ(g(n))** | Limite apertado | "exatamente nessa ordem" |
+
+O CLRS é rigoroso com a distinção. Na engenharia do dia a dia, todo mundo fala "Big O" pra tudo.
+
+---
+
+## As classes de complexidade que você precisa decorar
+
+Da mais rápida para a mais lenta:
+
+| Notação | Nome | Exemplo típico |
+|---|---|---|
+| O(1) | Constante | Acesso a `array[i]`, `HashMap.get()` |
+| O(log n) | Logarítmica | Busca binária, altura de árvore balanceada |
+| O(n) | Linear | Percorrer uma lista uma vez |
+| O(n log n) | Linearítmica | Merge sort, Quick sort (caso médio) |
+| O(n²) | Quadrática | Bubble sort, comparar todos os pares |
+| O(n³) | Cúbica | Multiplicação de matrizes ingênua |
+| O(2ⁿ) | Exponencial | Fibonacci recursivo ingênuo, subset sum |
+| O(n!) | Fatorial | Permutações, força bruta no caixeiro viajante |
+
+<Insight>
+Tabela mental do MIT 6.006: numa máquina de 1 GHz fazendo 1 operação por ciclo, **n = 1000**:
+O(1) = 1ns · O(log n) = 10ns · O(n) = 1µs · O(n log n) = 10µs · O(n²) = 1ms · O(2ⁿ) ≈ **10³⁰¹ milênios**. Existem ~10⁸⁰ partículas no universo observável. Algoritmos exponenciais são inviáveis bem antes do que sua intuição sugere.
+</Insight>
+
+---
+
+## Como analisar código Java na prática
+
+### O(1) — Constante
+
+```java
+public int primeiroElemento(int[] arr) {
+    return arr[0];  // 1 operação, independente do tamanho
 }
 ```
 
-A versão acima é `O(n²)` no pior caso. Usando um `Set`, conseguimos reduzir para `O(n)` em troca
-de `O(n)` de espaço extra.
+Não importa se `arr` tem 10 ou 10 milhões: a função faz a mesma coisa.
+
+<ComplexidadeBox melhor="O(1)" media="O(1)" pior="O(1)" />
+
+### O(n) — Linear
+
+```java
+public int somaTotal(int[] arr) {
+    int soma = 0;
+    for (int x : arr) {       // executa n vezes
+        soma += x;             // O(1) por iteração
+    }
+    return soma;
+}
+```
+
+Um loop que toca cada elemento uma vez: O(n).
+
+<ComplexidadeBox melhor="O(n)" media="O(n)" pior="O(n)" />
+
+### O(n²) — Quadrática
+
+```java
+public boolean temDuplicata(int[] arr) {
+    for (int i = 0; i < arr.length; i++) {        // n vezes
+        for (int j = i + 1; j < arr.length; j++) { // até n vezes
+            if (arr[i] == arr[j]) return true;
+        }
+    }
+    return false;
+}
+```
+
+Loop aninhado sobre o mesmo array → O(n²). O número exato de comparações é n·(n-1)/2, mas em Big O isso é O(n²).
+
+<Aviso>
+"Loop aninhado" nem sempre é O(n²). Se o loop interno depende do externo de forma logarítmica (ex.: `j *= 2`), você cai em O(n log n). Conte as iterações, não os `for`s.
+</Aviso>
+
+### O(log n) — Logarítmica
+
+```java
+public int buscaBinaria(int[] arr, int alvo) {
+    int lo = 0, hi = arr.length - 1;
+    while (lo <= hi) {
+        int meio = (lo + hi) >>> 1;
+        if (arr[meio] == alvo) return meio;
+        if (arr[meio] < alvo) lo = meio + 1;
+        else hi = meio - 1;
+    }
+    return -1;
+}
+```
+
+A cada iteração, o espaço de busca cai pela metade. Para n = 1.000.000, precisamos de ~20 iterações (log₂ 1.000.000 ≈ 20).
+
+<ComplexidadeBox melhor="O(1)" media="O(log n)" pior="O(log n)" />
+
+### O(n log n) — Linearítmica
+
+```java
+public void mergeSort(int[] arr, int lo, int hi) {
+    if (lo >= hi) return;
+    int meio = (lo + hi) >>> 1;
+    mergeSort(arr, lo, meio);     // T(n/2)
+    mergeSort(arr, meio + 1, hi); // T(n/2)
+    merge(arr, lo, meio, hi);     // O(n)
+}
+// Recorrência: T(n) = 2·T(n/2) + O(n)  →  T(n) = O(n log n)
+```
+
+A recorrência é resolvida pelo **Teorema Mestre** (CLRS cap. 4), assunto de uma lição futura.
+
+---
+
+## Regras práticas para analisar qualquer código
+
+1. **Sequências somam, mas o maior domina**: `O(n) + O(n²) = O(n²)`. Big O sempre fica com o termo mais pesado.
+
+2. **Loops aninhados multiplicam**: loop externo de n iterações com loop interno de m iterações → O(n·m).
+
+3. **Constantes morrem**: `O(3n + 50) = O(n)`. Não escreva `O(2n)` em prova de algoritmos — escreva `O(n)`.
+
+4. **Chamadas em sequência somam**: se você chama uma função O(n log n) seguida de uma O(n²), o total é O(n²).
+
+5. **Divisão por constante = logarítmico**: variável que é dividida por 2 (ou 3, ou 10) a cada iteração → log n iterações.
+
+---
+
+## Pegadinhas que derrubam até gente boa
+
+### Pior, médio e melhor caso são coisas diferentes
+
+```java
+public int buscar(int[] arr, int alvo) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == alvo) return i;
+    }
+    return -1;
+}
+```
+
+- **Melhor caso**: alvo é `arr[0]` → O(1)
+- **Pior caso**: alvo não existe ou está no fim → O(n)
+- **Caso médio**: aproximadamente n/2 → O(n)
+
+Quando falamos "complexidade do algoritmo" sem qualificar, geralmente nos referimos ao **pior caso**.
+
+### Constantes importam na prática
+
+```java
+// Algoritmo A: O(n) com constante alta — 1000n operações
+// Algoritmo B: O(n²) com constante baixa — n² operações
+// Para n = 500: A faz 500.000 ops, B faz 250.000 ops → B vence
+// Para n = 10.000: A faz 10M, B faz 100M → A vence
+```
+
+Big O ignora constantes, mas seu programa não. **Para entradas pequenas, algoritmos "piores" podem ser melhores.** É por isso que `Arrays.sort()` em Java usa insertion sort (O(n²)) para sublistas pequenas dentro do quicksort.
+
+### Complexidade de espaço também existe
+
+Big O também mede memória usada. Um algoritmo pode ser O(n) em tempo e O(n²) em espaço, ou vice-versa. **Sempre pergunte: qual recurso estamos medindo?**
+
+---
+
+## Quiz rápido
 
 <Quiz
-  pergunta="Qual a complexidade de tempo da busca binária em um array ordenado de tamanho n?"
-  opcoes={["O(1)", "O(log n)", "O(n)", "O(n log n)"]}
+  pergunta="Qual a complexidade de tempo deste código?"
+  opcoes={[
+    "O(1)",
+    "O(log n)",
+    "O(n)",
+    "O(n²)"
+  ]}
   resposta={1}
-  explicacao="A cada iteração, a busca binária descarta metade do espaço de busca, levando a log₂(n) passos."
+  explicacao="A variável i começa em 1 e é multiplicada por 2 a cada iteração. O loop executa log₂(n) vezes antes de i ultrapassar n. Sempre que uma variável é multiplicada/dividida por uma constante, temos comportamento logarítmico."
 />
 
-## Próximos passos
+```java
+// Código do quiz acima
+for (int i = 1; i < n; i *= 2) {
+    System.out.println(i);
+}
+```
 
-Nas próximas lições vamos analisar algoritmos de ordenação, estruturas de dados e como combinar a
-análise de tempo com a de espaço para escolher a implementação certa.
+<Quiz
+  pergunta="Verdadeiro ou falso: O(2n) é equivalente a O(n)."
+  opcoes={["Verdadeiro", "Falso"]}
+  resposta={0}
+  explicacao="Big O ignora constantes multiplicativas. 2n cresce na mesma taxa que n — apenas com inclinação diferente. Por definição, existe c=2 e n₀=1 tal que 2n ≤ 2·n para todo n ≥ 1, logo 2n = O(n)."
+/>
+
+---
+
+## Tabela ICPC: o que cabe em 1 segundo
+
+Numa máquina típica de juiz online (~10⁸ operações simples por segundo), com tempo limite de 1s:
+
+| n máximo | Complexidade aceitável |
+|---|---|
+| n ≤ 10 | O(n!), O(n⁶) |
+| n ≤ 20 | O(2ⁿ · n) |
+| n ≤ 100 | O(n⁴) |
+| n ≤ 500 | O(n³) |
+| n ≤ 5.000 | O(n²) |
+| n ≤ 10⁵ | O(n log n) |
+| n ≤ 10⁶ | O(n) |
+| n ≤ 10⁸ | O(log n), O(1) |
+
+Essa tabela é **a primeira coisa** que você olha ao ler um enunciado de competição: o valor de n te diz qual complexidade você precisa atingir. Se o problema diz `n ≤ 10⁵`, descarte qualquer solução O(n²) — não vai passar.
+
+---
+
+## Recap
+
+- **Big O** = limite superior de crescimento, ignorando constantes e termos menores
+- **Você analisa código contando iterações dominantes**, não cronômetro
+- **Loops aninhados multiplicam**, loops sequenciais somam (e o maior domina)
+- **Divisão por constante → log n**, dobrar → log n também
+- **Pior caso é a leitura padrão** de complexidade
+- **Big O não substitui benchmark**: para entradas pequenas, constantes podem inverter o resultado
+
+Próxima lição da trilha: **Arrays vs Listas Ligadas** — onde a teoria de Big O encontra a realidade de cache de CPU e por que `ArrayList` é quase sempre melhor que `LinkedList` na vida real.

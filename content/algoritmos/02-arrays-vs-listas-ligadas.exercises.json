@@ -1,0 +1,117 @@
+[
+  {
+    "id": "arr-list-01",
+    "enunciado": "Você está implementando uma fila (FIFO) que vai receber milhões de operações `offer` e `poll`. Qual é a MELHOR escolha em Java?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "new LinkedList<>()",
+      "new ArrayDeque<>()",
+      "new ArrayList<>()",
+      "new Stack<>()"
+    ],
+    "resposta": 1,
+    "explicacao": "O próprio Javadoc do Oracle afirma que ArrayDeque 'is likely to be faster than LinkedList when used as a queue'. ArrayDeque usa um circular buffer em cima de um array, mantendo localidade de cache mesmo com operações nas duas pontas. LinkedList tem nós espalhados pelo heap (cache miss a cada poll), ArrayList tem add(0,...) custando O(n), e Stack é uma classe legada sincronizada (lenta e não recomendada)."
+  },
+  {
+    "id": "arr-list-02",
+    "enunciado": "Qual a complexidade REAL de `LinkedList.add(index, element)` quando `index` está no meio da lista?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+    "resposta": 2,
+    "explicacao": "A inserção em si (ajustar 4 referências) é O(1), mas o método `node(index)` precisa percorrer a lista até o índice — isso é O(n). O total é O(n). É um erro clássico de entrevista dizer 'O(1) pra inserir no meio' — só seria O(1) se você já tivesse uma referência ao nó, o que a API pública da LinkedList do Java não expõe."
+  },
+  {
+    "id": "arr-list-03",
+    "enunciado": "Verdadeiro ou falso: iterar com `for-each` é igualmente rápido em ArrayList<Integer> e LinkedList<Integer>, já que ambos são O(n).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Big O ignora constantes, mas elas dominam aqui. ArrayList armazena referências contiguamente — o CPU traz cache lines de 64 bytes de uma vez, e o prefetcher adianta as próximas. LinkedList tem nós em endereços aleatórios do heap, causando cache miss a cada `node.next`. Na prática, iterar ArrayList chega a ser 10-100x mais rápido. Os dois são O(n), mas com fatores constantes drasticamente diferentes."
+  },
+  {
+    "id": "arr-list-04",
+    "enunciado": "Por que `ArrayList.add(elemento)` (sem índice) é chamado de O(1) AMORTIZADO?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque a maioria das adições é O(1), mas ocasionalmente o array precisa ser realocado (O(n)). Distribuindo o custo das realocações ao longo de muitas operações, o custo médio fica constante.",
+      "Porque a JVM faz lazy initialization da capacidade.",
+      "Porque o garbage collector compensa o custo das alocações.",
+      "Porque a JIT inlina a chamada."
+    ],
+    "resposta": 0,
+    "explicacao": "Quando o array interno enche, o ArrayList aloca um novo array 1.5x maior e copia tudo (O(n) naquela operação). Mas como a capacidade cresce exponencialmente, isso acontece cada vez mais raramente. Somando o custo de N adições, o total é O(n), então o custo amortizado por adição é O(1). É o mesmo raciocínio usado para tabelas hash dinâmicas."
+  },
+  {
+    "id": "arr-list-05",
+    "enunciado": "Você precisa processar 10 milhões de inteiros e calcular a soma. Qual estrutura entrega a MELHOR performance?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "LinkedList<Integer>",
+      "ArrayList<Integer>",
+      "int[]",
+      "HashSet<Integer>"
+    ],
+    "resposta": 2,
+    "explicacao": "int[] vence por margens grandes em três frentes: (1) zero overhead de boxing — cada int ocupa 4 bytes vs ~16+ bytes de um Integer; (2) memória 100% contígua, maximizando cache hits; (3) o JIT consegue vetorizar o loop com instruções SIMD (somar 4 ou 8 ints por ciclo). ArrayList<Integer> seria segundo lugar (ainda contíguo, mas com boxing). LinkedList é o pior caso. HashSet não preserva ordem nem permite duplicatas, irrelevante aqui."
+  },
+  {
+    "id": "arr-list-06",
+    "enunciado": "Quanto de memória uma LinkedList<Integer> com 1 milhão de elementos consome aproximadamente (sem contar os Integer em si), na JVM HotSpot 64-bit?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "~4 MB (4 bytes por int)",
+      "~8 MB (referência por elemento)",
+      "~40 MB (cada Node ocupa ~40 bytes)",
+      "~400 MB"
+    ],
+    "resposta": 2,
+    "explicacao": "Cada Node interno tem: 16 bytes de header de objeto + 8 bytes para `item` (referência) + 8 bytes para `next` + 8 bytes para `prev` = ~40 bytes. Multiplicando por 1 milhão de elementos: ~40 MB só de estrutura, antes de contar os 1M de objetos Integer (que adicionariam mais ~16-24 MB). Um int[1_000_000] caberia em ~4 MB. É uma diferença de 10x+ de memória."
+  },
+  {
+    "id": "arr-list-07",
+    "enunciado": "Em uma BFS (busca em largura) em grafo, você precisa de uma fila que aceite milhares de inserções e remoções. Qual a melhor escolha?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "ArrayDeque",
+      "LinkedList",
+      "ArrayList",
+      "PriorityQueue"
+    ],
+    "resposta": 0,
+    "explicacao": "ArrayDeque é a recomendação padrão para BFS em Java. É mais rápida que LinkedList (confirmado pelo Javadoc oficial) e tem melhor uso de memória. ArrayList daria O(n) em remoções do início. PriorityQueue ordena os elementos — você quer FIFO em BFS, não prioridade (PriorityQueue seria correta para Dijkstra ou A*, não BFS pura)."
+  },
+  {
+    "id": "arr-list-08",
+    "enunciado": "Verdadeiro ou falso: como ArrayList armazena referências (não os objetos em si), iterar uma `ArrayList<MeuObjeto>` tem performance de cache similar a iterar um array contíguo do objeto em C.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. As REFERÊNCIAS são contíguas, mas os OBJETOS apontados estão espalhados pelo heap. Ao acessar `lista.get(i).getCampo()`, a CPU traz a referência rapidinho (cache hit), mas o objeto em si pode causar cache miss. Em C/C++ com struct value semantics, os campos do struct ficam contíguos. É por isso que para dados realmente performance-críticos em Java, costuma-se usar arrays paralelos de primitivos (`int[] idades; double[] salarios`) — padrão conhecido como SoA (Structure of Arrays)."
+  },
+  {
+    "id": "arr-list-09",
+    "enunciado": "Qual é a complexidade de `get(i)` na LinkedList do Java quando `i` está exatamente no meio da lista?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(1), porque a LinkedList mantém referência ao meio",
+      "O(log n), porque ela faz uma busca binária interna",
+      "O(n/2), que em Big O é O(n)",
+      "O(n²)"
+    ],
+    "resposta": 2,
+    "explicacao": "A LinkedList do Java tem uma micro-otimização: o método `node(index)` percorre a partir do início se index < size/2, ou a partir do fim se index >= size/2. No pior caso (meio exato), são n/2 saltos — mas em Big O isso é O(n). A otimização ajuda no fator constante, mas não muda a classe de complexidade. Para acesso por índice, sempre use ArrayList."
+  },
+  {
+    "id": "arr-list-10",
+    "enunciado": "Qual situação RARA justifica preferir LinkedList sobre ArrayList em Java?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando você precisa de muitas chamadas a get(i)",
+      "Quando você itera com ListIterator e faz muitas inserções/remoções no meio durante a iteração",
+      "Quando os dados são pequenos (menos de 100 elementos)",
+      "Quando você precisa thread-safety"
+    ],
+    "resposta": 1,
+    "explicacao": "Esse é o ÚNICO caso de uso defensável: durante uma iteração com ListIterator, os métodos `iterator.add()` e `iterator.remove()` são O(1) em LinkedList (o iterator já está parado no nó), mas O(n) em ArrayList (precisa shiftar). Mesmo assim, é um caso raro — na prática, costuma ser mais rápido marcar elementos para remoção e fazer uma passada final. Get(i) frequente é o pior caso para LinkedList. Para thread-safety use CopyOnWriteArrayList ou Collections.synchronizedList(), não LinkedList."
+  }
+]

@@ -16,6 +16,12 @@ export type Trilha = {
   licoes: LicaoMeta[];
 };
 
+export type TrilhaMetaLicao = {
+  slug: string;
+  ordem: number;
+  prerequisitos?: string[];
+};
+
 export type Licao = LicaoMeta & {
   trilha: string;
   referencias?: string[];
@@ -36,8 +42,8 @@ export type Exercicio = {
 export type TrilhaMetaFile = {
   titulo: string;
   descricao: string;
-  cor: string;
-  ordem: string[];
+  cor?: string;
+  licoes: TrilhaMetaLicao[];
 };
 
 export type LicaoFrontmatter = {

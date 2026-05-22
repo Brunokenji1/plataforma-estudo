@@ -1,8 +1,8 @@
 {
   "titulo": "Algoritmos",
   "descricao": "Fundamentos de análise, projeto e complexidade de algoritmos.",
-  "cor": "#06b6d4",
-  "ordem": [
-    "01-big-o"
+  "licoes": [
+    { "slug": "01-big-o", "ordem": 1 },
+    { "slug": "02-arrays-vs-listas-ligadas", "ordem": 2, "prerequisitos": ["01-big-o"] }
   ]
 }

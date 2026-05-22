@@ -1,0 +1,254 @@
+---
+titulo: "Arrays vs Listas Ligadas: Quando a Teoria Mente"
+trilha: "algoritmos"
+duracaoMin: 40
+dificuldade: "iniciante"
+referencias:
+  - "Oracle Java SE 21 Docs — ArrayList, LinkedList, ArrayDeque"
+  - "Bjarne Stroustrup, 'Why you should avoid Linked Lists' (GoingNative 2012)"
+  - "Bjarne Stroustrup, The C++ Programming Language, 4ª ed., Cap. 31.6"
+  - "Joshua Bloch, Effective Java, 3ª ed."
+  - "Ulrich Drepper, 'What Every Programmer Should Know About Memory' (Red Hat, 2007)"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Cap. 10"
+---
+
+## A pergunta da prova que está errada
+
+Todo curso de estrutura de dados ensina o mesmo mantra:
+
+> "Use `ArrayList` para acesso aleatório. Use `LinkedList` para inserções e remoções no meio."
+
+A primeira parte está certa. **A segunda é falsa na JVM moderna.** E não é uma falha sutil — é uma diferença de **10x a 100x** de performance, na direção contrária do que a teoria sugere.
+
+Esta lição vai destrinchar o porquê. No fim, você vai entender:
+1. Por que `ArrayList` quase sempre ganha de `LinkedList`, mesmo onde a teoria diz que perde
+2. Por que `ArrayDeque` deveria ser sua escolha padrão para pilhas e filas (não `LinkedList`)
+3. O que **cache locality** tem a ver com isso (spoiler: tudo)
+
+<Insight>
+"Does anyone actually use LinkedList? I wrote it, and I never use it." — **Joshua Bloch**, o engenheiro que escreveu o `java.util.LinkedList`. Quando o autor da classe não usa o próprio código, é um sinal forte.
+</Insight>
+
+---
+
+## Como cada um vive na memória
+
+### ArrayList por dentro
+
+Um `ArrayList<Integer>` é, internamente, **um array Java contíguo** mais um inteiro `size`:
+
+```java
+public class ArrayList<E> {
+    transient Object[] elementData;  // o array real
+    private int size;
+    // ...
+}
+```
+
+Quando o array enche, o `ArrayList` cria um novo array **1.5x maior**, copia tudo, e descarta o antigo. Esse é o famoso **crescimento amortizado** — caro pontualmente, barato no longo prazo.
+
+```java
+// Trecho real do OpenJDK (simplificado)
+private void grow(int minCapacity) {
+    int oldCapacity = elementData.length;
+    int newCapacity = oldCapacity + (oldCapacity >> 1);  // 1.5x
+    elementData = Arrays.copyOf(elementData, newCapacity);
+}
+```
+
+<Aviso>
+Cuidado com a confusão: `Object[]` no Java não armazena os objetos em si, e sim **referências** (ponteiros) para eles. O array é contíguo, mas os objetos apontados estão espalhados pelo heap. Para tipos primitivos boxed (`Integer`, `Long`), isso degrada muito a localidade. Se performance crítica importa, use `int[]` direto.
+</Aviso>
+
+### LinkedList por dentro
+
+`LinkedList<Integer>` é uma **lista duplamente ligada**. Cada elemento é um `Node` alocado **separadamente no heap**:
+
+```java
+private static class Node<E> {
+    E item;
+    Node<E> next;
+    Node<E> prev;
+}
+```
+
+Para cada elemento, você paga:
+- **16 bytes** de header do objeto Node (na JVM HotSpot 64-bit)
+- **8 bytes** de referência para o dado (`item`)
+- **8 bytes** de referência para o próximo (`next`)
+- **8 bytes** de referência para o anterior (`prev`)
+- = **40 bytes de overhead por elemento**, antes de contar o dado em si
+
+E pior: cada nó pode estar em qualquer lugar da memória.
+
+---
+
+## O detalhe que muda tudo: cache lines
+
+CPUs modernas **não leem byte por byte da memória RAM**. Elas leem em blocos chamados **cache lines** — tipicamente **64 bytes** em processadores x86 modernos.
+
+Quando você acessa `array[i]`, a CPU traz para o cache L1 não só `array[i]`, mas também `array[i+1]`, `array[i+2]`, ..., até preencher 64 bytes. **Os próximos acessos sequenciais são quase grátis** — vêm do cache L1 (~1 ciclo) em vez da RAM (~200-300 ciclos).
+
+<Insight>
+A diferença entre L1 cache e RAM principal é de **100x a 300x em latência**. Iterar um array contíguo aproveita isso. Iterar uma lista ligada **não aproveita** — cada `node.next` pode estar em uma página de memória completamente diferente, forçando o CPU a esperar a RAM toda vez. Isso é chamado de **cache miss**.
+</Insight>
+
+### O experimento famoso de Stroustrup
+
+Bjarne Stroustrup (criador do C++) apresentou em 2012 um benchmark icônico no GoingNative: inserir N elementos em ordem ordenada, em um `std::vector` e em um `std::list`. A teoria dizia que a lista venceria — afinal, lista tem inserção O(1). O resultado:
+
+> **O vector ganhou em todos os tamanhos testados** — de 100 até 500.000 elementos.
+
+Por quê? Para inserir em ordem, você precisa primeiro **encontrar a posição correta**. Na lista, isso exige percorrer nó por nó (cache miss a cada passo). No vector, a busca é em memória contígua (prefetcher do CPU adiantando os dados). O custo de "shift dos elementos" na inserção do vector é insignificante perto do custo de cache miss da lista.
+
+Stroustrup resumiu na resposta oficial dele (ISO C++): *"use a contiguous representation unless there is a good reason not to. I emphasize the importance of cache effects."*
+
+---
+
+## A tabela honesta de complexidade
+
+Operação | ArrayList | LinkedList | Realidade
+---|---|---|---
+`get(i)` | **O(1)** | O(n) | ArrayList ganha sempre
+`set(i, x)` | **O(1)** | O(n) | ArrayList ganha sempre
+`add(x)` (no fim) | O(1) amortizado | O(1) | Empate na complexidade, ArrayList ganha na prática (cache)
+`add(0, x)` (no início) | O(n) | **O(1)** | LinkedList ganha — use `ArrayDeque`
+`add(i, x)` (no meio) | O(n) | **O(n)** ⚠️ | Veja abaixo
+`remove(i)` | O(n) | O(n) ⚠️ | Veja abaixo
+Iteração com `for-each` | O(n) | O(n) | ArrayList **muito** mais rápido (cache)
+Memória por elemento | ~4-8 bytes (referência) | ~40+ bytes | ArrayList muito menor
+
+### A armadilha do "LinkedList é O(1) para inserir no meio"
+
+Esse é o erro mais comum em entrevista de Java. Olha o que `LinkedList.add(int index, E element)` realmente faz:
+
+```java
+public void add(int index, E element) {
+    checkPositionIndex(index);
+    if (index == size)
+        linkLast(element);
+    else
+        linkBefore(element, node(index));  // ← O custo está aqui
+}
+
+// node(index) percorre a lista nó por nó:
+Node<E> node(int index) {
+    if (index < (size >> 1)) {              // se < metade, vai do início
+        Node<E> x = first;
+        for (int i = 0; i < index; i++)
+            x = x.next;                      // ← O(n) traversal
+        return x;
+    } else {                                  // se >= metade, vai do fim
+        Node<E> x = last;
+        for (int i = size - 1; i > index; i--)
+            x = x.prev;
+        return x;
+    }
+}
+```
+
+A **inserção em si** é O(1) (só ajustar 4 referências), mas **chegar até o índice é O(n)**. O total continua sendo O(n) — e pior, com cache misses no caminho. `ArrayList.add(index, x)` também é O(n) (precisa shiftar os elementos), mas o shift é em memória contígua e o CPU prefetcher ajuda. **ArrayList ganha na prática.**
+
+<Aviso>
+A única situação em que `LinkedList.add(index, ...)` é genuinamente O(1) é se você **já tem uma referência direta ao nó** — o que `java.util.LinkedList` **não expõe**. Em outras palavras: o caso de uso teórico que justifica a LinkedList nem é alcançável pela API pública do Java.
+</Aviso>
+
+---
+
+## Por que ArrayDeque é melhor que LinkedList (para fila/pilha)
+
+Se você ainda usa `LinkedList` como fila ou pilha, **pare**. O próprio Javadoc do Oracle diz:
+
+> "This class [ArrayDeque] is likely to be faster than `Stack` when used as a stack, and **faster than `LinkedList` when used as a queue**."
+
+`ArrayDeque` é um **circular buffer** em cima de um array — mantém localidade de cache mesmo com operações nas duas pontas:
+
+```java
+// Bom: ArrayDeque como pilha
+Deque<Integer> pilha = new ArrayDeque<>();
+pilha.push(1);
+pilha.push(2);
+int topo = pilha.pop();  // 2
+
+// Bom: ArrayDeque como fila
+Deque<String> fila = new ArrayDeque<>();
+fila.offer("a");
+fila.offer("b");
+String primeiro = fila.poll();  // "a"
+
+// Ruim (mas ainda funciona):
+Queue<Integer> velho = new LinkedList<>();  // ← evite
+```
+
+---
+
+## Quiz rápido
+
+<Quiz
+  pergunta="Você precisa armazenar 1 milhão de inteiros e iterar sobre eles sequencialmente várias vezes para calcular estatísticas. Qual estrutura usar?"
+  opcoes={[
+    "LinkedList<Integer>, porque suporta crescimento dinâmico sem realocação",
+    "ArrayList<Integer>, porque a iteração é cache-friendly",
+    "int[] (array primitivo), porque elimina overhead de boxing e referências",
+    "TreeSet<Integer>, porque mantém ordem"
+  ]}
+  resposta={2}
+  explicacao="Para iteração intensa sobre primitivos, int[] vence por uma margem grande: zero boxing (não cria objetos Integer), memória contígua máxima (cada int ocupa 4 bytes adjacentes), e o JIT consegue vetorizar com SIMD. ArrayList<Integer> seria a segunda melhor escolha — ainda contíguo, mas com overhead de boxing. LinkedList é a pior opção possível aqui: 40+ bytes por elemento e cache miss a cada node.next."
+/>
+
+<Quiz
+  pergunta="Por que ArrayList geralmente ganha de LinkedList mesmo em operações onde a complexidade Big O da LinkedList é melhor?"
+  opcoes={[
+    "Porque ArrayList tem menos métodos sobrecarregados",
+    "Porque a JVM otimiza ArrayList mais agressivamente",
+    "Por causa de localidade de cache: memória contígua aproveita cache lines de 64 bytes e o prefetcher do CPU",
+    "Porque LinkedList é uma classe deprecada"
+  ]}
+  resposta={2}
+  explicacao="A diferença entre acessar um dado no cache L1 (~1 ciclo) e na RAM (~200-300 ciclos) é de 100-300x. ArrayList armazena referências contiguamente, então iterar traz blocos inteiros para o cache automaticamente. LinkedList tem nós espalhados pelo heap, então cada node.next pode ser um cache miss completo. Big O ignora esses fatores constantes, mas eles dominam na prática."
+/>
+
+---
+
+## Quando LinkedList faz sentido (honestamente, quase nunca)
+
+Os únicos cenários onde `LinkedList` pode justificar uso real:
+
+1. **Você precisa de iterador estável durante inserções/remoções no meio** — `ListIterator.add()` e `remove()` são O(1) na LinkedList porque o iterador já está parado no nó. Em ArrayList, esses métodos são O(n) porque shiftam.
+
+2. **Operações exclusivas em ambas as pontas, com tamanho realmente imprevisível e grande** — mesmo nesse caso, `ArrayDeque` quase sempre vence.
+
+3. **Você precisa de `null`s e Deque com operações específicas** — `ArrayDeque` não aceita `null`.
+
+Fora desses casos: **use `ArrayList` por padrão.**
+
+---
+
+## Regra prática de decisão
+
+```
+Precisa indexar por posição? (get/set frequente)
+    └── ArrayList
+
+Pilha ou fila?
+    └── ArrayDeque
+
+Inserções/remoções massivas no meio, com ListIterator?
+    └── LinkedList (raríssimo)
+
+Vai armazenar muitos primitivos para processar?
+    └── int[] / long[] direto (ou bibliotecas como Eclipse Collections para listas primitivas)
+```
+
+---
+
+## Recap
+
+- **`ArrayList`** = array contíguo + size. Excelente acesso aleatório, ótima iteração, baixo overhead de memória.
+- **`LinkedList`** = nós espalhados no heap, ~40 bytes overhead por elemento, **cache-hostile**.
+- **Cache lines de 64 bytes** tornam memória contígua 10-100x mais rápida na prática.
+- **"O(1) para inserir no meio" é mito na LinkedList** — você ainda precisa chegar no índice (O(n)).
+- **`ArrayDeque` substitui `LinkedList`** para pilha/fila — confirmado pelo Javadoc oficial.
+- **Joshua Bloch e Stroustrup concordam**: use representação contígua por default.
+
+Próxima lição: **Pilhas e Filas** — como usar `ArrayDeque` em problemas reais (parser de expressões, BFS, sliding window).

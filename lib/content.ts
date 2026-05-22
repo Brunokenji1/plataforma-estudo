@@ -34,21 +34,29 @@ export function listTrilhaSlugs(): string[] {
     .map((d) => d.name);
 }
 
+const DEFAULT_TRILHA_COR = '#06b6d4';
+
 export function getTrilha(slug: string): Trilha | null {
   const trilhaDir = path.join(CONTENT_DIR, slug);
   const metaPath = path.join(trilhaDir, '_meta.json');
   if (!existsSafe(metaPath)) return null;
 
   const meta = readJson<TrilhaMetaFile>(metaPath);
-  const licoes: LicaoMeta[] = meta.ordem
-    .map((licaoSlug) => readLicaoMeta(slug, licaoSlug))
+  const ordenadas = [...meta.licoes].sort((a, b) => a.ordem - b.ordem);
+
+  const licoes: LicaoMeta[] = ordenadas
+    .map((entry) => {
+      const m = readLicaoMeta(slug, entry.slug);
+      if (!m) return null;
+      return entry.prerequisitos ? { ...m, prerequisitos: entry.prerequisitos } : m;
+    })
     .filter((l): l is LicaoMeta => l !== null);
 
   return {
     slug,
     titulo: meta.titulo,
     descricao: meta.descricao,
-    cor: meta.cor,
+    cor: meta.cor ?? DEFAULT_TRILHA_COR,
     licoes,
   };
 }
