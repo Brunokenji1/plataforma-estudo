@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import type { CodeLang } from '@/lib/language-store';
+
+export type CodeLang = 'java' | 'cpp' | 'python' | 'typescript';
 
 type CodeProps = {
   lang: CodeLang;
   children: ReactNode;
 };
 
-export function Code({ children }: CodeProps) {
-  return <>{children}</>;
+export function Code({ lang, children }: CodeProps) {
+  return <div data-code-lang={lang}>{children}</div>;
 }

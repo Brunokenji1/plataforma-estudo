@@ -11,8 +11,6 @@ import {
 import { useLanguageStore, type CodeLang } from '@/lib/language-store';
 import { cn } from '@/lib/utils';
 
-type CodeChild = ReactElement<{ lang: CodeLang; children: ReactNode }>;
-
 const LABELS: Record<CodeLang, string> = {
   java: 'Java',
   cpp: 'C++',
@@ -20,10 +18,35 @@ const LABELS: Record<CodeLang, string> = {
   typescript: 'TypeScript',
 };
 
-function hasLangProp(node: unknown): node is CodeChild {
-  if (!isValidElement(node)) return false;
-  const props = node.props as { lang?: unknown };
-  return typeof props.lang === 'string';
+type CodeBlock = {
+  lang: CodeLang;
+  content: ReactNode;
+};
+
+function findCodeBlocks(children: ReactNode): CodeBlock[] {
+  const result: CodeBlock[] = [];
+
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+
+    const props =
+      (child as ReactElement<Record<string, unknown>>).props ?? {};
+    const dataLang = props['data-code-lang'];
+
+    if (typeof dataLang === 'string') {
+      result.push({
+        lang: dataLang as CodeLang,
+        content: props.children as ReactNode,
+      });
+      return;
+    }
+
+    if (props.children) {
+      result.push(...findCodeBlocks(props.children as ReactNode));
+    }
+  });
+
+  return result;
 }
 
 export function CodeSwap({ children }: { children: ReactNode }) {
@@ -34,16 +57,32 @@ export function CodeSwap({ children }: { children: ReactNode }) {
 
   useEffect(() => setMounted(true), []);
 
-  const blocks = Children.toArray(children).filter(hasLangProp);
+  const blocks = findCodeBlocks(children);
 
-  if (blocks.length === 0) return null;
+  if (process.env.NODE_ENV === 'development' && blocks.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[CodeSwap] Nenhum bloco <Code lang=...> encontrado. Children:',
+      children,
+    );
+  }
 
-  const effectiveLang: CodeLang = mounted && hydrated ? lang : 'java';
-  const active = blocks.find((b) => b.props.lang === effectiveLang) ?? blocks[0];
-  const available = blocks.map((b) => b.props.lang);
+  if (blocks.length === 0) {
+    return (
+      <div className="my-4 rounded-lg border border-yellow-700 bg-yellow-900/20 p-4 text-sm text-yellow-200">
+        ⚠️ CodeSwap sem blocos. Verifique a sintaxe: cada filho deve usar{' '}
+        <code>{'<Code lang="java">'}</code>.
+      </div>
+    );
+  }
+
+  const effectiveLang: CodeLang =
+    mounted && hydrated ? lang : blocks[0].lang;
+  const active = blocks.find((b) => b.lang === effectiveLang) ?? blocks[0];
+  const available = blocks.map((b) => b.lang);
 
   if (available.length === 1) {
-    return <div className="my-4">{active.props.children}</div>;
+    return <div className="my-4">{active.content}</div>;
   }
 
   return (
@@ -69,13 +108,13 @@ export function CodeSwap({ children }: { children: ReactNode }) {
                   : 'border-transparent text-zinc-400 hover:text-zinc-200',
               )}
             >
-              {LABELS[l]}
+              {LABELS[l] ?? l}
             </button>
           );
         })}
       </div>
       <div className="bg-zinc-950 [&_pre]:!my-0 [&_pre]:!rounded-none [&_pre]:!border-0">
-        {active.props.children}
+        {active.content}
       </div>
     </div>
   );
