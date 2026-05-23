@@ -159,9 +159,12 @@ Para registrar mais, edite [components/MDXComponents.tsx](components/MDXComponen
 
 Use quando o mesmo conceito tem implementação em mais de uma linguagem. O componente renderiza tabs e a escolha do usuário persiste em `localStorage` (`techstudy-language`), valendo para todas as lições.
 
+Sintaxe estrita (MDX 3):
+
 ````mdx
 <CodeSwap>
-  <Code lang="java">
+<Code lang="java">
+
 ```java
 public int somar(int[] arr) {
     int s = 0;
@@ -169,8 +172,10 @@ public int somar(int[] arr) {
     return s;
 }
 ```
-  </Code>
-  <Code lang="cpp">
+
+</Code>
+<Code lang="cpp">
+
 ```cpp
 int somar(const std::vector<int>& v) {
     int s = 0;
@@ -178,16 +183,24 @@ int somar(const std::vector<int>& v) {
     return s;
 }
 ```
-  </Code>
+
+</Code>
 </CodeSwap>
 ````
 
-Regras:
+Regras (MDX 3 é estrito):
 
-- Se você incluir só uma linguagem dentro do `<CodeSwap>`, o componente renderiza sem tabs.
+- Sem indentação nas tags filhas (`<Code>` colado na margem esquerda).
+- Linha em branco entre `<Code lang="...">` e o ` ``` ` que vem depois.
+- Linha em branco entre o fechamento do ` ``` ` e o `</Code>`.
 - Linguagens suportadas: `java`, `cpp`, `python`, `typescript`.
-- A página de lição também expõe um `<LanguageToggle>` no header, que controla o mesmo store.
-- **Não use** `<CodeSwap>` para código específico de uma linguagem (ex.: trecho do OpenJDK, header da STL). Nesses casos, use um bloco markdown normal.
+- Se incluir só uma linguagem, o componente renderiza sem tabs.
+- A página de lição também expõe um `<LanguageToggle>` no header, controla o mesmo store.
+
+Quando NÃO usar `<CodeSwap>`:
+
+- Código fonte real da JVM (OpenJDK) — é Java específico, use bloco markdown normal e diga isso na prosa.
+- Trechos com referência a tipo/método exclusivo de uma linguagem (ex.: `std::vector` num exemplo sobre a STL, `synchronized` num exemplo sobre o memory model do Java) — não há equivalente direto, então tabs viram ruído.
 
 ## Sistema de progresso
 
