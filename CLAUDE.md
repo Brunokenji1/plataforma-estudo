@@ -123,5 +123,9 @@ Quando NÃO usar:
 - Código fonte real da JVM (OpenJDK) — explique que é Java específico, use bloco markdown normal
 - Trechos com referência a tipo/método exclusivo de uma linguagem (ex.: `std::vector` num exemplo sobre a STL, `synchronized` num exemplo sobre o memory model do Java) — não há equivalente direto, então tabs viram ruído
 
+### Subtítulos MDX
+
+Todos os headings `##` e `###` dentro de uma mesma lição MDX devem ser únicos. O `LicaoNav.tsx` gera IDs via slug do texto, e duplicatas quebram React keys. Se duas seções têm a mesma estrutura (ex.: "Operações" pra Pilha e Fila), prefixar com o nome do conceito ("Operações da pilha" / "Operações da fila").
+
 ## Sobre o autor
 Bruno Kenji — estudante de ADS, foco em Java/Spring Boot. Prefere respostas diretas e tecnicamente precisas. GitHub: Brunokenji1.

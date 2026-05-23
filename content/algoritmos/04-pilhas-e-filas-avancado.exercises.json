@@ -1,0 +1,127 @@
+[
+  {
+    "id": "pilhas-adv-01",
+    "enunciado": "Aplicando o Shunting Yard à expressão `2 + 3 * 4`, qual é a saída em notação pós-fixa?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "2 3 4 + *",
+      "2 3 + 4 *",
+      "2 3 4 * +",
+      "+ 2 * 3 4"
+    ],
+    "resposta": 2,
+    "explicacao": "Trace: '2' → saída=[2], pilha=[]. '+' → empilha, pilha=[+]. '3' → saída=[2,3]. '*' tem precedência MAIOR que '+' no topo, então não tira nada e empilha, pilha=[+,*]. '4' → saída=[2,3,4]. Fim: tira tudo da pilha → saída=[2,3,4,*,+]. Resultado: '2 3 4 * +'. Isso reflete a precedência correta: primeiro multiplica 3*4=12, depois soma 2+12=14."
+  },
+  {
+    "id": "pilhas-adv-02",
+    "enunciado": "Qual a complexidade de tempo do algoritmo Sliding Window Maximum usando monotonic deque?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(n × k) — cada janela leva O(k)",
+      "O(n log n) — heap interna",
+      "O(n) — cada índice entra e sai do deque no máximo uma vez",
+      "O(n²) — pior caso"
+    ],
+    "resposta": 2,
+    "explicacao": "O(n). Apesar do while interno parecer custoso, a análise amortizada mostra que cada índice é adicionado ao deque uma única vez (push_back) e removido no máximo uma vez (seja por pop_back na fase 2 ou pop_front na fase 1). Total de operações limitado por 2n → O(n). É a vantagem fundamental sobre brute force O(n·k) e sobre heap O(n log k)."
+  },
+  {
+    "id": "pilhas-adv-03",
+    "enunciado": "Por que armazenamos ÍNDICES (e não valores) no deque do Sliding Window Maximum?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque índices ocupam menos memória",
+      "Para podermos detectar quando um elemento sai da janela (comparando o índice com i - k)",
+      "Porque o deque do Java só aceita ints",
+      "Para evitar overflow em arrays muito grandes"
+    ],
+    "resposta": 1,
+    "explicacao": "Precisamos saber QUANDO um candidato sai da janela. Se a cabeça do deque tem índice ≤ i - k, ele está fora da janela atual e precisa ser removido. Sem o índice, perderíamos essa informação. Armazenando apenas valores, dois elementos iguais em posições diferentes seriam indistinguíveis. Esse é um padrão geral em algoritmos com janela deslizante: guarde sempre o índice."
+  },
+  {
+    "id": "pilhas-adv-04",
+    "enunciado": "No algoritmo Next Greater Element com monotonic stack, em que ordem os elementos ficam na pilha (durante a execução)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ordem crescente de valores (do topo pra base)",
+      "Ordem decrescente de valores (do topo pra base)",
+      "Ordem aleatória",
+      "Ordenados pelo índice (do topo pra base)"
+    ],
+    "resposta": 1,
+    "explicacao": "Decrescente do topo pra base. O algoritmo desempilha qualquer elemento MENOR que o atual antes de empilhar, então o topo sempre é menor que o que está embaixo. Equivalente: base ≥ ... ≥ topo. Essa monotonia é o INVARIANTE da pilha que garante O(n): cada elemento entra e sai uma única vez."
+  },
+  {
+    "id": "pilhas-adv-05",
+    "enunciado": "Verdadeiro ou falso: se você substituir a fila do BFS por uma pilha, ainda obtém o caminho mais curto.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Trocar a fila por uma pilha transforma BFS em DFS (busca em profundidade), que NÃO encontra o caminho mais curto em geral. BFS funciona porque processa nós em ordem de distância crescente da origem — propriedade que depende do comportamento FIFO. Com pilha (LIFO), você mergulha fundo num ramo antes de explorar os outros, perdendo a garantia de menor caminho. A estrutura ESCOLHIDA define o algoritmo."
+  },
+  {
+    "id": "pilhas-adv-06",
+    "enunciado": "No Shunting Yard, ao encontrar `)`, o que o algoritmo faz?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Adiciona `)` à saída e descarta",
+      "Empilha `)` na pilha de operadores",
+      "Desempilha operadores para a saída até encontrar `(`, e descarta ambos os parênteses",
+      "Adiciona à saída o próximo operador da pilha"
+    ],
+    "resposta": 2,
+    "explicacao": "Ao encontrar `)`, desempilha operadores para a saída até encontrar o `(` correspondente, e descarta AMBOS os parênteses (eles não aparecem na pós-fixa). É assim que o algoritmo respeita o agrupamento: tudo entre `(` e `)` é tratado como uma sub-expressão isolada. Se nunca encontrar `(` na pilha, indica parênteses desbalanceados (erro)."
+  },
+  {
+    "id": "pilhas-adv-07",
+    "enunciado": "Qual a complexidade do BFS em um grafo com V vértices e E arestas, representado por lista de adjacência?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(V)",
+      "O(V + E)",
+      "O(V × E)",
+      "O(V²)"
+    ],
+    "resposta": 1,
+    "explicacao": "O(V + E). Cada vértice é colocado na fila no máximo uma vez (graças ao array de visitados): O(V). Para cada vértice removido da fila, percorremos sua lista de adjacência. A soma de todas as listas é 2E em grafo não direcionado (cada aresta aparece duas vezes) ou E em direcionado: O(E). Total: O(V + E). Se o grafo fosse representado por matriz de adjacência, seria O(V²) — outra razão pra usar listas em grafos esparsos."
+  },
+  {
+    "id": "pilhas-adv-08",
+    "enunciado": "Para o array `[1, 3, 2, 4]` com k=2, qual a saída do Sliding Window Maximum?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "[3, 3, 4]",
+      "[1, 2, 4]",
+      "[3, 2, 4]",
+      "[3, 4]"
+    ],
+    "resposta": 0,
+    "explicacao": "Trace: janela [1,3] → max=3; janela [3,2] → max=3; janela [2,4] → max=4. Resultado: [3, 3, 4]. Para n elementos e janela k, o resultado tem n-k+1 entradas. Aqui: 4-2+1=3 entradas."
+  },
+  {
+    "id": "pilhas-adv-09",
+    "enunciado": "Dijkstra publicou o Shunting Yard em 1961, no relatório técnico do Mathematisch Centrum. Qual era o contexto desse trabalho?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Era um exercício para alunos de graduação em Amsterdam",
+      "Fazia parte da construção do primeiro compilador ALGOL 60 da história",
+      "Foi uma especulação teórica sem aplicação prática inicial",
+      "Era um experimento para o Manhattan Project"
+    ],
+    "resposta": 1,
+    "explicacao": "Dijkstra estava construindo o primeiro compilador ALGOL 60 do mundo no Mathematisch Centrum, em Amsterdam, com Jaap Zonneveld. O Shunting Yard nasceu da necessidade prática de parser de expressões matemáticas em código fonte para o computador Electrologica X1. Quase todo compilador atual usa variações desse algoritmo (ou parsers de descida recursiva, que resolvem o mesmo problema com técnica diferente)."
+  },
+  {
+    "id": "pilhas-adv-10",
+    "enunciado": "Qual problema dos abaixo é resolvido pela técnica de PILHA MONOTÔNICA (não deque)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sliding Window Maximum",
+      "Caminho mais curto em grafo não ponderado",
+      "Next Greater Element (encontrar para cada elemento o próximo maior à direita)",
+      "Validar parênteses balanceados"
+    ],
+    "resposta": 2,
+    "explicacao": "Next Greater Element é o caso clássico de pilha monotônica. Sliding Window Maximum usa DEQUE (precisa remover dos dois lados — frente quando sai da janela, traseira quando empilhando). BFS usa FILA simples. Validar parênteses usa pilha SIMPLES (sem monotonia). A pilha monotônica também resolve Daily Temperatures, Largest Rectangle in Histogram e Trapping Rain Water — todos LeetCode clássicos."
+  }
+]

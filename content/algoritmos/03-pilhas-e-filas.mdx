@@ -1,0 +1,459 @@
+---
+titulo: "Pilhas e Filas: As Duas Estruturas Mais Subestimadas"
+trilha: "algoritmos"
+duracaoMin: 30
+dificuldade: "iniciante"
+referencias:
+  - "Donald Knuth, The Art of Computer Programming, Vol. 1, 3ª ed., Seção 2.2.1 — Stacks, Queues, and Deques"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 1.3 — Bags, Queues, and Stacks"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 10 — Elementary Data Structures"
+  - "Oracle Java SE 21 Docs — Deque, ArrayDeque, Stack"
+  - "cppreference.com — std::stack, std::queue, std::deque"
+  - "LeetCode #20 — Valid Parentheses (clássico de entrevista)"
+---
+
+## Duas estruturas, um milhão de aplicações
+
+A maioria das pessoas estuda pilhas e filas no primeiro ano da faculdade, decora `push/pop/peek`, e nunca mais pensa nelas. **Erro.** Você usa pilhas e filas literalmente toda vez que:
+
+- Abre uma página no navegador (a lista de "voltar" é uma **pilha**)
+- Pressiona Ctrl+Z num editor de texto (histórico de undo = **pilha**)
+- Manda uma mensagem no WhatsApp (mensagens pendentes na rede = **fila**)
+- Roda qualquer função em qualquer programa (call stack = **pilha**)
+- Imprime um documento (fila da impressora = **fila**)
+- Faz BFS num grafo (a próxima estrutura usa **fila**)
+
+Knuth dedica uma seção inteira do TAOCP Vol. 1 a essas duas estruturas porque, segundo ele, *"stacks are particularly useful for the processing of languages with a nested structure"* — toda linguagem de programação que existe roda em cima de uma pilha de chamadas.
+
+<Insight>
+Curiosidade do TAOCP: Knuth detesta a terminologia `push`/`pop`. Ele escreveu que *"the brevity of words 'push' and 'pop' has its advantages, but these terms falsely imply a motion of the whole list within computer memory"*. Você só empurra e tira na ponta — o resto da memória não se mexe. Apesar disso, "push/pop" virou padrão universal.
+</Insight>
+
+---
+
+## Pilha (Stack): LIFO
+
+**Last In, First Out** — o último a entrar é o primeiro a sair. Como uma pilha de pratos: você só consegue mexer no de cima.
+
+### Operações da pilha
+
+| Operação | O que faz | Complexidade |
+|---|---|---|
+| `push(x)` | Adiciona x no topo | O(1) |
+| `pop()` | Remove e retorna o topo | O(1) |
+| `peek()` / `top()` | Olha o topo sem remover | O(1) |
+| `isEmpty()` | Está vazia? | O(1) |
+| `size()` | Quantos elementos | O(1) |
+
+<ComplexidadeBox melhor="O(1)" media="O(1)" pior="O(1)" />
+
+Todas as operações são **constantes**. É por isso que pilhas são tão úteis em algoritmos sensíveis a performance.
+
+### Pilha em Java e C++
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+Deque<Integer> pilha = new ArrayDeque<>();
+
+pilha.push(1);          // pilha: [1]
+pilha.push(2);          // pilha: [2, 1]   (2 é o topo)
+pilha.push(3);          // pilha: [3, 2, 1]
+
+int topo = pilha.peek();    // 3, pilha continua [3, 2, 1]
+int removido = pilha.pop(); // 3, pilha agora é [2, 1]
+
+System.out.println(pilha.isEmpty()); // false
+System.out.println(pilha.size());    // 2
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <stack>
+
+std::stack<int> pilha;
+
+pilha.push(1);           // pilha: [1]
+pilha.push(2);           // pilha: [2, 1]   (2 é o topo)
+pilha.push(3);           // pilha: [3, 2, 1]
+
+int topo = pilha.top();  // 3, pilha continua [3, 2, 1]
+pilha.pop();             // remove o topo (NÃO retorna o valor!)
+                          // pilha agora é [2, 1]
+
+std::cout << pilha.empty() << "\n";  // false (0)
+std::cout << pilha.size() << "\n";   // 2
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+**Diferença sutil mas importante**: `std::stack::pop()` em C++ **não retorna o elemento removido** — ela só remove. Você precisa chamar `top()` antes pra pegar o valor. No Java, `ArrayDeque.pop()` faz as duas coisas (remove e retorna). Razão histórica: o pessoal do C++ queria evitar copiar objetos pesados na hora do pop.
+</Aviso>
+
+### Não use `java.util.Stack` no Java moderno
+
+Existe uma classe `java.util.Stack` no Java desde 1.0. **Não use.** Razões:
+
+1. Ela herda de `Vector`, que é **sincronizada** (overhead de mutex em toda operação, mesmo single-thread)
+2. Ela expõe métodos de acesso aleatório (`get(i)`, `add(i, x)`) que **violam a abstração de pilha**
+3. A própria documentação do Oracle recomenda usar `Deque` no lugar
+
+```java
+// ❌ Evite
+Stack<Integer> velha = new Stack<>();
+
+// ✅ Use sempre
+Deque<Integer> pilha = new ArrayDeque<>();
+```
+
+---
+
+## Fila (Queue): FIFO
+
+**First In, First Out** — o primeiro a entrar é o primeiro a sair. Como uma fila de banco: quem chegou primeiro é atendido primeiro.
+
+### Operações da fila
+
+| Operação | O que faz | Complexidade |
+|---|---|---|
+| `offer(x)` / `push(x)` | Adiciona x no fim | O(1) |
+| `poll()` / `pop()` | Remove e retorna o primeiro | O(1) |
+| `peek()` / `front()` | Olha o primeiro sem remover | O(1) |
+| `isEmpty()` | Está vazia? | O(1) |
+
+<ComplexidadeBox melhor="O(1)" media="O(1)" pior="O(1)" />
+
+### Fila em Java e C++
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayDeque;
+import java.util.Queue;
+
+Queue<String> fila = new ArrayDeque<>();
+
+fila.offer("Ana");      // fila: [Ana]
+fila.offer("Bruno");    // fila: [Ana, Bruno]
+fila.offer("Carla");    // fila: [Ana, Bruno, Carla]
+
+String prox = fila.peek();    // "Ana"
+String atendido = fila.poll(); // "Ana", fila: [Bruno, Carla]
+
+System.out.println(fila.size()); // 2
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <queue>
+
+std::queue<std::string> fila;
+
+fila.push("Ana");       // fila: [Ana]
+fila.push("Bruno");     // fila: [Ana, Bruno]
+fila.push("Carla");     // fila: [Ana, Bruno, Carla]
+
+std::string prox = fila.front();  // "Ana"
+fila.pop();                        // remove "Ana", fila: [Bruno, Carla]
+
+std::cout << fila.size() << "\n"; // 2
+```
+
+</Code>
+</CodeSwap>
+
+<Insight>
+Por que dois nomes em Java (`offer/add`, `poll/remove`)? `add` e `remove` lançam exceção se a fila estiver vazia/cheia. `offer` e `poll` retornam `false`/`null`. Em código de produção, `offer/poll` são mais seguros — você lida com falha sem try/catch. O Bloch recomenda `offer/poll` por padrão.
+</Insight>
+
+---
+
+## Deque: o pai dos dois
+
+**D**ouble-**E**nded **Que**ue (pronuncia "deck"). Knuth a chamou de *output-restricted deque* quando você só pode tirar de uma ponta, e *input-restricted* quando só insere de uma. **Stack e Queue são casos especiais de Deque.**
+
+Knuth descreveu deques usando uma analogia ferroviária — o "railroad model": dois trilhos paralelos com chaves que decidem por qual ponta entrar/sair. Mais didática que a analogia de "deck de cartas" que aparece em livros modernos.
+
+### Operações úteis adicionais
+
+`addFirst/addLast`, `removeFirst/removeLast`, `peekFirst/peekLast`. **Você pode operar nas duas pontas em O(1).**
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+Deque<Integer> dq = new ArrayDeque<>();
+
+dq.addLast(1);    // [1]
+dq.addLast(2);    // [1, 2]
+dq.addFirst(0);   // [0, 1, 2]
+dq.addLast(3);    // [0, 1, 2, 3]
+
+dq.peekFirst();   // 0
+dq.peekLast();    // 3
+
+dq.removeFirst(); // remove 0 → [1, 2, 3]
+dq.removeLast();  // remove 3 → [1, 2]
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <deque>
+
+std::deque<int> dq;
+
+dq.push_back(1);    // [1]
+dq.push_back(2);    // [1, 2]
+dq.push_front(0);   // [0, 1, 2]
+dq.push_back(3);    // [0, 1, 2, 3]
+
+dq.front();         // 0
+dq.back();          // 3
+
+dq.pop_front();     // remove 0 → [1, 2, 3]
+dq.pop_back();      // remove 3 → [1, 2]
+```
+
+</Code>
+</CodeSwap>
+
+Por que isso importa? Porque algoritmos como o **sliding window maximum** dependem da habilidade de remover dos dois lados em O(1) — assunto da próxima lição.
+
+---
+
+## Problema clássico 1: Balanceamento de parênteses
+
+**Problema** (LeetCode #20): dada uma string contendo apenas `()`, `[]`, `{}`, retorne `true` se os parênteses estão corretamente balanceados.
+
+```
+"()"       → true
+"()[]{}"   → true
+"(]"       → false  (fecha tipo errado)
+"([)]"     → false  (ordem errada)
+"{[()]}"   → true   (aninhamento correto)
+```
+
+**Por que pilha?** Toda vez que abrimos um parêntese, precisamos lembrar dele pra fechar **na ordem inversa**. LIFO é exatamente isso.
+
+### Algoritmo
+
+1. Para cada caractere:
+   - Se for abertura (`(`, `[`, `{`), empurra na pilha
+   - Se for fechamento (`)`, `]`, `}`), verifica se o topo da pilha é a abertura correspondente. Se sim, `pop`. Se não, retorna `false`
+2. No final, a string só é válida se a pilha estiver **vazia** (todo aberto foi fechado)
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+
+public boolean isValid(String s) {
+    Map<Character, Character> par = Map.of(
+        ')', '(',
+        ']', '[',
+        '}', '{'
+    );
+
+    Deque<Character> pilha = new ArrayDeque<>();
+
+    for (char c : s.toCharArray()) {
+        if (par.containsValue(c)) {
+            // É abertura
+            pilha.push(c);
+        } else if (par.containsKey(c)) {
+            // É fechamento
+            if (pilha.isEmpty() || pilha.pop() != par.get(c)) {
+                return false;
+            }
+        }
+    }
+
+    return pilha.isEmpty();
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <stack>
+#include <string>
+#include <unordered_map>
+
+bool isValid(const std::string& s) {
+    std::unordered_map<char, char> par = {
+        {')', '('},
+        {']', '['},
+        {'}', '{'}
+    };
+
+    std::stack<char> pilha;
+
+    for (char c : s) {
+        if (c == '(' || c == '[' || c == '{') {
+            pilha.push(c);
+        } else if (par.count(c)) {
+            if (pilha.empty() || pilha.top() != par[c]) {
+                return false;
+            }
+            pilha.pop();
+        }
+    }
+
+    return pilha.empty();
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) tempo, O(n) espaço no pior caso (string toda de aberturas).
+
+<ComplexidadeBox melhor="O(n)" media="O(n)" pior="O(n)" />
+
+<Insight>
+Esse é provavelmente o problema de pilha mais perguntado em entrevista. Se você o resolve em 2 minutos, está pronto pra discutir variações: balanceamento com aspas, parser de HTML, validação de blocos de código. A ideia base é sempre a mesma — **abertura empilha, fechamento desempilha e compara**.
+</Insight>
+
+---
+
+## Problema clássico 2: Avaliação de Notação Pós-fixa (RPN)
+
+**Notação pós-fixa** (também chamada **Reverse Polish Notation**, RPN) é uma forma de escrever expressões matemáticas sem parênteses:
+
+```
+Infixa:    (2 + 3) * 4
+Pós-fixa:  2 3 + 4 *
+```
+
+Você lê da esquerda pra direita: quando vê um operando, empilha. Quando vê um operador, desempilha os dois últimos, aplica o operador, e empilha o resultado.
+
+Trace de `2 3 + 4 *`:
+
+```
+Token  Ação                                Pilha
+─────  ──────────────────────────────────  ──────
+"2"    push(2)                             [2]
+"3"    push(3)                             [2, 3]
+"+"    pop 3, pop 2, push 2+3              [5]
+"4"    push(4)                             [5, 4]
+"*"    pop 4, pop 5, push 5*4              [20]
+```
+
+Resultado final: o único valor que sobrou na pilha → **20**.
+
+### Por que isso importa?
+
+Calculadoras HP usaram RPN nas décadas de 70 e 80 porque é **muito mais fácil de implementar** que infixa — não precisa lidar com precedência de operadores nem com parênteses. Compiladores modernos convertem expressões infixas em pós-fixas (ou árvores) internamente antes de avaliar.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+public int evalRPN(String[] tokens) {
+    Deque<Integer> pilha = new ArrayDeque<>();
+
+    for (String t : tokens) {
+        switch (t) {
+            case "+", "-", "*", "/" -> {
+                int b = pilha.pop();
+                int a = pilha.pop();
+                pilha.push(switch (t) {
+                    case "+" -> a + b;
+                    case "-" -> a - b;
+                    case "*" -> a * b;
+                    case "/" -> a / b;
+                    default -> throw new IllegalStateException();
+                });
+            }
+            default -> pilha.push(Integer.parseInt(t));
+        }
+    }
+
+    return pilha.pop();
+}
+
+// evalRPN(new String[]{"2", "3", "+", "4", "*"}) → 20
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <stack>
+#include <string>
+#include <vector>
+
+int evalRPN(const std::vector<std::string>& tokens) {
+    std::stack<int> pilha;
+
+    for (const auto& t : tokens) {
+        if (t == "+" || t == "-" || t == "*" || t == "/") {
+            int b = pilha.top(); pilha.pop();
+            int a = pilha.top(); pilha.pop();
+
+            if      (t == "+") pilha.push(a + b);
+            else if (t == "-") pilha.push(a - b);
+            else if (t == "*") pilha.push(a * b);
+            else               pilha.push(a / b);
+        } else {
+            pilha.push(std::stoi(t));
+        }
+    }
+
+    return pilha.top();
+}
+
+// evalRPN({"2", "3", "+", "4", "*"}) → 20
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) tempo, O(n) espaço (pilha pode crescer até n/2 no pior caso, com todos os operandos seguidos).
+
+<Aviso>
+Cuidado com a ordem: ao desempilhar dois operandos, o **primeiro a sair é o segundo operando**. Para `5 - 3`, a pós-fixa é `5 3 -`. Quando você vê `-`, desempilha `3` (b) e depois `5` (a) — a operação é `a - b = 5 - 3 = 2`. Trocar a ordem dá `3 - 5 = -2`, errado.
+</Aviso>
+
+---
+
+## Recap
+
+- **Pilha (LIFO)** = último entra, primeiro sai. Todas as operações O(1).
+- **Fila (FIFO)** = primeiro entra, primeiro sai. Todas as operações O(1).
+- **Deque** = pode operar nas duas pontas em O(1). Generaliza pilha e fila.
+- **Em Java**: use sempre `ArrayDeque` (nunca `java.util.Stack`, nunca `LinkedList` pra fila).
+- **Em C++**: use `std::stack` ou `std::queue` (que são adaptadores sobre `std::deque`).
+- **Diferença sutil**: `std::stack::pop()` não retorna valor; `ArrayDeque.pop()` retorna.
+- **Problemas clássicos**: balanceamento de parênteses (LeetCode #20) e avaliação de RPN são canônicos de entrevista.
+
+Próxima lição: **Pilhas e Filas — Algoritmos Avançados**. Vamos cobrir:
+- **Shunting Yard** (Dijkstra, 1961) — converte infixa em pós-fixa
+- **Monotonic deque** — resolve sliding window maximum em O(n)
+- **Monotonic stack** — next greater element, histograma de retângulos
+- **BFS** num grafo — base de Dijkstra e A*

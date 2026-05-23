@@ -29,26 +29,91 @@ Esta lição vai destrinchar o porquê. No fim, você vai entender:
 "Does anyone actually use LinkedList? I wrote it, and I never use it." — **Joshua Bloch**, o engenheiro que escreveu o `java.util.LinkedList`. Quando o autor da classe não usa o próprio código, é um sinal forte.
 </Insight>
 
+### Mapa rápido entre Java e C++
+
+Se você programa em C++ (ICPC, jogos, sistemas) os equivalentes na STL são esses. O conceito é o mesmo, muda só a sintaxe:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Java — java.util
+List<Integer> dinamico = new ArrayList<>();   // array dinâmico
+List<Integer> ligada   = new LinkedList<>();  // doubly linked
+Deque<Integer> pilha   = new ArrayDeque<>();  // circular buffer
+
+dinamico.add(42);
+int x = dinamico.get(0);
+
+pilha.push(1);
+int topo = pilha.pop();
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// C++ — STL (<vector>, <list>, <deque>)
+std::vector<int> dinamico;   // array dinâmico (contíguo)
+std::list<int>   ligada;     // doubly linked
+std::deque<int>  pilha;      // double-ended queue
+
+dinamico.push_back(42);
+int x = dinamico[0];
+
+pilha.push_front(1);
+int topo = pilha.front(); pilha.pop_front();
+```
+
+</Code>
+</CodeSwap>
+
+Tudo que vamos discutir a seguir vale para os dois mundos: `std::vector` ↔ `ArrayList`, `std::list` ↔ `LinkedList`, `std::deque` ↔ `ArrayDeque`. As análises de cache e complexidade são idênticas — o Stroustrup, aliás, fez a palestra original em C++.
+
 ---
 
 ## Como cada um vive na memória
 
 ### ArrayList por dentro
 
-Um `ArrayList<Integer>` é, internamente, **um array Java contíguo** mais um inteiro `size`:
+Um `ArrayList<Integer>` é, internamente, **um array contíguo** mais um inteiro `size`. Em C++, `std::vector` segue exatamente a mesma ideia, só com 3 ponteiros em vez de tamanho + capacidade:
+
+<CodeSwap>
+<Code lang="java">
 
 ```java
+// java.util.ArrayList (simplificado do OpenJDK)
 public class ArrayList<E> {
     transient Object[] elementData;  // o array real
-    private int size;
-    // ...
+    private int size;                 // quantos elementos ocupados
+    // capacidade = elementData.length
 }
 ```
 
-Quando o array enche, o `ArrayList` cria um novo array **1.5x maior**, copia tudo, e descarta o antigo. Esse é o famoso **crescimento amortizado** — caro pontualmente, barato no longo prazo.
+</Code>
+<Code lang="cpp">
+
+```cpp
+// std::vector (conceitualmente — implementações reais variam)
+template<typename T>
+class vector {
+    T* _start;            // início do bloco contíguo
+    T* _finish;           // primeiro slot livre  (size = _finish - _start)
+    T* _end_of_storage;   // fim alocado          (capacity = _end_of_storage - _start)
+};
+```
+
+</Code>
+</CodeSwap>
+
+Quando o array enche, o `ArrayList` cria um novo array maior, copia tudo, e descarta o antigo. Esse é o famoso **crescimento amortizado** — caro pontualmente, barato no longo prazo. O fator de crescimento varia entre implementações:
+
+<CodeSwap>
+<Code lang="java">
 
 ```java
 // Trecho real do OpenJDK (simplificado)
+// ArrayList cresce com fator 1.5x
 private void grow(int minCapacity) {
     int oldCapacity = elementData.length;
     int newCapacity = oldCapacity + (oldCapacity >> 1);  // 1.5x
@@ -56,21 +121,65 @@ private void grow(int minCapacity) {
 }
 ```
 
+</Code>
+<Code lang="cpp">
+
+```cpp
+// std::vector — fator de crescimento depende da implementação:
+// - libstdc++ (GCC) e libc++ (Clang): 2x
+// - MSVC STL: 1.5x
+// Conceitualmente:
+void grow() {
+    size_t old_cap = capacity();
+    size_t new_cap = old_cap * 2;  // libc++ / libstdc++
+    T* new_data = allocator.allocate(new_cap);
+    std::uninitialized_move(_start, _finish, new_data);
+    // ... realloc + destruir antigo
+}
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+Fator 2x desperdiça mais memória mas faz menos realocações; fator 1.5x economiza memória ao custo de mais cópias. Não existe "melhor" universal — é trade-off conhecido. Ambos garantem O(1) amortizado.
+</Aviso>
+
 <Aviso>
 Cuidado com a confusão: `Object[]` no Java não armazena os objetos em si, e sim **referências** (ponteiros) para eles. O array é contíguo, mas os objetos apontados estão espalhados pelo heap. Para tipos primitivos boxed (`Integer`, `Long`), isso degrada muito a localidade. Se performance crítica importa, use `int[]` direto.
 </Aviso>
 
 ### LinkedList por dentro
 
-`LinkedList<Integer>` é uma **lista duplamente ligada**. Cada elemento é um `Node` alocado **separadamente no heap**:
+`LinkedList<Integer>` é uma **lista duplamente ligada**. Cada elemento é um `Node` alocado **separadamente no heap**. `std::list` em C++ tem estrutura praticamente idêntica:
+
+<CodeSwap>
+<Code lang="java">
 
 ```java
+// java.util.LinkedList — nó interno
 private static class Node<E> {
     E item;
     Node<E> next;
     Node<E> prev;
 }
 ```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// std::list — nó interno (libstdc++, simplificado)
+template<typename T>
+struct _List_node {
+    T data;
+    _List_node* next;
+    _List_node* prev;
+};
+```
+
+</Code>
+</CodeSwap>
 
 Para cada elemento, você paga:
 - **16 bytes** de header do objeto Node (na JVM HotSpot 64-bit)
@@ -120,9 +229,13 @@ Memória por elemento | ~4-8 bytes (referência) | ~40+ bytes | ArrayList muito 
 
 ### A armadilha do "LinkedList é O(1) para inserir no meio"
 
-Esse é o erro mais comum em entrevista de Java. Olha o que `LinkedList.add(int index, E element)` realmente faz:
+Esse é o erro mais comum em entrevista de Java. Olha o que `LinkedList.add(int index, E element)` realmente faz — e o problema **idêntico** que `std::list` tem em C++ se você tentar simular acesso por índice:
+
+<CodeSwap>
+<Code lang="java">
 
 ```java
+// java.util.LinkedList — código real do OpenJDK
 public void add(int index, E element) {
     checkPositionIndex(index);
     if (index == size)
@@ -147,6 +260,27 @@ Node<E> node(int index) {
 }
 ```
 
+</Code>
+<Code lang="cpp">
+
+```cpp
+// std::list NÃO tem operator[] — você é forçado a percorrer.
+// Note como std::next(it, n) é O(n) — a STL é honesta sobre isso.
+
+void inserir_no_indice(std::list<int>& lista, int index, int valor) {
+    auto it = lista.begin();
+    std::advance(it, index);   // ← O(n) traversal, igual ao node() do Java
+    lista.insert(it, valor);    // a inserção em si é O(1)
+}
+
+// Total = O(n), mesma armadilha do Java.
+// A diferença: em C++ a STL te FORÇA a ver o O(n) (via std::advance),
+// enquanto o Java esconde dentro de .add(index, x).
+```
+
+</Code>
+</CodeSwap>
+
 A **inserção em si** é O(1) (só ajustar 4 referências), mas **chegar até o índice é O(n)**. O total continua sendo O(n) — e pior, com cache misses no caminho. `ArrayList.add(index, x)` também é O(n) (precisa shiftar os elementos), mas o shift é em memória contígua e o CPU prefetcher ajuda. **ArrayList ganha na prática.**
 
 <Aviso>
@@ -162,6 +296,9 @@ Se você ainda usa `LinkedList` como fila ou pilha, **pare**. O próprio Javadoc
 > "This class [ArrayDeque] is likely to be faster than `Stack` when used as a stack, and **faster than `LinkedList` when used as a queue**."
 
 `ArrayDeque` é um **circular buffer** em cima de um array — mantém localidade de cache mesmo com operações nas duas pontas:
+
+<CodeSwap>
+<Code lang="java">
 
 ```java
 // Bom: ArrayDeque como pilha
@@ -179,6 +316,33 @@ String primeiro = fila.poll();  // "a"
 // Ruim (mas ainda funciona):
 Queue<Integer> velho = new LinkedList<>();  // ← evite
 ```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// Bom: std::stack (sobre deque por default) como pilha
+std::stack<int> pilha;
+pilha.push(1);
+pilha.push(2);
+int topo = pilha.top(); pilha.pop();  // topo = 2
+
+// Bom: std::queue (sobre deque por default) como fila
+std::queue<std::string> fila;
+fila.push("a");
+fila.push("b");
+std::string primeiro = fila.front(); fila.pop();  // "a"
+
+// Ruim (raramente justificado):
+std::list<int> velho;  // ← evite para fila/pilha
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+Em C++, `std::stack` e `std::queue` são **adaptadores** — internamente usam `std::deque` por padrão. Você pode trocar o container subjacente, mas raramente vale a pena. A regra é a mesma do Java: **representação contígua por default**.
+</Aviso>
 
 ---
 

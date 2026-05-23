@@ -1,0 +1,97 @@
+[
+  {
+    "id": "pilhas-01",
+    "enunciado": "Você precisa implementar o histórico de \"voltar\" de um navegador web. Quando o usuário clica em \"voltar\", você precisa retornar à página mais recente visitada antes da atual. Qual estrutura de dados modela isso naturalmente?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["Fila (FIFO)", "Pilha (LIFO)", "HashMap", "Árvore binária"],
+    "resposta": 1,
+    "explicacao": "Pilha (LIFO). A página mais recente visitada é a primeira a sair quando você clica em voltar — exatamente o comportamento LIFO. Quando você visita uma página nova, push; quando volta, pop. Navegadores reais usam exatamente isso (geralmente duas pilhas: uma para voltar e outra para avançar)."
+  },
+  {
+    "id": "pilhas-02",
+    "enunciado": "Você está processando mensagens em um sistema de e-commerce: pedidos chegam e devem ser processados na ordem em que foram recebidos. Qual estrutura modela isso?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["Pilha (LIFO)", "Fila (FIFO)", "Set ordenado", "Heap"],
+    "resposta": 1,
+    "explicacao": "Fila (FIFO) — first in, first out. Pedidos devem ser processados na ordem cronológica de chegada. Pilha inverteria a ordem (LIFO), set ordenado ordenaria por outro critério, e heap atende por prioridade. Filas FIFO são a base de sistemas de mensageria como RabbitMQ e Kafka (quando configurados para ordenação)."
+  },
+  {
+    "id": "pilhas-03",
+    "enunciado": "Qual é a complexidade das operações push, pop e peek em uma ArrayDeque (Java) ou std::stack (C++)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1) amortizado para todas", "O(log n) para todas", "O(n) para pop, O(1) para push", "O(n) para todas"],
+    "resposta": 0,
+    "explicacao": "Todas as três operações são O(1) amortizado. O 'amortizado' aplica-se ao push: ocasionalmente o array interno precisa crescer (O(n) na realocação), mas distribuindo esse custo ao longo de muitas operações, o custo médio fica constante. Pop e peek são sempre O(1) puro. É por isso que pilhas são escolhidas em algoritmos sensíveis a performance — você nunca paga mais que O(1) por operação na média."
+  },
+  {
+    "id": "pilhas-04",
+    "enunciado": "Verdadeiro ou falso: `std::stack::pop()` em C++ retorna o elemento removido, igual ao `ArrayDeque.pop()` do Java.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Essa é uma diferença sutil que pega muita gente. Em C++, `std::stack::pop()` apenas REMOVE o topo, sem retornar nada. Você precisa chamar `top()` antes para pegar o valor. No Java, `ArrayDeque.pop()` faz as duas coisas (remove E retorna). A razão histórica do C++ é evitar cópias caras de objetos pesados durante o pop — em C++ você só paga pela cópia se chamar `top()` explicitamente."
+  },
+  {
+    "id": "pilhas-05",
+    "enunciado": "Por que `java.util.Stack` é desencorajado no Java moderno?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque tem complexidade O(log n) em todas as operações",
+      "Porque é sincronizada (overhead de mutex) e expõe métodos que violam a abstração de pilha",
+      "Porque foi removida no Java 17",
+      "Porque consome mais memória que ArrayDeque"
+    ],
+    "resposta": 1,
+    "explicacao": "java.util.Stack herda de Vector, que é sincronizada — toda operação adquire um mutex mesmo em código single-thread, gerando overhead inútil. Além disso, herda métodos como `get(i)`, `add(i, x)`, `set(i, x)` que violam a abstração LIFO (uma pilha não deveria permitir acesso aleatório). A própria Oracle recomenda usar Deque/ArrayDeque. A classe ainda existe por compatibilidade retroativa, mas é considerada legada."
+  },
+  {
+    "id": "pilhas-06",
+    "enunciado": "Considere a string \"({[]})\". Qual o tamanho MÁXIMO que a pilha alcança ao validar essa string com o algoritmo de balanceamento de parênteses?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["1", "2", "3", "6"],
+    "resposta": 2,
+    "explicacao": "Tamanho máximo = 3. Trace: push '(' → [(], push '{' → [(,{], push '[' → [(,{,[]. Nesse momento a pilha tem tamanho 3 (máximo). Daí pop ']' → [(,{], pop '}' → [(], pop ')' → []. O tamanho máximo da pilha corresponde à PROFUNDIDADE de aninhamento, não ao total de caracteres. Por isso o algoritmo é O(n) tempo e O(n) espaço apenas no pior caso (string toda de aberturas tipo \"((((((\")."
+  },
+  {
+    "id": "pilhas-07",
+    "enunciado": "Qual o valor da expressão RPN: `4 13 5 / +`?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["6", "9", "8", "11"],
+    "resposta": 0,
+    "explicacao": "Trace: push 4 → [4]; push 13 → [4,13]; push 5 → [4,13,5]; '/' → pop 5 e 13, push 13/5=2 (divisão inteira) → [4,2]; '+' → pop 2 e 4, push 4+2=6 → [6]. Resultado = 6. Essa expressão equivale à infixa `4 + (13 / 5)` = `4 + 2` = 6. Observe que `13 / 5` em divisão inteira dá 2, não 2.6."
+  },
+  {
+    "id": "pilhas-08",
+    "enunciado": "Você quer construir uma estrutura que permita inserir tanto no início quanto no fim em O(1). Qual escolher?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "ArrayList (Java) ou std::vector (C++)",
+      "ArrayDeque (Java) ou std::deque (C++)",
+      "java.util.Stack ou std::stack",
+      "HashMap ou std::unordered_map"
+    ],
+    "resposta": 1,
+    "explicacao": "ArrayDeque/std::deque são as escolhas corretas — ambos suportam addFirst/addLast (Java) ou push_front/push_back (C++) em O(1). ArrayList/std::vector permitem add no fim em O(1), mas add no início é O(n) por precisar deslocar todos os elementos. Stack é restrita a operações em uma ponta. HashMap não preserva ordem. Deque (Double-Ended Queue) generaliza pilha e fila."
+  },
+  {
+    "id": "pilhas-09",
+    "enunciado": "Verdadeiro ou falso: em uma pilha, se você fizer N pushes seguidos de N pops, vai recuperar os elementos na ordem em que foram inseridos.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. A pilha INVERTE a ordem (LIFO). Se você push(1), push(2), push(3) e depois pop, pop, pop, vai receber 3, 2, 1 — ordem inversa. Essa propriedade de inversão é exatamente o que torna a pilha útil para problemas como inversão de string, retorno de funções recursivas, e validação de parênteses. Para preservar ordem de inserção em recuperação, use uma fila (FIFO)."
+  },
+  {
+    "id": "pilhas-10",
+    "enunciado": "No problema de balanceamento de parênteses, em qual momento podemos retornar `false` imediatamente sem nem terminar de processar a string?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando encontramos um caractere de fechamento e a pilha está vazia",
+      "Quando o tamanho da pilha excede 10",
+      "Quando encontramos dois caracteres iguais seguidos",
+      "Nunca podemos retornar false antes de processar tudo"
+    ],
+    "resposta": 0,
+    "explicacao": "Quando encontramos um fechamento (')', ']', '}') e a pilha está vazia, significa que não há abertura correspondente — a string é inválida e podemos retornar false imediatamente. Outro caso de early-exit é quando o topo da pilha não bate com o fechamento atual (ex: topo é '(' mas o fechamento é ']'). Detectar falha cedo economiza tempo — não precisamos processar o resto se já sabemos que é inválido. Essa é uma otimização clássica de algoritmos sobre strings."
+  }
+]

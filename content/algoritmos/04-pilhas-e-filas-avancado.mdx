@@ -1,0 +1,529 @@
+---
+titulo: "Pilhas e Filas: Algoritmos Avançados"
+trilha: "algoritmos"
+duracaoMin: 40
+dificuldade: "intermediario"
+referencias:
+  - "Edsger W. Dijkstra, Mathematisch Centrum report MR 34/61 (1961) — 'Making a Translator for ALGOL 60' (Shunting Yard original)"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Cap. 22 — Elementary Graph Algorithms (BFS)"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 4.1 — Undirected Graphs"
+  - "LeetCode #239 — Sliding Window Maximum (Monotonic Deque)"
+  - "LeetCode #496, #503, #739 — Next Greater Element / Daily Temperatures (Monotonic Stack)"
+  - "Competitive Programmer's Handbook, Antti Laaksonen — Cap. 8 (Stack/Queue applications)"
+---
+
+## Da álgebra de Boole ao parser de calculadora
+
+Pilhas e filas básicas resolvem problemas óbvios (balanceamento de parênteses, RPN). Mas as técnicas **avançadas** que dependem dessas estruturas resolvem problemas que parecem impossíveis sem elas — em complexidade ótima.
+
+Nesta lição você vai aprender 4 técnicas que aparecem em **TODA** entrevista FAANG e em **quase todo** problema sério de ICPC:
+
+1. **Shunting Yard** (Dijkstra, 1961) — converte expressões matemáticas para uma forma que computadores conseguem avaliar
+2. **Monotonic Deque** — encontra o máximo em janelas deslizantes em O(n)
+3. **Monotonic Stack** — encontra o "próximo maior" em O(n)
+4. **BFS** — caminho mais curto em grafos não ponderados
+
+Todas usam o mesmo princípio: **manter na estrutura apenas os elementos que ainda podem influenciar o futuro, e descartar agressivamente os que não podem**.
+
+---
+
+## Shunting Yard: convertendo infixa em pós-fixa
+
+Em 1961, no **Mathematisch Centrum** em Amsterdam, **Edsger Dijkstra** trabalhava no primeiro compilador ALGOL 60 da história. Ele precisava de uma forma de transformar expressões que humanos escrevem (infixa, com precedência e parênteses) em uma forma que máquinas avaliam facilmente (pós-fixa). O algoritmo dele virou o **Shunting Yard** — publicado no relatório técnico **MR 34/61**.
+
+O nome vem de **pátios de manobras ferroviárias**: trens entrando por uma linha são reorganizados em desvios temporários (a pilha) antes de saírem na ordem correta na linha oposta.
+
+<Insight>
+Esse algoritmo é, talvez, o exemplo mais elegante de "pilha como buffer de reordenação" da computação. Ele resolve um problema que parecia exigir uma árvore (AST) usando apenas uma string de saída e uma pilha de operadores. **Quase todo compilador hoje começa por uma variação desse algoritmo.**
+</Insight>
+
+### O algoritmo
+
+Dois "tokens" a processar — operandos (números) e operadores (`+`, `-`, `*`, `/`, parênteses). Mantemos:
+- **Saída** (fila): onde a expressão pós-fixa vai sendo construída
+- **Pilha de operadores**: armazena operadores aguardando o momento de ir pra saída
+
+Regras de processamento:
+
+1. **Operando** → vai direto pra saída
+2. **Operador `op`** → enquanto o topo da pilha for um operador de **precedência maior ou igual** a `op` (e não for `(`), tira da pilha pra saída. Depois empilha `op`.
+3. **`(`** → empilha
+4. **`)`** → tira tudo da pilha pra saída até encontrar `(`. Descarta o `(`.
+5. **Fim da expressão** → tira tudo que sobrou na pilha pra saída
+
+Precedência clássica:
+
+| Operador | Precedência |
+|---|---|
+| `*` `/` | 2 (maior) |
+| `+` `-` | 1 |
+| `(` `)` | — (especiais) |
+
+### Trace passo a passo
+
+Vamos converter `3 + 4 * 2 - 1` em pós-fixa:
+
+```
+Token  Ação                                      Saída            Pilha
+─────  ────────────────────────────────────────  ───────────────  ─────
+"3"    operando → saída                          [3]              []
+"+"    pilha vazia, empilha                      [3]              [+]
+"4"    operando → saída                          [3, 4]           [+]
+"*"    "+" tem precedência MENOR que "*",        [3, 4]           [+, *]
+       então empilha "*"
+"2"    operando → saída                          [3, 4, 2]        [+, *]
+"-"    "*" tem precedência MAIOR, tira pra saída [3, 4, 2, *]     [+]
+       "+" tem precedência IGUAL a "-", tira     [3, 4, 2, *, +]  []
+       empilha "-"                               [3, 4, 2, *, +]  [-]
+"1"    operando → saída                          [3, 4, 2, *, +, 1]   [-]
+fim    esvazia a pilha pra saída                 [3, 4, 2, *, +, 1, -] []
+```
+
+Resultado: `3 4 2 * + 1 -` (que é a pós-fixa de `(3 + (4 * 2)) - 1` = `10`).
+
+### Implementação do Shunting Yard
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public List<String> shuntingYard(String[] tokens) {
+    List<String> saida = new ArrayList<>();
+    Deque<String> ops = new ArrayDeque<>();
+    Map<String, Integer> prec = Map.of(
+        "+", 1, "-", 1,
+        "*", 2, "/", 2
+    );
+
+    for (String t : tokens) {
+        if (t.matches("\\d+")) {
+            saida.add(t);                                  // operando
+        } else if (prec.containsKey(t)) {                  // operador
+            while (!ops.isEmpty()
+                && !ops.peek().equals("(")
+                && prec.getOrDefault(ops.peek(), 0) >= prec.get(t)) {
+                saida.add(ops.pop());
+            }
+            ops.push(t);
+        } else if (t.equals("(")) {
+            ops.push(t);
+        } else if (t.equals(")")) {
+            while (!ops.peek().equals("(")) {
+                saida.add(ops.pop());
+            }
+            ops.pop();                                     // descarta "("
+        }
+    }
+    while (!ops.isEmpty()) saida.add(ops.pop());
+    return saida;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <stack>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <cctype>
+
+std::vector<std::string> shuntingYard(const std::vector<std::string>& tokens) {
+    std::vector<std::string> saida;
+    std::stack<std::string> ops;
+    std::unordered_map<std::string, int> prec = {
+        {"+", 1}, {"-", 1},
+        {"*", 2}, {"/", 2}
+    };
+
+    auto isNumber = [](const std::string& s) {
+        return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
+    };
+
+    for (const auto& t : tokens) {
+        if (isNumber(t)) {
+            saida.push_back(t);                            // operando
+        } else if (prec.count(t)) {                        // operador
+            while (!ops.empty()
+                && ops.top() != "("
+                && prec.count(ops.top())
+                && prec[ops.top()] >= prec[t]) {
+                saida.push_back(ops.top()); ops.pop();
+            }
+            ops.push(t);
+        } else if (t == "(") {
+            ops.push(t);
+        } else if (t == ")") {
+            while (ops.top() != "(") {
+                saida.push_back(ops.top()); ops.pop();
+            }
+            ops.pop();                                     // descarta "("
+        }
+    }
+    while (!ops.empty()) { saida.push_back(ops.top()); ops.pop(); }
+    return saida;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) tempo, O(n) espaço. Cada token é empilhado e desempilhado no máximo uma vez.
+
+<ComplexidadeBox melhor="O(n)" media="O(n)" pior="O(n)" />
+
+<Aviso>
+A versão acima trata apenas operadores binários esquerda-associativos (`+ - * /`). Para operadores direita-associativos (como `^` de exponenciação), a comparação muda de `>=` para `>`. Calculadoras reais também precisam lidar com funções (`sin`, `cos`), operadores unários (`-x`), e erros (parênteses não balanceados). A ideia base é a mesma — só são mais regras.
+</Aviso>
+
+---
+
+## Monotonic Deque: Sliding Window Maximum em O(n)
+
+**Problema (LeetCode #239)**: dado um array `nums` e um inteiro `k`, retorne o **máximo de cada janela contígua de tamanho k**.
+
+```
+nums = [1, 3, -1, -3, 5, 3, 6, 7],  k = 3
+
+Janelas:  [1, 3, -1]                → max = 3
+              [3, -1, -3]            → max = 3
+                  [-1, -3, 5]        → max = 5
+                       [-3, 5, 3]    → max = 5
+                            [5, 3, 6] → max = 6
+                                [3, 6, 7] → max = 7
+
+Resposta: [3, 3, 5, 5, 6, 7]
+```
+
+### Por que brute-force não basta
+
+A solução ingênua percorre cada janela de tamanho `k` recalculando o máximo: **O(n·k)**. Para `n = 10⁵` e `k = 10⁵`, dá **10¹⁰ operações** — tempo de execução acima de 1 minuto, garantido TLE em qualquer juiz.
+
+Existe uma solução com heap (`PriorityQueue` / `priority_queue`) em O(n log n), mas dá pra fazer melhor: **O(n) usando deque monotônico**.
+
+### A ideia da monotonia
+
+**Insight central**: dentro de uma janela, se você tem `[2, 5, 3]`, o número `2` jamais será resposta enquanto `5` estiver vivo — porque `5` está depois dele E é maior. Então `2` é **inútil** e pode ser descartado.
+
+Mantemos no deque apenas índices de **candidatos vivos a máximo**, em ordem decrescente de valor. Na cabeça do deque fica o índice do maior elemento da janela atual.
+
+**A cada novo elemento `nums[i]`**:
+1. Remova do **fim** do deque todos os índices `j` com `nums[j] < nums[i]` — eles não podem mais ser máximo
+2. Adicione `i` no fim
+3. Se a cabeça do deque está fora da janela (índice ≤ `i - k`), remova-a
+4. Quando `i >= k - 1`, o `nums[deque.front()]` é o máximo da janela atual
+
+### Trace do monotonic deque
+
+```
+nums = [1, 3, -1, -3, 5, 3, 6, 7],  k = 3
+
+i=0, nums[0]=1
+  deque vazio → push 0                          deque (índices): [0]
+  janela ainda incompleta
+
+i=1, nums[1]=3
+  fim do deque é nums[0]=1 < 3 → pop 0          deque: []
+  push 1                                         deque: [1]
+  janela ainda incompleta
+
+i=2, nums[2]=-1
+  fim do deque é nums[1]=3 > -1 → não remove
+  push 2                                         deque: [1, 2]
+  janela completa! max = nums[1] = 3            resposta: [3]
+
+i=3, nums[3]=-3
+  fim é nums[2]=-1 > -3 → não remove
+  push 3                                         deque: [1, 2, 3]
+  cabeça (1) ainda está em [1..3]? sim
+  max = nums[1] = 3                              resposta: [3, 3]
+
+i=4, nums[4]=5
+  pop 3 (nums[3]=-3 < 5)                         deque: [1, 2]
+  pop 2 (nums[2]=-1 < 5)                         deque: [1]
+  pop 1 (nums[1]=3 < 5)                          deque: []
+  push 4                                         deque: [4]
+  max = nums[4] = 5                              resposta: [3, 3, 5]
+
+i=5, nums[5]=3
+  fim é nums[4]=5 > 3 → não remove
+  push 5                                         deque: [4, 5]
+  max = nums[4] = 5                              resposta: [3, 3, 5, 5]
+
+i=6, nums[6]=6
+  pop 5 (nums[5]=3 < 6)                          deque: [4]
+  pop 4 (nums[4]=5 < 6)                          deque: []
+  push 6                                         deque: [6]
+  max = nums[6] = 6                              resposta: [3, 3, 5, 5, 6]
+
+i=7, nums[7]=7
+  pop 6 (nums[6]=6 < 7)                          deque: []
+  push 7                                         deque: [7]
+  max = nums[7] = 7                              resposta: [3, 3, 5, 5, 6, 7]
+```
+
+Por que isso é O(n)? **Cada índice entra no deque uma vez e sai no máximo uma vez** — total de 2n operações. O `while` interno parece custoso, mas amortiza pra O(1) por iteração.
+
+### Implementação do Sliding Window
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public int[] maxSlidingWindow(int[] nums, int k) {
+    int n = nums.length;
+    int[] res = new int[n - k + 1];
+    Deque<Integer> dq = new ArrayDeque<>();  // armazena ÍNDICES
+
+    for (int i = 0; i < n; i++) {
+        // 1. remove índices fora da janela
+        if (!dq.isEmpty() && dq.peekFirst() <= i - k) {
+            dq.pollFirst();
+        }
+        // 2. remove do fim todos os menores que nums[i]
+        while (!dq.isEmpty() && nums[dq.peekLast()] < nums[i]) {
+            dq.pollLast();
+        }
+        // 3. adiciona o índice atual
+        dq.offerLast(i);
+        // 4. quando a janela está completa, registra o máximo
+        if (i >= k - 1) {
+            res[i - k + 1] = nums[dq.peekFirst()];
+        }
+    }
+    return res;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <deque>
+
+std::vector<int> maxSlidingWindow(std::vector<int>& nums, int k) {
+    int n = nums.size();
+    std::vector<int> res;
+    std::deque<int> dq;  // armazena ÍNDICES
+
+    for (int i = 0; i < n; i++) {
+        // 1. remove índices fora da janela
+        if (!dq.empty() && dq.front() <= i - k) {
+            dq.pop_front();
+        }
+        // 2. remove do fim todos os menores que nums[i]
+        while (!dq.empty() && nums[dq.back()] < nums[i]) {
+            dq.pop_back();
+        }
+        // 3. adiciona o índice atual
+        dq.push_back(i);
+        // 4. quando a janela está completa, registra o máximo
+        if (i >= k - 1) {
+            res.push_back(nums[dq.front()]);
+        }
+    }
+    return res;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) tempo, O(k) espaço (o deque tem no máximo k índices).
+
+<Insight>
+**Por que armazenamos índices, não valores?** Porque precisamos saber **quando o elemento sai da janela**. O índice nos diz isso direto — se o índice da cabeça é menor ou igual a `i - k`, ele já está fora.
+</Insight>
+
+---
+
+## Monotonic Stack: Next Greater Element
+
+**Problema clássico**: para cada elemento de um array, encontre o **primeiro elemento à direita que é maior** que ele. Se não houver, marque -1.
+
+```
+nums = [2, 1, 5, 6, 2, 3]
+res  = [5, 5, 6, -1, 3, -1]
+```
+
+Brute-force: O(n²). Com **pilha monotônica decrescente**: O(n).
+
+### Algoritmo do Next Greater
+
+Percorremos o array. Mantemos uma pilha de **índices ainda sem resposta**, com os valores em ordem decrescente.
+
+Para cada `nums[i]`:
+1. Enquanto a pilha não está vazia e `nums[topo] < nums[i]`: o `topo` acabou de encontrar seu próximo maior (é `nums[i]`). Desempilha e seta `res[topo] = nums[i]`.
+2. Empilha `i`.
+
+Ao fim, todos os índices que sobraram na pilha não têm próximo maior — seta `-1`.
+
+### Implementação do Next Greater
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public int[] nextGreaterElement(int[] nums) {
+    int n = nums.length;
+    int[] res = new int[n];
+    Arrays.fill(res, -1);
+    Deque<Integer> pilha = new ArrayDeque<>();  // índices
+
+    for (int i = 0; i < n; i++) {
+        while (!pilha.isEmpty() && nums[pilha.peek()] < nums[i]) {
+            int idx = pilha.pop();
+            res[idx] = nums[i];
+        }
+        pilha.push(i);
+    }
+    return res;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <stack>
+
+std::vector<int> nextGreaterElement(std::vector<int>& nums) {
+    int n = nums.size();
+    std::vector<int> res(n, -1);
+    std::stack<int> pilha;  // índices
+
+    for (int i = 0; i < n; i++) {
+        while (!pilha.empty() && nums[pilha.top()] < nums[i]) {
+            int idx = pilha.top(); pilha.pop();
+            res[idx] = nums[i];
+        }
+        pilha.push(i);
+    }
+    return res;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) — cada índice entra e sai da pilha uma vez.
+
+### Variações úteis
+
+Mesma técnica resolve:
+- **LeetCode #739 Daily Temperatures** — quantos dias até uma temperatura mais alta
+- **LeetCode #496/503 Next Greater Element I/II** — variações em arrays circulares
+- **LeetCode #84 Largest Rectangle in Histogram** — pilha monotônica em histogramas
+- **LeetCode #42 Trapping Rain Water** — pilha monotônica em "água da chuva"
+
+São todos problemas de entrevista FAANG. **Dominar a pilha monotônica destrava uma família inteira.**
+
+---
+
+## BFS: busca em largura
+
+**B**readth-**F**irst **S**earch. Visita um grafo (ou árvore) em **camadas** — primeiro todos os vizinhos diretos, depois os vizinhos dos vizinhos, e assim por diante. Garante o **caminho mais curto em arestas** em grafos não ponderados.
+
+### Por que BFS usa fila
+
+A propriedade do BFS é processar nós **na ordem em que foram descobertos**. Isso é FIFO — exatamente o que uma fila faz.
+
+- **Pilha** no lugar da fila → vira **DFS** (busca em profundidade), comportamento totalmente diferente
+- **Heap** no lugar da fila → vira **Dijkstra** (caminho mais curto com pesos)
+
+A escolha da estrutura *é* o algoritmo.
+
+### Implementação do BFS
+
+Grafo representado como lista de adjacência: `adj[u]` lista todos os vizinhos de `u`.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+// Retorna distâncias do nó 'origem' a todos os outros nós (em arestas)
+public int[] bfs(List<List<Integer>> adj, int origem) {
+    int n = adj.size();
+    int[] dist = new int[n];
+    Arrays.fill(dist, -1);             // -1 = não alcançável
+    dist[origem] = 0;
+
+    Queue<Integer> fila = new ArrayDeque<>();
+    fila.offer(origem);
+
+    while (!fila.isEmpty()) {
+        int u = fila.poll();
+        for (int v : adj.get(u)) {
+            if (dist[v] == -1) {       // ainda não visitado
+                dist[v] = dist[u] + 1;
+                fila.offer(v);
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <queue>
+
+// Retorna distâncias do nó 'origem' a todos os outros nós (em arestas)
+std::vector<int> bfs(const std::vector<std::vector<int>>& adj, int origem) {
+    int n = adj.size();
+    std::vector<int> dist(n, -1);     // -1 = não alcançável
+    dist[origem] = 0;
+
+    std::queue<int> fila;
+    fila.push(origem);
+
+    while (!fila.empty()) {
+        int u = fila.front(); fila.pop();
+        for (int v : adj[u]) {
+            if (dist[v] == -1) {       // ainda não visitado
+                dist[v] = dist[u] + 1;
+                fila.push(v);
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V + E) — visita cada vértice uma vez e cada aresta uma vez. Aqui V = número de vértices, E = número de arestas.
+
+<ComplexidadeBox melhor="O(V+E)" media="O(V+E)" pior="O(V+E)" />
+
+<Insight>
+**BFS é a base de Dijkstra** (caminho mais curto com pesos não negativos) — basta trocar a fila comum por uma fila de prioridade (heap). E é a base do **A*** (caminho mais curto guiado por heurística), trocando a heap por outra heap com chave diferente. **Entender BFS profundamente significa entender uma família inteira de algoritmos de grafo.**
+</Insight>
+
+---
+
+## Recap
+
+- **Shunting Yard** (Dijkstra 1961): pilha de operadores + fila de saída → converte infixa em pós-fixa em O(n). Base de quase todo compilador.
+- **Monotonic Deque**: mantém só candidatos vivos a máximo/mínimo em ordem decrescente → Sliding Window Maximum em O(n).
+- **Monotonic Stack**: mantém só elementos sem resposta ainda → Next Greater Element em O(n). Família grande de problemas LeetCode.
+- **BFS**: fila + marcação de visitados → caminho mais curto em grafo não ponderado em O(V + E). Base de Dijkstra e A*.
+
+**Princípio comum**: descartar agressivamente o que não pode mais importar. O segredo de algoritmos O(n) em problemas que parecem exigir O(n²).
+
+Próxima trilha: **Hash Tables** — como `HashMap`/`unordered_map` conseguem O(1) amortizado, e por que isso ocasionalmente vira O(n).

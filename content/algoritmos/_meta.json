@@ -3,6 +3,8 @@
   "descricao": "Fundamentos de análise, projeto e complexidade de algoritmos.",
   "licoes": [
     { "slug": "01-big-o", "ordem": 1 },
-    { "slug": "02-arrays-vs-listas-ligadas", "ordem": 2, "prerequisitos": ["01-big-o"] }
+    { "slug": "02-arrays-vs-listas-ligadas", "ordem": 2, "prerequisitos": ["01-big-o"] },
+    { "slug": "03-pilhas-e-filas", "ordem": 3, "prerequisitos": ["02-arrays-vs-listas-ligadas"] },
+    { "slug": "04-pilhas-e-filas-avancado", "ordem": 4, "prerequisitos": ["03-pilhas-e-filas"] }
   ]
 }
