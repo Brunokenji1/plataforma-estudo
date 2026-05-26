@@ -1,0 +1,672 @@
+---
+titulo: "Modular Monolith com Spring Modulith"
+descricao: "Enforcement automatizado de fronteiras de módulo em Java/Spring. ArchUnit, Spring Modulith, Event Publication Registry (Outbox built-in), @ApplicationModuleListener, testes por módulo, documentação automática."
+---
+
+A Lição 7 apresentou o Modular Monolith como estilo arquitetural — uma única unidade de deploy com fronteiras de módulo explícitas. A pergunta que ficou em aberto: **como garantir que essas fronteiras sejam respeitadas conforme o código evolui?**
+
+Sem enforcement automatizado, fronteiras de módulo são apenas convenção. No primeiro mês o time respeita. No segundo, alguém com pressa faz um import "rápido" entre módulos que deveriam ser isolados. No terceiro, outro dev vê o atalho e replica. No sexto mês, você tem um monolito modular **no nome** mas com acoplamento real igual ao monolito tradicional. O "Big Ball of Mud" voltou, dessa vez disfarçado.
+
+Esta lição cobre duas ferramentas Java que resolvem isso:
+
+1. **ArchUnit** — biblioteca de testes que verifica regras arquiteturais como **testes unitários** que rodam no CI
+2. **Spring Modulith** — framework Spring que, além de enforcement, fornece **eventos entre módulos**, **Event Publication Registry** (Outbox built-in), **testes por módulo** e **documentação automática**
+
+Não são alternativas: Spring Modulith **usa ArchUnit por baixo**. ArchUnit é a base genérica; Spring Modulith é a camada opinativa do Spring.
+
+<Insight>
+Não basta ter um diagrama de arquitetura bonito mostrando módulos. Sem enforcement automatizado, o diagrama vira ficção em 3 meses. A regra prática de arquitetos experientes: *fitness functions* (regras arquiteturais como testes automatizados) são o equivalente da "documentação executável" — se a regra está num teste que falha no CI, ela é real. Se está só num PDF, é folclore.
+</Insight>
+
+## ArchUnit: testes para arquitetura
+
+ArchUnit foi criado por **Peter Gafert** na consultoria alemã **TNG Technology Consulting**, open sourced em maio de 2018 sob licença Apache 2.0. A versão 1.0.0 foi lançada em outubro de 2022, marcando o amadurecimento da API. Site oficial: archunit.org. GroupId Maven: `com.tngtech.archunit`.
+
+A ideia central é simples e radical: **regras arquiteturais são testes unitários**. Você escreve regras como "classes do pacote `dominio` não podem importar nada de `infrastructure`" em Java puro (ou Kotlin), e essas regras rodam no JUnit junto com os testes normais. Se alguém quebrar, o build falha.
+
+ArchUnit funciona analisando o **bytecode Java** (não o código-fonte) — usa o ClassFileImporter pra carregar todas as classes em memória e roda asserções sobre o grafo de dependências. Não precisa de recompilação especial nem agente de runtime.
+
+### Exemplo básico — proibindo dependência cross-module
+
+Pro Carbon Credit (Bounded Contexts: Compensação, Inventário, Cadastro, Auditoria), uma regra fundamental é: **classes do interior de um módulo não podem ser usadas por outro módulo**. Em ArchUnit:
+
+```java
+package com.carbon.compensacaocredito;
+
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.lang.ArchRule;
+import org.junit.jupiter.api.Test;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+class ArquiteturaTest {
+
+    private static final JavaClasses classes = new ClassFileImporter()
+        .importPackages("com.carbon.compensacaocredito");
+
+    @Test
+    void compensacaoInternaNaoPodeSerImportadaForaDoModulo() {
+        ArchRule regra = noClasses()
+            .that().resideOutsideOfPackage("..compensacao..")
+            .should().dependOnClassesThat()
+            .resideInAPackage("..compensacao.interno..");
+
+        regra.check(classes);
+    }
+
+    @Test
+    void inventarioInternoNaoPodeSerImportadoForaDoModulo() {
+        ArchRule regra = noClasses()
+            .that().resideOutsideOfPackage("..inventario..")
+            .should().dependOnClassesThat()
+            .resideInAPackage("..inventario.interno..");
+
+        regra.check(classes);
+    }
+}
+```
+
+A sintaxe é fluente em inglês quase-natural: "no classes that reside outside of package `compensacao` should depend on classes that reside in package `compensacao.interno`". Quando alguém criar um import proibido, esse teste falha com mensagem explícita mostrando qual classe está violando, em qual linha.
+
+### Regras úteis built-in
+
+ArchUnit tem regras prontas pra arquiteturas comuns:
+
+```java
+@Test
+void semDependenciasCirculares() {
+    ArchRule regra = slices().matching("com.carbon.compensacaocredito.(*)..")
+        .should().beFreeOfCycles();
+    regra.check(classes);
+}
+
+@Test
+void layeredArchitecture() {
+    LayeredArchitecture regra = layeredArchitecture()
+        .consideringAllDependencies()
+        .layer("Controllers").definedBy("..web..")
+        .layer("Services").definedBy("..service..")
+        .layer("Repositories").definedBy("..repository..")
+        .whereLayer("Controllers").mayNotBeAccessedByAnyLayer()
+        .whereLayer("Services").mayOnlyBeAccessedByLayers("Controllers")
+        .whereLayer("Repositories").mayOnlyBeAccessedByLayers("Services");
+    regra.check(classes);
+}
+
+@Test
+void onionArchitecture() {
+    OnionArchitecture regra = onionArchitecture()
+        .domainModels("..dominio.modelo..")
+        .domainServices("..dominio.servico..")
+        .applicationServices("..aplicacao..")
+        .adapter("rest", "..adapter.driving.rest..")
+        .adapter("persistencia", "..adapter.driven.persistencia..");
+    regra.check(classes);
+}
+
+@Test
+void naoUsaSysoutNoCodigoProducao() {
+    ArchRule regra = noClasses()
+        .that().resideInAPackage("..dominio..")
+        .should().callMethod(System.class, "out");
+    regra.check(classes);
+}
+```
+
+ArchUnit também tem regras pra naming conventions, anotações, generics — qualquer aspecto verificável do código.
+
+### Onde colocar e como rodar
+
+Recomendação prática: crie uma classe `ArquiteturaTest` (ou `ArchitectureTest`) em `src/test/java/com/seu/pacote/`. Os testes rodam junto com `./mvnw test` ou `./gradlew test`. No CI, eles falham o build em qualquer violação — exatamente como qualquer teste unitário.
+
+Limitações importantes:
+
+- ArchUnit não previne código ruim em runtime — só verifica dependências entre classes/pacotes
+- Não substitui revisão de código pra qualidade de domínio (nome de variável, lógica)
+- Custo: regras complexas podem demorar 1-3 segundos pra rodar em projetos grandes (compensa em qualquer caso)
+
+ArchUnit é genérico — funciona em qualquer projeto Java, sem precisar de Spring. Útil em Spring, mas também em Java EE, Quarkus, Micronaut, ou Java puro.
+
+## Spring Modulith: a camada opinativa do Spring
+
+Spring Modulith foi criado por **Oliver Drotbohm**, engenheiro do Spring por 15 anos com foco em arquitetura de software, DDD e persistência. O projeto começou como **Moduliths** (um R&D side project) em torno de 2018, foi anunciado oficialmente como Spring Modulith em **outubro de 2022** como projeto experimental, e atingiu **versão 1.0 GA em 21 de agosto de 2023**. Spring Modulith 2.0 saiu posteriormente. Documentação oficial: docs.spring.io/spring-modulith.
+
+Spring Modulith é **opinativo**: assume uma estrutura específica de pacotes e fornece tooling automatizado em cima dela. Não é alternativa ao ArchUnit — usa ArchUnit por baixo. É a camada Spring-específica que automatiza o que você teria que escrever manualmente em ArchUnit, e adiciona features que ArchUnit não tem (eventos entre módulos, Event Publication Registry, testes por módulo).
+
+### A estrutura de pacotes esperada
+
+Spring Modulith parte de uma convenção simples: **um módulo é um pacote Java diretamente abaixo do pacote principal da aplicação**. Os sub-pacotes são considerados **internos** (não acessíveis de fora).
+
+```
+src/main/java/com/carbon/compensacaocredito/
+├── CompensacaoCreditoApplication.java     ← @SpringBootApplication
+├── compensacao/                           ← MÓDULO Compensação
+│   ├── package-info.java                  ← (opcional) descrição do módulo
+│   ├── CompensacaoFacade.java             ← API pública (top-level)
+│   ├── CompensacaoIniciada.java           ← evento público (top-level)
+│   └── interno/                           ← TUDO aqui é interno
+│       ├── CompensacaoEmissao.java
+│       ├── CompensacaoController.java
+│       ├── CompensacaoService.java
+│       └── ItemCompensacao.java
+├── inventario/                            ← MÓDULO Inventário
+│   ├── InventarioFacade.java              ← API pública
+│   ├── CreditoReservado.java              ← evento público
+│   └── interno/
+│       ├── Credito.java
+│       ├── InventarioController.java
+│       └── InventarioService.java
+├── cadastro/                              ← MÓDULO Cadastro
+│   ├── CadastroFacade.java
+│   └── interno/
+│       └── ...
+├── auditoria/                             ← MÓDULO Auditoria
+│   └── ...
+└── compartilhado/                         ← Shared Kernel (Lição 3)
+    └── CompensacaoId.java
+```
+
+Regra Spring Modulith por convenção:
+- Classes **top-level** dentro de `compensacao/` (mas FORA de `interno/`) são **API pública** — qualquer outro módulo pode importar
+- Classes em `compensacao/interno/` ou qualquer sub-pacote são **internas** — outros módulos NÃO podem importar
+- Você pode customizar nomes (não precisa ser `interno`, pode ser `internal`, `impl`, etc) via configuração
+
+### Verificando a estrutura — `ApplicationModules.verify()`
+
+Com isso, o teste de fronteira fica trivial — uma linha:
+
+```java
+package com.carbon.compensacaocredito;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.modulith.core.ApplicationModules;
+
+class ModularidadeTest {
+
+    @Test
+    void verificarEstruturaDosModulos() {
+        ApplicationModules.of(CompensacaoCreditoApplication.class).verify();
+    }
+}
+```
+
+Esse único teste:
+- Detecta automaticamente os módulos (cada pacote top-level)
+- Verifica que nenhum módulo importa classes internas de outro módulo
+- Detecta dependências cíclicas entre módulos
+- Falha com mensagem explícita listando todas as violações
+
+Por baixo dos panos, Spring Modulith está usando ArchUnit pra fazer essas verificações — você só não precisa escrever as regras manualmente.
+
+### Declarando dependências explícitas entre módulos
+
+Por padrão, qualquer módulo pode usar a API pública de qualquer outro. Em sistemas maiores, você quer restringir explicitamente — "Cadastro depende só de Compartilhado, não de Compensação". Spring Modulith permite isso via `package-info.java`:
+
+```java
+// compensacao/package-info.java
+@org.springframework.modulith.ApplicationModule(
+    displayName = "Compensação de Emissões",
+    allowedDependencies = { "inventario", "cadastro", "compartilhado" }
+)
+package com.carbon.compensacaocredito.compensacao;
+```
+
+Aqui declaramos que o módulo Compensação:
+- Tem display name "Compensação de Emissões" (usado em documentação automática)
+- Pode depender APENAS de: inventario, cadastro, compartilhado
+- Não pode depender de: auditoria, ou qualquer outro módulo não listado
+
+Se algum dev tentar importar uma classe de `auditoria` no código de `compensacao`, o `ApplicationModules.verify()` falha.
+
+### Cadastro como módulo "puro" (sem dependências de outros módulos)
+
+Vamos ao oposto:
+
+```java
+// cadastro/package-info.java
+@org.springframework.modulith.ApplicationModule(
+    displayName = "Cadastro de Emissores",
+    allowedDependencies = { "compartilhado" }
+)
+package com.carbon.compensacaocredito.cadastro;
+```
+
+Cadastro só pode usar `compartilhado` (CNPJ, Money, etc). Não pode importar nada de Compensação, Inventário ou Auditoria. Isso é exatamente o padrão "Bounded Context isolado" que vocês desenharam nas lições 3 e 4 do DDD.
+
+## Comunicação entre módulos — `@ApplicationModuleListener`
+
+Aqui é onde Spring Modulith brilha em relação ao ArchUnit puro. A pergunta natural: se módulos são isolados, como eles se comunicam? A resposta é a mesma da Lição 6 (Event-Driven): **por eventos**.
+
+Spring Modulith introduz a anotação `@ApplicationModuleListener` como **shortcut canônico** para receber eventos entre módulos. Por baixo dos panos, ela combina três anotações:
+
+- `@Async` — execução assíncrona em outra thread
+- `@Transactional(propagation = Propagation.REQUIRES_NEW)` — nova transação, isolada da que originou o evento
+- `@TransactionalEventListener` — só recebe se a transação de origem commitou
+
+### Exemplo — Auditoria reage a CompensacaoEfetivada
+
+```java
+// compensacao/CompensacaoEfetivada.java (top-level — evento PÚBLICO)
+package com.carbon.compensacaocredito.compensacao;
+
+import com.carbon.compensacaocredito.compartilhado.CompensacaoId;
+import com.carbon.compensacaocredito.compartilhado.CNPJ;
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public record CompensacaoEfetivada(
+    CompensacaoId compensacaoId,
+    CNPJ emissor,
+    BigDecimal totalToneladas,
+    Instant ocorridoEm
+) {}
+```
+
+```java
+// compensacao/interno/CompensacaoService.java (publica o evento)
+package com.carbon.compensacaocredito.compensacao.interno;
+
+import com.carbon.compensacaocredito.compensacao.CompensacaoEfetivada;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+class CompensacaoService {
+
+    private final RepositorioCompensacoes repo;
+    private final ApplicationEventPublisher publicador;
+
+    CompensacaoService(RepositorioCompensacoes repo, ApplicationEventPublisher publicador) {
+        this.repo = repo;
+        this.publicador = publicador;
+    }
+
+    @Transactional
+    public void efetivar(CompensacaoId id) {
+        var compensacao = repo.buscarPorId(id).orElseThrow();
+        compensacao.efetivar();
+        repo.salvar(compensacao);
+
+        publicador.publishEvent(new CompensacaoEfetivada(
+            compensacao.id(),
+            compensacao.emissor(),
+            compensacao.totalToneladas(),
+            java.time.Instant.now()
+        ));
+    }
+}
+```
+
+```java
+// auditoria/interno/RegistradorAuditoria.java (consome o evento em outro módulo)
+package com.carbon.compensacaocredito.auditoria.interno;
+
+import com.carbon.compensacaocredito.compensacao.CompensacaoEfetivada;
+import org.springframework.modulith.events.ApplicationModuleListener;
+import org.springframework.stereotype.Component;
+
+@Component
+class RegistradorAuditoria {
+
+    private final RepositorioAuditoria repo;
+
+    RegistradorAuditoria(RepositorioAuditoria repo) {
+        this.repo = repo;
+    }
+
+    @ApplicationModuleListener
+    void on(CompensacaoEfetivada evento) {
+        repo.registrar(new EntradaAuditoria(
+            "COMPENSACAO_EFETIVADA",
+            evento.compensacaoId().valor(),
+            evento.ocorridoEm()
+        ));
+    }
+}
+```
+
+Repara em três pontos importantes:
+
+1. **CompensacaoService nunca conhece RegistradorAuditoria** — só publica o evento. Auditoria pode ser removida amanhã sem afetar Compensação.
+2. **O evento CompensacaoEfetivada é top-level em `compensacao/`** — é API pública do módulo. RegistradorAuditoria pode importar.
+3. **`@ApplicationModuleListener`** garante que: (a) o handler só executa se a transação de origem commitou; (b) roda em nova transação isolada (falha no handler não faz rollback da compensação); (c) execução assíncrona em outra thread (não bloqueia a transação de origem).
+
+Isso resolve simultaneamente os problemas de **Domain Events** (Lição 6) e **Outbox Pattern** — quando você adiciona persistência (próxima seção).
+
+## Event Publication Registry — Outbox built-in
+
+Na Lição 6 cobrimos o **Outbox Pattern**: pra garantir que eventos sejam publicados de forma confiável, você grava o evento numa tabela `outbox` na mesma transação do agregado, e um worker separado publica de fato.
+
+Implementar Outbox manualmente exige: tabela, repository, lógica de marca/desmarca, worker scheduled, tratamento de concorrência, retentativas. Spring Modulith fornece tudo isso automaticamente como **Event Publication Registry**.
+
+### Como ativar
+
+Quando vocês evoluírem o Carbon Credit pra ter persistência real (decisão atualmente deferida — ADR-0005 da Lição 9), adicionar o starter Modulith JPA:
+
+```xml
+<!-- pom.xml -->
+<dependency>
+    <groupId>org.springframework.modulith</groupId>
+    <artifactId>spring-modulith-starter-jpa</artifactId>
+</dependency>
+```
+
+Existem starters paralelos:
+- `spring-modulith-starter-jpa` — usa JPA pra persistir eventos
+- `spring-modulith-starter-jdbc` — JDBC direto (mais leve)
+- `spring-modulith-starter-mongodb` — MongoDB
+
+A partir da adição do starter, **todo evento publicado dentro de uma transação que tem `@TransactionalEventListener` ou `@ApplicationModuleListener` é AUTOMATICAMENTE persistido**:
+
+1. `publicador.publishEvent(new CompensacaoEfetivada(...))` é chamado dentro da transação
+2. Spring Modulith descobre quais listeners estão registrados pra esse evento
+3. Pra cada listener, cria uma entrada na tabela `event_publication` **dentro da mesma transação** do agregado
+4. Quando o handler executa com sucesso, a entrada é marcada como completa
+5. Se o handler falha (ou a app reinicia antes dele executar), a entrada fica pendente
+6. Eventos pendentes podem ser reprocessados manualmente ou via worker
+
+Isso é exatamente o Transactional Outbox Pattern, **sem você escrever nada além do `publishEvent`**. A tabela é criada automaticamente quando você define:
+
+```yaml
+# application.yml
+spring:
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: true
+```
+
+A tabela `event_publication` tem schema definido pelo Spring Modulith (id, listener_id, event_type, serialized_event, publication_date, completion_date). Você não precisa criar migrations manualmente.
+
+### Vantagens em relação a Outbox manual
+
+Comparando com a implementação manual de Outbox que vocês fariam (vista na Lição 6):
+
+| Aspecto | Outbox manual | Event Publication Registry |
+|---------|---------------|---------------------------|
+| Tabela de outbox | Você cria e mantém | Criada automaticamente |
+| Serialização do evento | Você define | Jackson por default, plugável |
+| Worker de relay | Você implementa | Built-in, configurável |
+| Retentativas | Você implementa | Configurável |
+| Concorrência multi-instância | Você resolve com lock | Resolvido pelo registry |
+| Integração com transação | Você garante manualmente | Garantida pelo framework |
+
+A linha "concorrência multi-instância" merece atenção: quando você tem 3 instâncias da aplicação rodando em produção, todas tentam processar eventos pendentes. Sem locks, processariam o mesmo evento múltiplas vezes. Spring Modulith resolve isso por baixo dos panos.
+
+## Testes por módulo — `@ApplicationModuleTest`
+
+Spring Modulith adiciona uma anotação de teste que **carrega só o módulo testado, não o ApplicationContext inteiro**:
+
+```java
+package com.carbon.compensacaocredito.compensacao.interno;
+
+import org.springframework.modulith.test.ApplicationModuleTest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+
+@ApplicationModuleTest
+class CompensacaoIntegracaoTest {
+
+    @Autowired
+    CompensacaoService service;
+
+    @Test
+    void deveEfetivarCompensacao() {
+        var id = service.iniciar(new CNPJ("12345678000100"), new BigDecimal("100.5"));
+        service.reservarCredito(id, /* ... */);
+        service.efetivar(id);
+
+        var compensacao = service.buscar(id);
+        assertThat(compensacao.status()).isEqualTo(StatusCompensacao.EFETIVADA);
+    }
+}
+```
+
+Diferenças em relação a `@SpringBootTest`:
+
+- `@SpringBootTest` carrega o ApplicationContext inteiro (todos os módulos, todos os beans). Bom pra teste end-to-end mas lento.
+- `@ApplicationModuleTest` carrega **só os beans do módulo testado** (mais módulos declarados como dependência via `allowedDependencies`). Testa o módulo em isolamento, mas com todo o Spring funcionando.
+
+Você consegue testar Compensação sem subir Auditoria ou Inventário. Quando precisa de interação entre módulos, Spring Modulith fornece a classe `Scenario`:
+
+```java
+@ApplicationModuleTest
+class CompensacaoEventosTest {
+
+    @Test
+    void publicaEventoQuandoEfetivada(Scenario scenario) {
+        scenario.stimulate(() -> service.efetivar(id))
+                .andWaitForEventOfType(CompensacaoEfetivada.class)
+                .matching(evento -> evento.compensacaoId().equals(id))
+                .toArrive();
+    }
+}
+```
+
+Isso testa: ao chamar `efetivar`, um evento `CompensacaoEfetivada` é publicado. Sem precisar mockar publisher nem inspecionar internals.
+
+## Documentação automática
+
+Outro recurso forte do Spring Modulith: **gera documentação dos módulos automaticamente** a partir do código.
+
+```java
+package com.carbon.compensacaocredito;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.modulith.core.ApplicationModules;
+import org.springframework.modulith.docs.Documenter;
+
+class DocumentacaoTest {
+
+    @Test
+    void gerarDocumentacaoDeModulos() {
+        ApplicationModules modules = ApplicationModules.of(CompensacaoCreditoApplication.class);
+
+        new Documenter(modules)
+            .writeModulesAsPlantUml()           // diagrama PlantUML de módulos
+            .writeIndividualModulesAsPlantUml() // diagrama por módulo individual
+            .writeModuleCanvases();             // Module Canvas em AsciiDoc
+    }
+}
+```
+
+Output gerado em `target/spring-modulith-docs/`:
+
+- `components.puml` — diagrama PlantUML estilo Component Diagram do C4 (Lição 9), mostrando módulos e suas dependências
+- `module-compensacao.puml` — diagrama individual do módulo Compensação com classes internas
+- `module-compensacao.adoc` — "Module Canvas": documento estruturado com: descrição, API pública (Facades), eventos publicados, eventos consumidos, dependências, beans Spring
+
+Isso fecha o ciclo da Lição 9 (C4 Model): em vez de desenhar Component Diagrams à mão, você **gera a partir do código**. A documentação é sempre fiel ao código real — nunca desincroniza.
+
+A vantagem prática: no Pull Request, o reviewer pode ver tanto o código quanto o diagrama atualizado da arquitetura. Se alguém adicionou dependência cross-module, aparece no diagrama.
+
+## jMolecules — anotações DDD declarativas
+
+jMolecules é projeto irmão do Spring Modulith, também mantido por Oliver Drotbohm. Versão 2.0 disponível atualmente. Fornece **anotações Java declarativas** pros conceitos do DDD tático (Lição 4), permitindo enforcement automatizado também desses conceitos.
+
+```java
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
+import org.jmolecules.ddd.annotation.Repository;
+import org.jmolecules.ddd.annotation.ValueObject;
+import org.jmolecules.event.annotation.DomainEvent;
+
+@AggregateRoot
+public class CompensacaoEmissao {
+
+    @Identity
+    private CompensacaoId id;
+
+    private CNPJ emissor;
+    // ...
+}
+
+@ValueObject
+public record CNPJ(String valor) { /* ... */ }
+
+@Repository
+public interface RepositorioCompensacoes { /* ... */ }
+
+@DomainEvent
+public record CompensacaoEfetivada(/* ... */) { /* ... */ }
+```
+
+Por que importa: quando você combina jMolecules + ArchUnit + Spring Modulith, você consegue enforcement automatizado de regras DDD como:
+
+- `@AggregateRoot` não pode importar `@Service` da camada aplicação
+- `@ValueObject` deve ser imutável
+- `@Repository` deve ser uma interface, não classe concreta
+- `@DomainEvent` não pode referenciar `@Entity` (deve ser imutável)
+
+Essas regras são fitness functions automatizadas. Se alguém violar, build falha. O ciclo se fecha: do design conceitual (lições 3-4) ao código real verificado automaticamente.
+
+## Aplicação no Carbon Credit
+
+Pro projeto Carbon Credit Compensation Platform da Fatec, o roteiro prático de adoção de Spring Modulith:
+
+**Etapa 1 — Setup mínimo (1-2 horas):**
+
+```xml
+<!-- pom.xml -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-bom</artifactId>
+            <version>1.4.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.modulith</groupId>
+        <artifactId>spring-modulith-starter-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.modulith</groupId>
+        <artifactId>spring-modulith-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+Estruturar pacotes conforme convenção (compensacao/, inventario/, cadastro/, auditoria/, compartilhado/).
+
+**Etapa 2 — Teste de fronteira (10 minutos):**
+
+```java
+class ModularidadeTest {
+    @Test
+    void verificarEstruturaDosModulos() {
+        ApplicationModules.of(CompensacaoCreditoApplication.class).verify();
+    }
+}
+```
+
+A partir desse momento, qualquer violação de fronteira de módulo no código resulta em build vermelho.
+
+**Etapa 3 — Declarar dependências entre módulos (30 minutos):**
+
+Em cada pacote-módulo, adicionar `package-info.java` com `@ApplicationModule` declarando dependências permitidas. Isso documenta a intenção do design.
+
+**Etapa 4 — Migrar eventos pra `@ApplicationModuleListener` (1 hora):**
+
+Vocês já têm o conceito de Domain Events da Lição 6 implementado com publisher in-memory simples. Trocar pra `@ApplicationModuleListener` com `ApplicationEventPublisher` do Spring é trivial e dá ganhos imediatos: handlers automaticamente assíncronos, em nova transação, e se o grupo evoluir pra adicionar banco no futuro, **o Event Publication Registry vira Outbox automaticamente** com a adição do starter JPA.
+
+**Etapa 5 — Gerar documentação (10 minutos):**
+
+```java
+class DocumentacaoTest {
+    @Test
+    void gerarDocumentacaoDeModulos() {
+        new Documenter(ApplicationModules.of(CompensacaoCreditoApplication.class))
+            .writeModulesAsPlantUml()
+            .writeIndividualModulesAsPlantUml()
+            .writeModuleCanvases();
+    }
+}
+```
+
+Output em `target/spring-modulith-docs/` — diagrama PlantUML pra incluir no README do GitHub e Module Canvas em AsciiDoc.
+
+**Etapa 6 — Apresentação da avaliação final:**
+
+O conjunto C4 (Lição 9) + ADRs (Lição 9) + diagramas auto-gerados (esta lição) + testes de fronteira passando demonstra **maturidade arquitetural raríssima entre estudantes**. Pro avaliador, comunica:
+
+- Vocês entendem DDD estratégico (Bounded Contexts)
+- Vocês entendem DDD tático (agregados, eventos)
+- Vocês entendem Hexagonal (ports/adapters)
+- Vocês conhecem o estilo arquitetural escolhido (Modular Monolith) e por que escolheram (ADR-0007 da Lição 9)
+- Vocês têm enforcement automatizado, não só convenção verbal
+- A documentação está sempre sincronizada com o código
+
+<Aviso>
+Cuidado com a tentação de adotar Spring Modulith "porque é novo e legal". Se o projeto não tem fronteiras de módulo claras (Lições 3-4 de DDD), Spring Modulith vira ferramenta cara que não resolve problema real. A ordem correta é: primeiro identificar Bounded Contexts, desenhar o modelo de domínio, escolher o estilo Modular Monolith conscientemente — DEPOIS adicionar Spring Modulith pra automatizar o enforcement. Spring Modulith é ferramenta, não substituto pro design.
+</Aviso>
+
+## Comparação com microservices (sumário)
+
+Vale formalizar a comparação que apareceu indiretamente em lições anteriores:
+
+| Aspecto | Modular Monolith + Spring Modulith | Microservices |
+|---------|-----------------------------------|---------------|
+| Unidades de deploy | 1 | N (uma por serviço) |
+| Comunicação entre módulos | In-process (eventos Spring) | Rede (REST/gRPC/messaging) |
+| Transações cross-module | ACID nativo | Saga, eventual consistency |
+| Latência cross-module | Nanossegundos | Milissegundos |
+| Refactoring de fronteiras | Refactor de código (fácil) | Reescrever serviços (caro) |
+| Deploy independente | Não | Sim |
+| Stack heterogêneo | Não (1 JVM) | Sim (cada serviço pode escolher) |
+| Falha isolada | Não (1 processo) | Sim (com circuit breakers) |
+| Complexidade operacional | Baixa | Alta |
+| Time mínimo viável | 2-10 pessoas | 30-50+ pessoas |
+
+Pra contextos onde você não precisa de deploy independente nem stack heterogêneo (a maioria dos sistemas, especialmente em fase inicial), Modular Monolith com Spring Modulith oferece muito do benefício de microservices (modularidade clara, eventos entre módulos) sem os custos (network, deploy múltiplo, transações distribuídas, SRE/DevOps maduro).
+
+Quando o sistema crescer e algum módulo realmente precisar de deploy independente ou escala diferente, a transição é trivial porque **as fronteiras já estão lá**. Você extrai um módulo pra microservice trocando in-process events por eventos externos (Kafka, RabbitMQ) e os adapters de persistência. O domínio não muda.
+
+## Próximos passos
+
+Esta foi a Lição 10 da trilha de Arquitetura, que fecha um arco coerente de 10 lições:
+
+| # | Lição | Foco |
+|---|-------|------|
+| L1 | Introdução à Arquitetura | Princípios fundamentais |
+| L2 | Clean Architecture | Estrutura interna do código |
+| L3 | DDD Strategic | Bounded Contexts, Context Map |
+| L4 | DDD Tactical | Aggregates, Entities, Value Objects |
+| L5 | Hexagonal | Ports & Adapters |
+| L6 | Event-Driven | Domain Events, Integration Events, ES, CQRS |
+| L7 | Estilos Arquiteturais | Monolito, Modular Monolith, Microservices, Serverless |
+| L8 | Resilience Patterns | Timeouts, Circuit Breaker, Bulkhead, Retry |
+| L9 | C4 Model + ADR | Documentação arquitetural |
+| L10 | Spring Modulith | Enforcement automatizado em Java |
+
+A trilha cobre **design conceitual** (L1-L6) + **escolha de estilo** (L7) + **sobrevivência em produção** (L8) + **comunicação** (L9) + **enforcement automatizado** (L10). Forma uma base completa de arquitetura de software pra um desenvolvedor Java/Spring backend.
+
+Próximas direções possíveis fora dessa trilha:
+
+1. **Trilha Java/Spring** focada na linguagem e ecossistema (Spring Boot, JPA, Spring Security, Spring WebFlux)
+2. **Trilha de Microservices** se vocês quiserem aprofundar especificamente em sistemas distribuídos (Saga, Service Mesh, distributed tracing)
+3. **Trilha de Observabilidade** (OpenTelemetry, métricas, logs estruturados)
+4. **Tópicos práticos** — ICPC/C++ competitivo, freelance, outros projetos pessoais (Pipo, GG/META)
+
+A trilha de Arquitetura está **fechada como base sólida**. Adicionar mais lições agora começaria a entrar em tópicos especializados (microservices, observability, security) que merecem trilha própria.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Gafert, Peter, et al. *ArchUnit*. TNG Technology Consulting, open sourced em maio de 2018 sob Apache 2.0. Versão 1.0.0 em outubro de 2022. Site oficial archunit.org. Documentação completa com exemplos de Layered Architecture, Onion Architecture, package dependencies, cyclic dependencies e naming conventions.
+- Drotbohm, Oliver. *Spring Modulith*. Originalmente Moduliths (~2018, R&D side project), anunciado como Spring Modulith em outubro de 2022, atingiu 1.0 GA em 21 de agosto de 2023. Documentação oficial em docs.spring.io/spring-modulith. Anúncio do 1.0 GA em spring.io/blog/2023/08/21/spring-modulith-1-0-ga-released.
+- Drotbohm, Oliver. *jMolecules*. Projeto irmão do Spring Modulith. Versão 2.0 disponível. Anotações declarativas para conceitos de DDD tático (@AggregateRoot, @ValueObject, @DomainEvent, etc).
+- Richardson, Chris. "Pattern: Transactional outbox". microservices.io/patterns/data/transactional-outbox.html. Pattern implementado nativamente pelo Event Publication Registry do Spring Modulith.
+- Nygard, Michael T. *Release It! Design and Deploy Production-Ready Software*. Pragmatic Bookshelf, 1ª ed março/2007, 2ª ed janeiro/2018. Conceito de "fitness functions" como testes arquiteturais automatizados é abordado também na obra de Neal Ford e Rebecca Parsons.
+- Ford, Neal; Parsons, Rebecca; Kua, Pat. *Building Evolutionary Architectures: Support Constant Change*. O'Reilly Media, primeira edição setembro de 2017. Cunharam o termo "fitness functions" como objetivo de testes arquiteturais — base teórica do que ArchUnit e Spring Modulith implementam na prática.

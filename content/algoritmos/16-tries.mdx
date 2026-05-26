@@ -1,0 +1,455 @@
+---
+titulo: "Tries: A Árvore Que Vive Dentro do Google"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Edward Fredkin (1960), 'Trie Memory', Communications of the ACM 3(9), pp. 490-499 — paper original e origem do nome"
+  - "René de la Briandais (1959), 'File searching using variable length keys', Proceedings of the Western Joint Computer Conference — descrição anterior independente"
+  - "Alfred V. Aho, Margaret J. Corasick (1975), 'Efficient String Matching: An Aid to Bibliographic Search', Communications of the ACM 18(6), pp. 333-340 — algoritmo Aho-Corasick (Bell Labs)"
+  - "Donald Morrison (1968), 'PATRICIA — Practical Algorithm To Retrieve Information Coded in Alphanumeric', JACM 15(4) — paper original do Patricia Trie"
+  - "Knuth, The Art of Computer Programming, Vol. 3, Cap. 6.3 — Digital Searching"
+  - "CLRS, Introduction to Algorithms, 4ª ed., menções em capítulos de strings"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 5.2 — Tries (Princeton)"
+  - "MIT OCW 6.006 (Spring 2020), Lecture 19 — String Matching"
+  - "Princeton CS226 (Sedgewick), aula sobre Tries e R-way tries"
+---
+
+## Quando você digita "pyt" no Google
+
+Cada vez que você digita uma letra na barra de busca do Google, em menos de **50 milissegundos**, aparece uma lista de sugestões: "python", "python download", "python tutorial". Pra entregar isso, o Google precisa, **a cada tecla pressionada**, percorrer uma estrutura contendo bilhões de queries históricas e devolver as mais relevantes que começam com o prefixo que você acabou de digitar.
+
+Como? Hash table não serve — hash não preserva relação de prefixo. Árvore binária balanceada (TreeMap) funciona, mas é lenta demais. A solução, conhecida desde **1960**, é a estrutura desta lição: **Trie**.
+
+Tries são, em essência, **árvores onde cada caminho da raiz até uma folha representa uma palavra**. Cada caractere é uma aresta. Em vez de comparar strings inteiras como em hash table ou BST, você percorre letra por letra. Resultado: busca, inserção e remoção em **O(L)**, onde L é o tamanho da palavra — **independente** de quantas palavras existem na estrutura.
+
+Pra Google com bilhões de queries, isso significa que buscar "py" custa 2 acessos, mesmo se houvesse 100 bilhões de strings armazenadas. Sem trie, busca por prefixo seria O(n × L) — varrendo cada string testando se começa com "py".
+
+Esta lição é sobre tries e suas aplicações. Vamos cobrir a estrutura básica, o algoritmo de **Aho-Corasick** (que está no `fgrep` do Unix e em quase todo antivírus), variantes como **Patricia tries** (usadas em **roteamento IP** em todo roteador da internet), e por que entender tries destrava uma família inteira de problemas de strings.
+
+---
+
+## A história e a etimologia bizarra
+
+Como Union-Find e DP, trie também tem nome estranho.
+
+A ideia foi proposta primeiro em forma abstrata por **Axel Thue em 1912**. Em **1959**, **René de la Briandais** publicou uma descrição concreta no Western Joint Computer Conference (paper *"File searching using variable length keys"*). Em **1960**, **Edward Fredkin**, físico do MIT, publicou o paper **mais influente**, *"Trie Memory"* (Communications of the ACM 3(9)). Foi ele quem cunhou o termo.
+
+**De onde vem "trie"?** Da palavra **"reTRIEval"** (recuperação, em inglês). Fredkin pegou as letras do meio e batizou a estrutura. **Pronúncia**: Fredkin pronunciava como "tree" (árvore). Mas a maioria das pessoas hoje pronuncia como "try" (tentar) — pra **distinguir verbalmente** de "tree". Esse caos de pronúncia segue até hoje. Em entrevista técnica, qualquer pronúncia funciona — só não se chama de "trai" mesmo.
+
+A estrutura é também chamada de **prefix tree** ou **digital tree**. Em alguns livros antigos, **lexicographic tree**.
+
+<Insight>
+Existe um movimento informal pra **renomear "trie" pra "prefix tree"** em literatura moderna. O argumento: o nome original "trie" gera confusão de pronúncia, não descreve o que a estrutura faz, e é menos descritivo que "prefix tree". Alguns artigos recentes usam "prefix tree" preferencialmente. Mas o nome "trie" está cravado em décadas de literatura, então provavelmente vai sobreviver.
+</Insight>
+
+---
+
+## A estrutura básica
+
+Visualizando uma trie contendo as palavras `["cat", "car", "card", "care", "cars"]`:
+
+```
+                       (raiz)
+                          |
+                          c
+                          |
+                          a
+                         / \
+                        t   r
+                        *  /|\
+                          d e s
+                          * * *
+```
+
+Onde `*` marca o **fim de uma palavra**. Repare:
+- `cat` é o caminho `c → a → t`, com `*` em `t`
+- `car` é `c → a → r`, com `*` em `r`
+- `card` é `c → a → r → d`, com `*` em `d`
+- `care` e `cars` seguem o padrão
+
+Características importantes:
+
+1. **Cada nó representa um prefixo** — ele é o caminho da raiz até ele
+2. **Caracteres são as arestas**, não os nós
+3. **Cada nó tem um array (ou map) de filhos**, um por possível caractere do alfabeto
+4. **Um booleano `isEndOfWord`** marca se aquele caminho é uma palavra completa (pode existir uma palavra `car` e outra `card` na mesma trie)
+
+### Implementação básica
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class Trie {
+    private static class No {
+        No[] filhos = new No[26];          // assumindo letras minúsculas a-z
+        boolean fimDePalavra = false;
+    }
+
+    private final No raiz = new No();
+
+    public void inserir(String palavra) {
+        No atual = raiz;
+        for (char c : palavra.toCharArray()) {
+            int idx = c - 'a';
+            if (atual.filhos[idx] == null) {
+                atual.filhos[idx] = new No();
+            }
+            atual = atual.filhos[idx];
+        }
+        atual.fimDePalavra = true;
+    }
+
+    public boolean buscar(String palavra) {
+        No atual = raiz;
+        for (char c : palavra.toCharArray()) {
+            int idx = c - 'a';
+            if (atual.filhos[idx] == null) return false;
+            atual = atual.filhos[idx];
+        }
+        return atual.fimDePalavra;
+    }
+
+    public boolean comecaCom(String prefixo) {
+        No atual = raiz;
+        for (char c : prefixo.toCharArray()) {
+            int idx = c - 'a';
+            if (atual.filhos[idx] == null) return false;
+            atual = atual.filhos[idx];
+        }
+        return true;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <string>
+
+class Trie {
+private:
+    struct No {
+        No* filhos[26] = {nullptr};
+        bool fimDePalavra = false;
+    };
+    No* raiz;
+
+public:
+    Trie() : raiz(new No()) {}
+
+    void inserir(const std::string& palavra) {
+        No* atual = raiz;
+        for (char c : palavra) {
+            int idx = c - 'a';
+            if (!atual->filhos[idx]) {
+                atual->filhos[idx] = new No();
+            }
+            atual = atual->filhos[idx];
+        }
+        atual->fimDePalavra = true;
+    }
+
+    bool buscar(const std::string& palavra) {
+        No* atual = raiz;
+        for (char c : palavra) {
+            int idx = c - 'a';
+            if (!atual->filhos[idx]) return false;
+            atual = atual->filhos[idx];
+        }
+        return atual->fimDePalavra;
+    }
+
+    bool comecaCom(const std::string& prefixo) {
+        No* atual = raiz;
+        for (char c : prefixo) {
+            int idx = c - 'a';
+            if (!atual->filhos[idx]) return false;
+            atual = atual->filhos[idx];
+        }
+        return true;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**:
+- `inserir(palavra)`: O(L), L = tamanho da palavra
+- `buscar(palavra)`: O(L)
+- `comecaCom(prefixo)`: O(L)
+
+**Não depende do número de palavras armazenadas**. Pra dicionários gigantes, é imbatível em operações de prefixo.
+
+<ComplexidadeBox melhor="O(L)" media="O(L)" pior="O(L)" />
+
+---
+
+## A diferença entre `buscar` e `comecaCom`
+
+Olhe o código acima. As duas funções são quase idênticas. A diferença está na última linha:
+
+- **`buscar(palavra)`** retorna `true` apenas se `atual.fimDePalavra` for `true`. Quer dizer: o caminho existe **E** marca uma palavra completa armazenada.
+- **`comecaCom(prefixo)`** retorna `true` simplesmente se o caminho existe, sem checar `fimDePalavra`. Quer dizer: alguma palavra na trie começa com esse prefixo.
+
+Pra trie com `["car", "card"]`:
+- `buscar("car")` → true
+- `buscar("ca")` → false (não é palavra completa)
+- `comecaCom("ca")` → true (`car` e `card` começam com `ca`)
+- `comecaCom("cd")` → false (nenhuma palavra na trie tem prefixo `cd`)
+
+Esse é o **superpoder** das tries: distinguir palavra inteira vs prefixo, **ambas em O(L)**.
+
+---
+
+## Trade-off: memória
+
+A implementação acima reserva um array de 26 ponteiros pra cada nó. Pra letras a-z, isso é 26 × 8 bytes = 208 bytes por nó em sistemas 64-bit. Pra alfabetos maiores (Unicode tem ~150.000 caracteres), o gasto fica proibitivo com array direto.
+
+Soluções comuns:
+
+**HashMap em vez de array**: cada nó usa `HashMap<Character, No>`. Memória proporcional ao número de filhos reais, não ao tamanho do alfabeto. Mais lento por chamada (hash + lookup), mas economiza memória.
+
+**Alfabeto reduzido**: se você sabe que o input só tem ASCII printable (128 caracteres), array de 128 ponteiros já é praticável.
+
+**Patricia trie / Radix trie**: compacta caminhos de nós com filho único em uma única aresta. Vamos ver mais adiante.
+
+<Aviso>
+**Tries usam mais memória que hash tables** pra armazenar strings simples. Se você só precisa de busca exata (sem prefixo), HashMap geralmente vence. **Tries valem a pena quando você precisa de operações de prefixo**: autocomplete, longest common prefix, ordenação alfabética com iteração, ou casos como Aho-Corasick que veremos.
+</Aviso>
+
+---
+
+## Aplicação 1: Autocomplete
+
+O caso de uso clássico. Dado um prefixo, retorna **todas as palavras na trie que começam com esse prefixo**.
+
+A ideia: percorre o prefixo na trie, depois faz **DFS** a partir do nó atual coletando palavras.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public List<String> autocomplete(String prefixo) {
+    List<String> resultado = new ArrayList<>();
+    No atual = raiz;
+
+    // Desce até o nó do prefixo
+    for (char c : prefixo.toCharArray()) {
+        int idx = c - 'a';
+        if (atual.filhos[idx] == null) return resultado;     // prefixo não existe
+        atual = atual.filhos[idx];
+    }
+
+    // DFS coletando palavras a partir daqui
+    coletarPalavras(atual, new StringBuilder(prefixo), resultado);
+    return resultado;
+}
+
+private void coletarPalavras(No no, StringBuilder palavraAtual, List<String> resultado) {
+    if (no.fimDePalavra) {
+        resultado.add(palavraAtual.toString());
+    }
+    for (int i = 0; i < 26; i++) {
+        if (no.filhos[i] != null) {
+            palavraAtual.append((char)('a' + i));
+            coletarPalavras(no.filhos[i], palavraAtual, resultado);
+            palavraAtual.deleteCharAt(palavraAtual.length() - 1);   // backtrack
+        }
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+
+void coletarPalavras(No* no, std::string& palavraAtual, std::vector<std::string>& resultado) {
+    if (no->fimDePalavra) {
+        resultado.push_back(palavraAtual);
+    }
+    for (int i = 0; i < 26; i++) {
+        if (no->filhos[i]) {
+            palavraAtual.push_back('a' + i);
+            coletarPalavras(no->filhos[i], palavraAtual, resultado);
+            palavraAtual.pop_back();
+        }
+    }
+}
+
+std::vector<std::string> autocomplete(const std::string& prefixo) {
+    std::vector<std::string> resultado;
+    No* atual = raiz;
+    for (char c : prefixo) {
+        int idx = c - 'a';
+        if (!atual->filhos[idx]) return resultado;
+        atual = atual->filhos[idx];
+    }
+    std::string palavraAtual = prefixo;
+    coletarPalavras(atual, palavraAtual, resultado);
+    return resultado;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(L + K), onde L é o tamanho do prefixo e K é o número total de caracteres em todas as palavras retornadas.
+
+Em produção, **Google, Apple, Amazon** usam variantes mais sofisticadas — frequentemente com ranking por popularidade e cache pesado. Mas a base é trie.
+
+---
+
+## Aplicação 2: Spell-check e ortografia
+
+Spell-checkers como **Aspell** e **Hunspell** mantêm dicionários inteiros de idiomas em estruturas similares a tries (com otimizações de memória pesadas). Pra checar se uma palavra existe: O(L). Pra sugerir correções (palavras com edit distance pequena), combinam trie com algoritmo de Levenshtein da lição 13 — você percorre a trie e poda ramos que já têm distância maior que o limite aceitável.
+
+---
+
+## Aplicação 3: Roteamento IP (Patricia Tries)
+
+Aqui as coisas ficam interessantes. Todo **roteador da internet** precisa decidir, pra cada pacote que chega, **qual interface enviar pra ele**. A decisão é baseada no **endereço IP de destino**, comparado contra uma **tabela de roteamento** com até centenas de milhares de entradas.
+
+Endereços IP são strings de bits. Um endereço IPv4 tem 32 bits. Uma entrada na tabela é tipicamente um **prefixo** (uma sub-rede), como `192.168.0.0/16` — significa "qualquer IP que comece com os bits de `192.168`".
+
+**Longest Prefix Match**: dado um IP de destino, encontre a entrada na tabela com **prefixo mais longo** que casa. Se a tabela tem `0.0.0.0/0` (default), `192.168.0.0/16`, e `192.168.1.0/24`, e o pacote é pra `192.168.1.5`, o match certo é o `/24` (24 bits casam, é o mais específico).
+
+Trie binária (bits) faz isso naturalmente. Mas com 32 bits e potencialmente centenas de milhares de prefixos, tries simples gastam memória demais e ficam altas demais.
+
+A solução, criada por **Donald Morrison em 1968** no paper *"PATRICIA — Practical Algorithm To Retrieve Information Coded in Alphanumeric"* (JACM 15(4)): **Patricia Trie**, também chamada **Radix Tree**.
+
+A ideia chave: **comprimir caminhos com filho único**. Se um nó tem apenas um filho, e esse filho tem apenas um filho, e assim por diante, junta tudo numa única aresta rotulada com a sequência de caracteres.
+
+```
+Trie comum:           Patricia Trie:
+   root                   root
+    |                     /  \
+    c                    c    d
+   / \                  /|    |
+  a   o                a o    og
+  |   |               /| |     *
+  t   t              t r t*
+  *   *              * *
+                       |
+                       d
+                       *
+```
+
+Cada aresta agora pode carregar uma string em vez de um único caractere. Resultado: muito menos nós, especialmente em alfabetos pequenos com chaves longas (como IPs binários).
+
+Patricia tries são a estrutura padrão em **tabelas de roteamento de roteadores**. Estão no kernel Linux (módulo `fib_trie`), em hardware especializado de roteadores Cisco/Juniper, e em qualquer implementação séria de redes.
+
+Variantes modernas (**Compressed tries**, **HAT-tries**, **Burst tries**) reduzem ainda mais memória mantendo performance — pesquisa ativa em estrutura de dados.
+
+---
+
+## Aplicação 4: Aho-Corasick — múltiplos padrões em uma passada
+
+Esse é talvez o algoritmo mais sofisticado baseado em trie e merece um destaque especial.
+
+**Problema**: você tem um texto longo (digamos, gigabytes) e um conjunto de palavras-padrão (digamos, 10.000 palavras). Quer encontrar **todas as ocorrências** de **qualquer um dos padrões** no texto.
+
+Solução ingênua: rodar `Boyer-Moore` ou `KMP` 10.000 vezes. Cada execução é O(N + L), onde N é o tamanho do texto e L o tamanho do padrão. Total: O(N × P + soma dos L), onde P é o número de padrões. Lento.
+
+**Aho-Corasick**, criado por **Alfred V. Aho** e **Margaret J. Corasick** em **1975** no **Bell Labs**, resolve isso em **O(N + soma dos L + Z)**, onde Z é o número de matches. **Linear no tamanho do texto, independente de quantos padrões existem**.
+
+A ideia é elegante:
+
+1. Constrói uma **trie com todos os padrões** (cada folha marca o fim de algum padrão)
+2. Adiciona **failure links** (similar à função `failure` do KMP): pra cada nó, aponta pro **maior sufixo próprio que é também prefixo de algum padrão**
+3. Processa o texto **uma única vez**: a cada caractere, segue a trie. Quando bate em falha, segue o failure link e continua. Reporta matches a cada nó com `fimDePalavra` visitado
+
+### Aplicações reais de Aho-Corasick
+
+- **`fgrep`** (Unix): o comando `fgrep` (fixed-string grep) usa Aho-Corasick por baixo. Mencionado explicitamente no paper original.
+- **Antivírus**: detecção de **assinaturas de malware** — cada vírus tem padrões binários característicos, e o scanner precisa procurar **milhares de padrões simultaneamente** em arquivos. Aho-Corasick é o coração disso.
+- **Intrusion detection systems** (Snort, Suricata): detectam tráfego suspeito comparando contra milhares de assinaturas.
+- **Bioinformática**: busca de motivos em sequências de DNA/proteínas.
+- **Detecção de plágio**: documenta acadêmico contra base com milhões de fragmentos.
+- **Word filtering** em jogos e redes sociais: filtro de palavrões/conteúdo sensível com vocabulário grande.
+
+A construção do automaton é tipicamente feita uma vez, **offline** (banco de assinaturas de vírus pré-compilado, por exemplo). Depois, o scanner roda em **velocidade de I/O** — limitado pelo disco, não pelo CPU.
+
+<Aviso>
+Implementação completa de Aho-Corasick é mais complexa que a trie básica — exige BFS pra construir os failure links em ordem de profundidade. Não vamos cobrir o código completo aqui, mas é um exercício clássico de algoritmos. **O conceito é o que importa**: trie + failure links + uma passagem pelo texto.
+</Aviso>
+
+---
+
+## Aplicação 5: Longest Common Prefix
+
+Problema: dado um array de strings, encontre o **maior prefixo comum** a todas elas.
+
+Solução com trie: insira todas as strings, depois faça DFS a partir da raiz seguindo enquanto o nó atual tem **exatamente 1 filho** e **não marca fim de palavra**. Quando bater nessas condições, é o fim do prefixo comum.
+
+Há soluções mais simples sem trie pra esse problema específico (compare strings duas a duas), mas a versão com trie é uma boa ilustração de quando você quer estrutura para responder múltiplas consultas de prefixo.
+
+---
+
+## Aplicação 6: Suffix Trees e Suffix Arrays (menção honrosa)
+
+Ramo importante mas grande demais pra essa lição. **Suffix Tree**: trie contendo **todos os sufixos** de uma string. Permite responder a queries complexas como "esse padrão aparece nessa string?" em O(L) onde L é o tamanho do padrão (sem importar o tamanho da string original).
+
+Aplicações: **bioinformática** (comparar genomas inteiros), **compressão LZ77** e descendentes, busca em texto indexada.
+
+Construção: **Ukkonen (1995)** mostrou como construir em O(n) — uma das construções algorítmicas mais elegantes de todos os tempos.
+
+**Suffix Array** é uma alternativa mais compacta (array em vez de árvore) com construção também O(n) por algoritmos como SA-IS. Padrão moderno pra indexação de texto.
+
+Se você for fundo em strings, esses dois te esperam. Esta lição só planta a semente.
+
+---
+
+## Tries vs Hash Tables: a comparação final
+
+| Aspecto | Trie | Hash Table |
+|---|---|---|
+| Busca exata | O(L) | O(L) amortizado* |
+| Inserção | O(L) | O(L) amortizado* |
+| Busca por prefixo | **O(L + K)** (K = matches) | **O(n × L)** (varrer tudo) |
+| Listar em ordem | **O(n × L)** trivial (DFS) | **O(n log n × L)** (sort) |
+| Memória | Alta (overhead de ponteiros por nó) | Baixa-média (compacta) |
+| Pior caso (busca) | **O(L) garantido** | O(n × L) sem treeification |
+| Suporta autocomplete | **Sim, nativo** | Não eficientemente |
+
+*Hash precisa calcular hash da string, O(L). Em colisões, comparar strings, mais O(L).
+
+**Use trie quando:** operações de prefixo, autocomplete, dicionários ordenados, múltiplos padrões em texto.
+
+**Use hash table quando:** busca exata pura, memória limitada, ordem não importa.
+
+---
+
+## Recap
+
+**Trie** (pronuncia-se "try" ou "tree", do meio da palavra **reTRIEval**) é uma estrutura especializada em strings, criada conceitualmente por **Axel Thue em 1912**, descrita concretamente por **René de la Briandais em 1959**, e formalizada por **Edward Fredkin em 1960** no paper *"Trie Memory"* (CACM 3(9)).
+
+Estrutura: cada nó representa um prefixo. Caracteres são as **arestas**. Caminho da raiz até qualquer nó forma uma palavra ou prefixo. Cada nó tem array (ou map) de filhos por caractere, e um booleano `fimDePalavra`.
+
+**Operações**:
+- Inserir, buscar, remover, checar prefixo: todas em **O(L)** onde L é o tamanho da string envolvida
+- Independente do número de strings armazenadas
+
+**Trade-off**: tries gastam mais memória que hash tables. Valem a pena quando você precisa de operações de **prefixo** ou listagem ordenada.
+
+**Aplicações clássicas**:
+- **Autocomplete** (Google, IDE, navegadores) — base do que vemos cada vez que digitamos numa caixa de busca
+- **Spell-check** (Aspell, Hunspell)
+- **Roteamento IP** (Patricia Trie de Morrison 1968 — kernel Linux, roteadores Cisco/Juniper)
+- **Multi-pattern matching** (Aho-Corasick 1975 — fgrep do Unix, antivírus, intrusion detection)
+- **Bioinformática** (suffix trees pra análise de DNA)
+- **Compressão** (componente de muitos algoritmos)
+
+**Aho-Corasick** merece destaque: criado em Bell Labs em 1975 por Alfred V. Aho e Margaret J. Corasick, encontra **todas as ocorrências de múltiplos padrões** em texto em **O(N + L + Z)** — linear no texto, independente de quantos padrões. É o motor de antivírus modernos, intrusion detection, e qualquer sistema que precisa procurar muitos padrões em muitos dados.
+
+**Patricia Tries** (Morrison 1968) comprimem caminhos com filho único em uma única aresta. Resultado: menos memória pra alfabetos pequenos com chaves longas (como IPs binários). Por isso são o padrão em **tabelas de roteamento** em todo roteador da internet.
+
+Tries fecham nossa **trilha de estruturas de dados avançadas**: já passamos por arrays, listas, pilhas, filas, hash tables, árvores binárias, BSTs balanceadas (Red-Black), heaps, Union-Find, e agora tries. Cada uma resolve uma família de problemas específica e juntas formam a caixa de ferramentas básica de qualquer engenheiro sério.
+
+Próximas lições podem explorar tópicos mais avançados conforme o interesse: **algoritmos de string matching avançados** (KMP, Boyer-Moore, Rabin-Karp), **fluxo em redes** (Ford-Fulkerson, Edmonds-Karp), **geometria computacional**, **computação probabilística** (Bloom filters, HyperLogLog), ou aprofundar em **programação dinâmica avançada** (DP em árvore, DP em bitmask, DP em SOS).

@@ -1,0 +1,127 @@
+[
+  {
+    "id": "stbit-01",
+    "enunciado": "Qual problema motiva o uso de Segment Tree ou Fenwick Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ordenar arrays muito grandes",
+      "RANGE QUERIES COM UPDATES — dado um array, suportar 'qual a soma/min/max entre posições L e R?' E 'mude o valor da posição i' — ambos em O(log N) em vez de O(N) com array simples",
+      "Compressão de dados",
+      "Roteamento em grafos"
+    ],
+    "resposta": 1,
+    "explicacao": "Range queries com updates. Solução ingênua: array simples — update O(1), query O(N). Solução com prefix sum: update O(N), query O(1). Ambas dão O(N²) total pra N operações. Fenwick e Segment Tree fazem AMBOS em O(log N), total O(N log N) — pra N = 10^6, isso é 600× mais rápido. Aplicações típicas: ICPC (aparece em quase todo regional), bancos de dados de séries temporais (TimescaleDB, InfluxDB), trading (order books), GIS, OLAP cubes. Operações comuns: soma, min, max, GCD, XOR, multiplicação modular — qualquer função ASSOCIATIVA."
+  },
+  {
+    "id": "stbit-02",
+    "enunciado": "Quem inventou a Fenwick Tree (Binary Indexed Tree)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Jon L. Bentley, 1977, junto com Segment Tree",
+      "Peter M. Fenwick, 1994, no paper 'A new data structure for cumulative frequency tables' (Software: Practice and Experience 24(3)) — originalmente para compressão aritmética adaptativa. Boris Ryabko publicou estrutura similar em 1989",
+      "Donald Knuth, 1968",
+      "Robert Tarjan, 1975"
+    ],
+    "resposta": 1,
+    "explicacao": "Peter M. Fenwick, professor na University of Auckland (Nova Zelândia), em 1994 no paper 'A new data structure for cumulative frequency tables' publicado em Software: Practice and Experience 24(3), pp. 327-336. Ele trabalhava em COMPRESSÃO ARITMÉTICA ADAPTATIVA — algoritmo que precisa atualizar frequências de símbolos dinamicamente e calcular somas cumulativas. Curiosidade: Boris Y. Ryabko (1989, 'A fast on-line code', Soviet Math. Doklady 39) já tinha proposto estrutura similar — mas o paper de Fenwick popularizou a ideia em CS ocidental. Caso leve da Lei de Stigler — às vezes aparece como 'Ryabko-Fenwick' mas o nome 'Fenwick Tree' prevaleceu."
+  },
+  {
+    "id": "stbit-03",
+    "enunciado": "Qual é o TRUQUE DE BIT MANIPULATION central usado no Fenwick Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "i << 1 (shift left)",
+      "i & -i (lowbit: extrai o BIT MENOS SIGNIFICATIVO de i usando complemento de dois). Define que tree[i] cobre o range A[i - lowbit(i) + 1 .. i]",
+      "i ^ (i+1) (XOR com sucessor)",
+      "i * 2 + 1"
+    ],
+    "resposta": 1,
+    "explicacao": "i & -i é o 'lowbit': extrai o valor do bit menos significativo de i. Exemplo: i=12 (1100 em binário). -i em complemento de dois = ...0100. i & -i = 0100 = 4. Esse truque define a estrutura inteira: tree[i] armazena soma de A[i - lowbit(i) + 1 .. i]. Em query, removemos lowbit pra subir (i -= i & -i). Em update, ADICIONAMOS lowbit pra propagar (i += i & -i). Cada operação termina em O(log N) porque cada iteração muda pelo menos um bit. É uma das estruturas mais elegantes em CS — cabe em ~15 linhas e usa só bit manipulation, sem ponteiros, sem nós, sem classes complexas."
+  },
+  {
+    "id": "stbit-04",
+    "enunciado": "Qual a complexidade das operações update e query em Fenwick Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(1) para ambos",
+      "O(N) para ambos",
+      "O(log N) para ambos — porque cada iteração do while remove (em query) ou adiciona (em update) um bit, e o número de bits em N é log N",
+      "O(sqrt N) para ambos"
+    ],
+    "resposta": 2,
+    "explicacao": "O(log N) por operação. A cada iteração: em query, removemos o lowbit (i -= i & -i), eventualmente chegando em 0. Em update, propagamos somando o lowbit (i += i & -i), eventualmente passando de N. Como i tem no máximo log N bits significativos, no máximo log N iterações. Memória: O(N), apenas um array. Pra N = 10^6, são ~20 operações por chamada — vs N = um milhão da abordagem ingênua. Por isso Fenwick é tão usado em ICPC: implementação trivial + performance excelente. Em grandes problemas com 10^5 operações, faz a diferença entre 'AC' (Accepted) e 'TLE' (Time Limit Exceeded)."
+  },
+  {
+    "id": "stbit-05",
+    "enunciado": "Qual a LIMITAÇÃO mais importante do Fenwick Tree padrão?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Só funciona com até 1000 elementos",
+      "Funciona bem para SOMA, XOR, e operações 'reversíveis' (que permitem query(R) - query(L-1)), MAS NÃO funciona diretamente para MIN/MAX — não há como 'remover' um mínimo de uma soma. Para min/max, use Segment Tree",
+      "Não suporta updates",
+      "Sempre dá resultados aproximados"
+    ],
+    "resposta": 1,
+    "explicacao": "Fenwick padrão depende de range query ser expressa como query(R) - query(L-1) — subtração de prefix sums. Funciona para soma, XOR (que tem operação reversa: XOR de novo desfaz), e algumas outras operações reversíveis. NÃO funciona pra min/max porque você não pode 'subtrair um mínimo'. Existem variantes mais sofisticadas pra min/max (BITs paralelos, técnica de Mo), mas perdem a simplicidade. Pra min/max em ranges, use Segment Tree — naturalmente suporta qualquer operação associativa. Outras limitações do Fenwick: range updates exigem truques (duas BITs, diferenças); construção O(N log N) ingenuamente (existe O(N) com propagação esperta)."
+  },
+  {
+    "id": "stbit-06",
+    "enunciado": "Quem inventou a Segment Tree, e em que contexto?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Peter Fenwick, 1994, junto com o BIT",
+      "Jon L. Bentley, 1977, no relatório técnico 'Solutions to Klee's Rectangle Problems' (Carnegie Mellon University) — originalmente para GEOMETRIA COMPUTACIONAL (problemas formulados por Victor Klee sobre interseções entre retângulos)",
+      "Donald Knuth, 1968, em The Art of Computer Programming",
+      "Robert Sedgewick, 2008"
+    ],
+    "resposta": 1,
+    "explicacao": "Jon L. Bentley, em 1977, no relatório técnico 'Solutions to Klee's Rectangle Problems' na Carnegie Mellon. Trabalhava em GEOMETRIA COMPUTACIONAL — especificamente problemas formulados por Victor Klee sobre interseções entre retângulos paralelos aos eixos (Klee's measure problem). Naquela época ICPC mal existia, então Bentley criou Segment Trees como ferramenta teórica pra geometria, sem imaginar que décadas depois seria estrela de competições de programação. Bentley também é famoso pelo livro 'Programming Pearls' (1986) com várias dicas clássicas de otimização, incluindo o famoso bug do mid = (lo + hi) / 2 em busca binária (visto na Lição 8). Inventor também das kd-trees (1975)."
+  },
+  {
+    "id": "stbit-07",
+    "enunciado": "Qual a estrutura BÁSICA de um Segment Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Um array onde cada posição corresponde a um bit do índice",
+      "Uma ÁRVORE BINÁRIA onde a raiz representa o array inteiro, cada nó representa um intervalo, e seus filhos representam as duas metades desse intervalo. Folhas são elementos individuais. Cada nó armazena uma agregação do seu intervalo",
+      "Uma lista ligada bidirecional",
+      "Uma matriz quadrada de N x N"
+    ],
+    "resposta": 1,
+    "explicacao": "Árvore binária explícita. Raiz cobre [0, N-1]. Filhos esquerdo e direito cobrem as duas metades. Folhas representam elementos individuais. Cada nó armazena uma AGREGAÇÃO (soma, min, max, etc) dos elementos do seu intervalo. Representação compacta: usar array de tamanho 4N (margem segura) onde nó i tem filhos em 2i e 2i+1, raiz é índice 1. Query [L,R]: começa na raiz, pra cada nó: (a) intervalo completamente fora → ignora; (b) completamente dentro → usa valor cached; (c) parcialmente sobreposto → recursa nos dois filhos. Update: caminha da raiz até a folha modificada, atualizando todos os nós do caminho. Ambos O(log N) porque árvore tem altura log N."
+  },
+  {
+    "id": "stbit-08",
+    "enunciado": "Qual a VANTAGEM principal da Segment Tree sobre Fenwick Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "É mais rápida em termos de constante de tempo",
+      "Usa menos memória",
+      "FLEXIBILIDADE — funciona com qualquer função ASSOCIATIVA (soma, min, max, GCD, OR, AND, XOR), suporta RANGE UPDATES via lazy propagation, e generaliza para problemas exóticos. Fenwick é melhor APENAS para soma + updates pontuais (mais simples e rápido)",
+      "É mais antiga"
+    ],
+    "resposta": 2,
+    "explicacao": "Flexibilidade. Segment Tree suporta QUALQUER função associativa simplesmente trocando a função de combinação — soma vira min trocando '+' por Math.min. Suporta range updates com LAZY PROPAGATION (técnica de adiar updates até serem necessários — aparece em quase todo regional ICPC). Generaliza facilmente pra problemas exóticos: contagem de inversões, polinômios, intervalos com merge complexo. Fenwick é mais rápido (constante menor) e mais simples (~15 linhas vs ~40-50 sem lazy) APENAS pro caso específico de soma + updates pontuais. Regra prática ICPC: tente Fenwick primeiro; se não der, Segment Tree."
+  },
+  {
+    "id": "stbit-09",
+    "enunciado": "O que é LAZY PROPAGATION em Segment Tree?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Uma técnica para reduzir o uso de memória",
+      "Uma forma de paralelizar Segment Trees",
+      "Técnica que permite RANGE UPDATES em O(log N) — em vez de propagar um update até todas as folhas do range (O(N)), deixa um MARCADOR no nó que cobre o range completo; propaga preguiçosamente apenas quando uma query/update precisa entrar no subárvore",
+      "Forma de comprimir a árvore"
+    ],
+    "resposta": 2,
+    "explicacao": "Lazy propagation = adiar updates até serem necessários. Update ingênuo em range [L,R] (somar delta em todos os elementos): caminhar até cada folha, O(N) pior caso. Com lazy: quando o update encontra um nó completamente dentro de [L,R], atualiza o valor cached + DEIXA UM MARCADOR no nó (lazy[node] += delta), sem descer. Quando outra operação (query ou update) precisa entrar no subárvore, PRIMEIRO propaga o marcador para os filhos (lazy[left] += lazy[node]; lazy[right] += lazy[node]). Resultado: update em range é O(log N), mesma complexidade que update pontual. Implementação adiciona ~30 linhas. Em ICPC é essencial — aparece em quase todo regional."
+  },
+  {
+    "id": "stbit-10",
+    "enunciado": "Verdadeiro ou falso: Fenwick Tree e Segment Tree são usadas APENAS em competições de programação (ICPC) — não têm aplicação prática em produção.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Apesar do uso DOMINANTE em ICPC, ambas aparecem em produção: (1) BANCOS DE DADOS — índices BRIN do PostgreSQL, agregações materializadas, window functions otimizadas; (2) TIME-SERIES DATABASES — TimescaleDB, InfluxDB, Prometheus usam estruturas similares para queries por janela temporal; (3) TRADING — order books com queries de profundidade (quantos contratos entre preços X e Y); (4) GIS — extensões 2D de Segment Tree para queries espaciais (a APLICAÇÃO ORIGINAL do Bentley em 1977!); PostGIS, MongoDB geospatial indices; (5) OLAP CUBES — agregações multidimensionais sobre fatos históricos; (6) JOGOS — range queries em mundos abertos. A formulação 1D que estudamos é a base; em produção, com mais dimensões e otimizações específicas."
+  }
+]

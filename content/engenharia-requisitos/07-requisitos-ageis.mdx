@@ -1,0 +1,552 @@
+---
+titulo: "Requisitos Ágeis na prática"
+descricao: "Como requisitos vivem em times ágeis modernos: Story Mapping de Jeff Patton, decomposição de épicos, backlog refinement, Definition of Ready vs Definition of Done, e onde cada técnica brilha (ou falha)."
+---
+
+Você cobriu o ciclo completo da Engenharia de Requisitos: elicitação (L2), domínio (L3), análise (L4), especificação (L5), V&V e gestão (L6). Agora foca em **como tudo isso vive na realidade ágil**, onde requisitos não são documento fechado, são conversa contínua.
+
+Esta lição cobre as práticas que viraram padrão de fato em times ágeis modernos:
+
+- **Story Mapping** (Jeff Patton) — visualização espacial do produto inteiro
+- **Épicos** e decomposição — de feature grande pra stories implementáveis
+- **Backlog Refinement** — atividade contínua de preparar stories
+- **Definition of Ready (DoR)** vs **Definition of Done (DoD)** — quando uma story entra e quando sai do sprint
+
+Não é "ágil é melhor que tradicional" — é "como aplicar boas práticas de requisitos no formato ágil sem perder rigor". Tudo que você aprendeu nas L1-L6 continua valendo: rastreabilidade, validação, NFRs, vocabulário do domínio. Só muda o **formato** e a **cadência**.
+
+<Insight>
+Erro comum em equipe ágil iniciante: confundir "menos documentação" com "sem requisitos". Ágil exige mais conversa, mais validação contínua, mais critérios de aceitação testáveis. O que cai é o documento monolítico (SRS de 200 páginas), não a disciplina. Time ágil maduro tem requisitos MAIS claros que time tradicional médio — só que distribuídos no backlog e em conversas registradas, não num PDF.
+</Insight>
+
+## Story Mapping (Jeff Patton)
+
+**Jeff Patton** introduziu o conceito de Story Maps em 2005 e formalizou no livro *User Story Mapping: Discover the Whole Story, Build the Right Product* (O'Reilly Media, 2014, ISBN 978-1-491-90490-9), com forewords de Martin Fowler, Alan Cooper e Marty Cagan.
+
+O problema que Story Mapping resolve: **backlog plano de stories perde a visão do todo**. Quando você tem 200 stories numa lista, é impossível ver:
+
+- Como elas se relacionam no fluxo do usuário
+- Qual é o "happy path" essencial
+- O que pode virar MVP vs o que é refinamento posterior
+- Onde estão os buracos no escopo
+
+Story Mapping organiza stories em **duas dimensões**:
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Story Map — estrutura típica (biblioteca municipal)</text>
+
+  <rect x="40" y="50" width="640" height="32" rx="4" fill="#5bc0de" fillOpacity="0.12" stroke="#5bc0de" strokeWidth="1.5" />
+  <text x="55" y="71" fill="#5bc0de" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">BACKBONE (narrativa principal — sequência do usuário, esquerda → direita)</text>
+
+  <rect x="50" y="95" width="120" height="40" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="110" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Cadastrar leitor</text>
+  <text x="110" y="127" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(atividade)</text>
+
+  <rect x="180" y="95" width="120" height="40" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="240" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Buscar acervo</text>
+  <text x="240" y="127" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(atividade)</text>
+
+  <rect x="310" y="95" width="120" height="40" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="370" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Emprestar</text>
+  <text x="370" y="127" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(atividade)</text>
+
+  <rect x="440" y="95" width="120" height="40" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="500" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Devolver</text>
+  <text x="500" y="127" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(atividade)</text>
+
+  <rect x="570" y="95" width="100" height="40" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="620" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Relatórios</text>
+  <text x="620" y="127" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(atividade)</text>
+
+  <line x1="40" y1="158" x2="680" y2="158" stroke="#7cae50" strokeWidth="1.5" strokeDasharray="5,3" />
+  <text x="50" y="172" fill="#7cae50" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">MVP (release 1)</text>
+
+  <rect x="50" y="183" width="120" height="35" rx="4" fill="#7cae50" fillOpacity="0.15" stroke="#7cae50" strokeWidth="1" />
+  <text x="110" y="205" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Cadastro básico</text>
+
+  <rect x="180" y="183" width="120" height="35" rx="4" fill="#7cae50" fillOpacity="0.15" stroke="#7cae50" strokeWidth="1" />
+  <text x="240" y="205" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Busca por título</text>
+
+  <rect x="310" y="183" width="120" height="35" rx="4" fill="#7cae50" fillOpacity="0.15" stroke="#7cae50" strokeWidth="1" />
+  <text x="370" y="205" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Empréstimo 14 dias</text>
+
+  <rect x="440" y="183" width="120" height="35" rx="4" fill="#7cae50" fillOpacity="0.15" stroke="#7cae50" strokeWidth="1" />
+  <text x="500" y="205" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Devolução simples</text>
+
+  <rect x="570" y="183" width="100" height="35" rx="4" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1" strokeDasharray="3,2" />
+  <text x="620" y="205" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">(adiar)</text>
+
+  <line x1="40" y1="240" x2="680" y2="240" stroke="#f0ad4e" strokeWidth="1.5" strokeDasharray="5,3" />
+  <text x="50" y="254" fill="#f0ad4e" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Release 2</text>
+
+  <rect x="50" y="265" width="120" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="110" y="287" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Foto, RG, endereço</text>
+
+  <rect x="180" y="265" width="120" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="240" y="287" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Busca por autor/ISBN</text>
+
+  <rect x="310" y="265" width="120" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="370" y="287" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Multa por atraso</text>
+
+  <rect x="440" y="265" width="120" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="500" y="287" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Devolução em outra unidade</text>
+
+  <rect x="570" y="265" width="100" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="620" y="287" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Mensal por gênero</text>
+
+  <line x1="40" y1="320" x2="680" y2="320" stroke="#dc3545" strokeWidth="1.5" strokeDasharray="5,3" />
+  <text x="50" y="334" fill="#dc3545" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Release 3 (backlog)</text>
+
+  <rect x="50" y="345" width="120" height="35" rx="4" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1" />
+  <text x="110" y="367" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Self-service online</text>
+
+  <rect x="180" y="345" width="120" height="35" rx="4" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1" />
+  <text x="240" y="367" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Recomendações IA</text>
+
+  <rect x="310" y="345" width="120" height="35" rx="4" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1" />
+  <text x="370" y="367" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Renovação online</text>
+
+  <rect x="440" y="345" width="120" height="35" rx="4" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1" />
+  <text x="500" y="367" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Devolução self-service</text>
+
+  <rect x="570" y="345" width="100" height="35" rx="4" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1" />
+  <text x="620" y="367" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Dashboards BI</text>
+
+  <rect x="40" y="395" width="640" height="55" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" />
+  <text x="360" y="415" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Princípio "mile wide, inch deep"</text>
+  <text x="360" y="432" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Cobre o backbone INTEIRO antes de aprofundar uma atividade</text>
+  <text x="360" y="445" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Scope doesn't creep, instead understanding grows" — Jeff Patton</text>
+</svg>
+
+### Estrutura do Story Map
+
+**Backbone (eixo horizontal — narrativa principal)**: as **atividades** principais que o usuário realiza, em ordem cronológica. Pra biblioteca: Cadastrar → Buscar → Emprestar → Devolver → Relatórios.
+
+**Body (eixo vertical — releases / detalhamento)**: pra cada atividade, as stories que a implementam, organizadas por **prioridade/release**. As mais essenciais ficam em cima (MVP); as opcionais embaixo (releases futuros).
+
+### Como construir um Story Map (workflow de Patton)
+
+Patton descreve 6 passos no livro:
+
+1. **Frame the problem** — pra quem é? Por que vamos construir? Que problema resolve?
+2. **Map the big picture** — backbone completo, "mile wide, inch deep". Foco em LARGURA antes de PROFUNDIDADE.
+3. **Explore** — adicionar variações, edge cases, tipos diferentes de usuário, exceções.
+4. **Slice out a release strategy** — cortar fatias horizontais por release (MVP, R2, R3).
+5. **Slice out a learning strategy** — identificar maiores riscos, criar experimentos pra validar.
+6. **Prepare to build** — pegar primeira fatia, refinar stories, levar pra sprint.
+
+### Princípios importantes
+
+- **"Mile wide, inch deep"**: cobre tudo na largura primeiro, depois aprofunda. Erro comum: detalhar perfeitamente a primeira atividade e esgotar tempo sem cobrir o resto.
+- **"Scope doesn't creep, instead understanding grows"** — Patton argumenta que escopo "crescendo" é frequentemente sinal de que entendimento melhorou; a alternativa (manter escopo errado) é pior.
+- **MVP NÃO é "mínimo produto viável" no sentido de "feito porcamente"**: é menor conjunto de stories que entrega **valor real e mensurável** ao usuário. MVP da biblioteca: cadastrar + buscar + emprestar + devolver é o ciclo MÍNIMO que funciona. Cortar qualquer um quebra o sistema.
+- **Story Map é vivo**: muda durante o projeto conforme entendimento cresce. Não é artefato final.
+
+### Quando Story Map é útil
+
+- Início de projeto novo (frame inicial)
+- Refactoring de backlog plano que perdeu visão do todo
+- Conversa com stakeholders pra alinhar prioridades
+- Quebrar épicos grandes
+- Planejamento de release
+
+### Quando NÃO usar
+
+- Time muito pequeno e backlog curto (overhead não vale)
+- Projetos com requisitos muito fixos e bem entendidos
+- Quando não há diversidade de stakeholders pra conversar
+
+## Épicos e decomposição
+
+**Épico** é uma unidade de trabalho **maior que uma story**, que não cabe num sprint, mas representa funcionalidade coerente. Termo popularizado por Mike Cohn em *User Stories Applied* (Addison-Wesley, 2004) e adotado por frameworks como SAFe, Scrum e LeSS.
+
+### Hierarquia comum
+
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Hierarquia: Iniciativa → Épico → Story → Task</text>
+
+  <rect x="40" y="55" width="640" height="40" rx="6" fill="#5bc0de" fillOpacity="0.10" stroke="#5bc0de" strokeWidth="1.5" />
+  <text x="55" y="78" fill="#5bc0de" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Iniciativa: Sistema de Biblioteca Municipal Online</text>
+  <text x="55" y="91" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(meses-anos — vários épicos relacionados ao objetivo de negócio)</text>
+
+  <rect x="60" y="110" width="200" height="40" rx="6" fill="#7cae50" fillOpacity="0.12" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="70" y="130" fill="#7cae50" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Épico: Gestão de empréstimos</text>
+  <text x="70" y="144" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(semanas-meses)</text>
+
+  <rect x="280" y="110" width="200" height="40" rx="6" fill="#7cae50" fillOpacity="0.12" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="290" y="130" fill="#7cae50" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Épico: Cadastro de leitores</text>
+  <text x="290" y="144" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(semanas-meses)</text>
+
+  <rect x="500" y="110" width="180" height="40" rx="6" fill="#7cae50" fillOpacity="0.12" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="510" y="130" fill="#7cae50" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Épico: Acervo digital</text>
+  <text x="510" y="144" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(semanas-meses)</text>
+
+  <rect x="60" y="165" width="190" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="70" y="183" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">US-07.1 Buscar leitor</text>
+  <text x="70" y="195" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(1 sprint, ~3 pontos)</text>
+
+  <rect x="60" y="210" width="190" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="70" y="228" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">US-07.2 Ver pendências</text>
+  <text x="70" y="240" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(1 sprint, ~2 pontos)</text>
+
+  <rect x="60" y="255" width="190" height="35" rx="4" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="70" y="273" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">US-07.3 Registrar 14d</text>
+  <text x="70" y="285" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(1 sprint, ~5 pontos)</text>
+
+  <rect x="280" y="165" width="170" height="125" rx="4" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeDasharray="3,2" />
+  <text x="365" y="185" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Stories do épico</text>
+  <text x="365" y="200" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">"Cadastro de leitores"</text>
+  <text x="365" y="225" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.7">(detalhamento similar)</text>
+
+  <rect x="490" y="165" width="190" height="35" rx="4" fill="#dc3545" fillOpacity="0.08" stroke="#dc3545" strokeWidth="1" />
+  <text x="500" y="183" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">Task: Validação CPF</text>
+  <text x="500" y="195" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(horas-dia, dentro de uma story)</text>
+
+  <rect x="490" y="210" width="190" height="35" rx="4" fill="#dc3545" fillOpacity="0.08" stroke="#dc3545" strokeWidth="1" />
+  <text x="500" y="228" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">Task: Migration DB</text>
+  <text x="500" y="240" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(horas-dia)</text>
+
+  <rect x="490" y="255" width="190" height="35" rx="4" fill="#dc3545" fillOpacity="0.08" stroke="#dc3545" strokeWidth="1" />
+  <text x="500" y="273" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">Task: API endpoint</text>
+  <text x="500" y="285" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(horas-dia)</text>
+</svg>
+
+### Características de um épico
+
+- **Tamanho**: não cabe em um sprint (2-4 semanas tipicamente). Pode levar 1-3 sprints quebrado em stories.
+- **Granularidade**: descreve uma capacidade ampla ("Gestão de empréstimos") em vez de uma ação específica ("Registrar empréstimo").
+- **Quebra natural**: deve ser possível decompor em stories independentes que entreguem valor incremental.
+- **Não é estimável diretamente**: estima-se em "T-shirt size" (S, M, L, XL) ou range de pontos (20-50, 50-100), não pontos precisos.
+
+### Técnicas de decomposição
+
+Quando um épico precisa virar stories, há técnicas comuns:
+
+| Técnica | Como funciona | Exemplo |
+|---|---|---|
+| **Workflow steps** | Decompor pelos passos do fluxo do usuário | Empréstimo: buscar leitor → ver pendências → confirmar → registrar → imprimir |
+| **Business rules** | Cada regra de negócio vira uma story | Multa: cálculo padrão / isenção idoso / desconto promocional |
+| **CRUD operations** | Separar create/read/update/delete | Leitor: cadastrar / consultar / editar / desativar |
+| **User roles** | Separar por tipo de usuário | Mesmo épico de relatórios: atendente (operacional), bibliotecária-chefe (estratégico), prefeitura (compliance) |
+| **Happy path + alternates** | Primeiro o caminho feliz, depois exceções | Empréstimo OK → leitor com pendência → livro indisponível → falha de conexão |
+| **Vertical slicing** | Cortar features ponta a ponta em fatias finas | Em vez de "fazer todo o backend, depois todo o frontend": fazer 1 fluxo completo (UI + API + persistência) |
+
+**Vertical slicing** é o mais importante e mais difícil. **Anti-padrão clássico**: horizontal slicing (sprint 1 = "fazer todo o banco", sprint 2 = "todo o backend", sprint 3 = "todo o frontend"). Resultado: nada entregável até sprint 3.
+
+### Aplicação prática: épico "Gestão de empréstimos"
+
+```
+Épico: Gestão de empréstimos
+└── US-07.1: Como atendente, quero buscar leitor por nome ou código
+└── US-07.2: Como atendente, quero ver pendências do leitor
+└── US-07.3: Como atendente, quero registrar empréstimo com 14 dias automáticos
+└── US-07.4: Como atendente, quero imprimir comprovante
+└── US-08.1: Como atendente, quero registrar devolução
+└── US-08.2: Como atendente, quero calcular multa por atraso
+└── US-09.1: Como atendente, quero renovar empréstimo
+```
+
+Cada story cabe num sprint (1-2 semanas), tem critérios de aceitação em Gherkin (L5), atende INVEST (L5), e tem rastreabilidade até o épico e até o requisito do SRS macro (L6).
+
+## Backlog Refinement (Grooming)
+
+**Backlog refinement** (também chamado *grooming* — termo abandonado pelo Scrum Guide 2011 por conotações negativas em inglês) é a **atividade contínua** de manter o backlog em estado utilizável.
+
+### O que acontece no refinement
+
+- Quebra de épicos em stories
+- Adição de detalhes a stories que vão entrar em sprints próximos
+- Escrita/refinamento de critérios de aceitação (Gherkin idealmente)
+- Estimativa de stories (story points, planning poker)
+- Reordenação de prioridades pelo PO
+- Remoção de stories que perderam valor
+- Identificação de dependências entre stories
+
+### Quem participa
+
+- **Product Owner**: prioridades, valor de negócio, decisões de escopo
+- **Devs**: viabilidade técnica, estimativa, dependências, edge cases
+- **QA**: testabilidade, critérios de aceitação, riscos
+- Opcionalmente: stakeholders, designers, especialistas de domínio
+
+É o momento dos **Three Amigos** (PO + dev + QA) discutirem stories em profundidade. Lembra da L6: ATDD começa aqui.
+
+### Cadência típica
+
+- **Scrum**: 1-2 reuniões de refinement por sprint, 1-2 horas cada
+- **Kanban**: refinement contínuo conforme stories chegam ao topo
+- **SAFe**: PI Planning + refinements semanais
+
+O Scrum Guide recomenda gastar **até 10% do tempo da equipe em refinement**. Mais que isso é overhead; menos que isso é receita pra entrar em sprint com stories mal preparadas.
+
+### Anti-padrões comuns
+
+1. **Refinement sem PO** — vira reunião técnica sem priorização
+2. **Refinement como sprint planning** — confunde os dois eventos
+3. **Tentar refinar 6 meses de backlog** — só refine o que vai entrar nos próximos 2-3 sprints
+4. **Refinement só com Scrum Master/PO** — perde input técnico do time
+5. **Sem critérios de saída** — refinement vira conversa eterna sem decisão
+
+## Definition of Ready (DoR)
+
+**Definition of Ready** é o **critério explícito** que uma story precisa atender pra entrar num sprint. É polêmica — alguns consideram boa prática, outros anti-pattern.
+
+### Origem do DoR
+
+- Popularizada por **Kenneth Rubin** no livro *Essential Scrum: A Practical Guide to the Most Popular Agile Process* (Addison-Wesley, 2012, ISBN 978-0-13-704329-3).
+- **NÃO está no Scrum Guide oficial** — Schwaber e Sutherland não a incluíram. O Scrum Guide diz apenas que items "devem estar suficientemente claros e refinados" pra entrar em sprint.
+- **Mike Cohn** publicou artigo influente *"The Dangers of a Definition of Ready"* (Mountain Goat Software, ~2015) alertando sobre uso como **stage-gate** que reduz agilidade.
+
+### Exemplo típico de DoR
+
+Uma story está "Ready" pro sprint quando:
+
+- Está no formato Connextra (Como X, quero Y, para Z)
+- Tem critérios de aceitação claros (Gherkin ou bullets)
+- Foi estimada pela equipe
+- Atende INVEST (especialmente Small — cabe num sprint)
+- Tem mockup ou wireframe se envolve UI
+- Dependências resolvidas ou identificadas
+- PO disponível pra esclarecer dúvidas durante o sprint
+
+### O perigo do DoR (Mike Cohn)
+
+A crítica de Cohn é direta: **se o DoR exige que tudo esteja 100% definido antes da story entrar, vira waterfall disfarçado**. A força do ágil é descobrir detalhes durante a implementação, não antes. Cohn argumenta que regras exigindo "100% concluído" antes da story entrar na iteração (com possível exceção de dependências externas) transformam o DoR num **stage-gate** que mata a flexibilidade ágil.
+
+**Solução**: DoR como **guia leve**, não checklist rígido. Conversa entre PO e time sobre se a story está "suficientemente clara pra ser implementada com confiança".
+
+## Definition of Done (DoD)
+
+**Definition of Done** é o critério explícito que define quando uma story (ou incremento) está **realmente pronta** — não apenas com código escrito, mas validada, testada, integrada, documentada.
+
+### Origem do DoD
+
+- Conceito surgiu organicamente em times XP/Scrum nos anos 2000. Bill Wake mencionou o problema da definição inconsistente de "done" em artigo de 2002. Materiais de treinamento Scrum (Schwaber, Sutherland) começaram a formalizar entre 2003 e 2007.
+- **Formalizada como compromisso oficial** no Scrum Guide 2020 (Ken Schwaber e Jeff Sutherland), junto com Product Goal e Sprint Goal.
+- A versão atual do Scrum Guide define a DoD como descrição formal do estado do incremento quando atende aos critérios de qualidade requeridos pelo produto.
+
+### Exemplo típico de DoD
+
+Uma story está "Done" quando:
+
+- Código implementado e revisado (peer review / PR aprovado)
+- Testes unitários escritos e passando
+- Testes de aceitação (Gherkin) passando
+- Cobertura de testes mantida acima da meta (~70% típico)
+- Documentação atualizada (README, API docs, changelog)
+- Integrado na main branch sem quebrar build (CI verde)
+- Deployado em ambiente de staging
+- Aceito pelo PO (UAT informal)
+- Sem defeitos críticos conhecidos
+- NFRs relevantes verificados (performance se aplicável)
+
+### DoR vs DoD — quando aplicar
+
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">DoR vs DoD — pontos do ciclo de vida da story</text>
+
+  <rect x="40" y="60" width="150" height="40" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="115" y="83" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Backlog</text>
+  <text x="115" y="96" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(ideias, rascunhos)</text>
+
+  <rect x="220" y="60" width="150" height="40" rx="6" fill="#5bc0de" fillOpacity="0.12" stroke="#5bc0de" strokeWidth="1.5" />
+  <text x="295" y="83" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Refinement</text>
+  <text x="295" y="96" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(detalha, estima)</text>
+
+  <rect x="400" y="60" width="150" height="40" rx="6" fill="#7cae50" fillOpacity="0.12" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="475" y="83" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Sprint</text>
+  <text x="475" y="96" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(implementação)</text>
+
+  <rect x="580" y="60" width="100" height="40" rx="6" fill="#28a745" fillOpacity="0.15" stroke="#28a745" strokeWidth="1.5" />
+  <text x="630" y="83" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Done!</text>
+  <text x="630" y="96" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(entregue)</text>
+
+  <line x1="190" y1="80" x2="220" y2="80" stroke="currentColor" strokeWidth="1.5" />
+  <line x1="370" y1="80" x2="400" y2="80" stroke="#f0ad4e" strokeWidth="2" />
+  <line x1="550" y1="80" x2="580" y2="80" stroke="#dc3545" strokeWidth="2" />
+
+  <text x="385" y="125" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">↑ DoR (porta de entrada do sprint)</text>
+  <text x="565" y="125" textAnchor="middle" fill="#dc3545" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">↑ DoD (porta de saída do sprint)</text>
+
+  <rect x="40" y="150" width="320" height="150" rx="6" fill="#f0ad4e" fillOpacity="0.08" stroke="#f0ad4e" strokeWidth="1.5" />
+  <text x="200" y="172" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">DEFINITION OF READY (DoR)</text>
+  <text x="200" y="192" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Critério pra ENTRAR no sprint</text>
+  <text x="55" y="215" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Connextra + AC claros</text>
+  <text x="55" y="232" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Estimada pelo time</text>
+  <text x="55" y="249" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Atende INVEST (Small)</text>
+  <text x="55" y="266" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Dependências resolvidas/identificadas</text>
+  <text x="55" y="283" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• PO disponível pra dúvidas</text>
+
+  <rect x="380" y="150" width="300" height="150" rx="6" fill="#dc3545" fillOpacity="0.08" stroke="#dc3545" strokeWidth="1.5" />
+  <text x="530" y="172" textAnchor="middle" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">DEFINITION OF DONE (DoD)</text>
+  <text x="530" y="192" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Critério pra SAIR do sprint</text>
+  <text x="395" y="215" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Código revisado (PR aprovado)</text>
+  <text x="395" y="232" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Testes unitários e AC passando</text>
+  <text x="395" y="249" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Cobertura mantida; CI verde</text>
+  <text x="395" y="266" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Documentação atualizada</text>
+  <text x="395" y="283" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Aceito pelo PO; deploy staging</text>
+</svg>
+
+A diferença essencial: **DoR é negociável** (Cohn argumenta que deveria ser leve); **DoD é compromisso obrigatório** (Scrum Guide 2020 define como commitment do incremento).
+
+## Estimativa em ágil
+
+Não é o foco desta lição, mas vale o panorama porque conecta com DoR:
+
+- **Story Points (Cohn)**: unidade relativa de esforço. Não é hora; é complexidade + esforço + incerteza. Usa Fibonacci modificado (1, 2, 3, 5, 8, 13, 20, 40, 100).
+- **Planning Poker** (James Grenning, 2002): cada dev escolhe carta com estimativa simultaneamente. Discute divergências. Reestima até convergir.
+- **T-shirt sizing** (S/M/L/XL): pra épicos onde precisão de pontos não faz sentido.
+- **#NoEstimates** (Vasco Duarte, Woody Zuill): movimento crítico que argumenta contar stories (assumindo decomposição fina e consistente) é mais útil que estimar pontos.
+
+Trade-offs reais — escolha conforme contexto da equipe.
+
+## Como tudo se conecta no fluxo ágil real
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Fluxo de requisitos em time ágil (visão integrada)</text>
+
+  <rect x="40" y="55" width="640" height="60" rx="6" fill="#5bc0de" fillOpacity="0.10" stroke="#5bc0de" strokeWidth="1.5" />
+  <text x="55" y="78" fill="#5bc0de" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">1. Início do projeto</text>
+  <text x="55" y="96" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Elicitação (L2) + Domínio (L3): entender stakeholders e regras de negócio</text>
+  <text x="55" y="110" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Story Mapping: backbone do produto + identificação de MVP</text>
+
+  <rect x="40" y="130" width="640" height="60" rx="6" fill="#7cae50" fillOpacity="0.10" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="55" y="153" fill="#7cae50" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">2. Antes de cada sprint (refinement contínuo)</text>
+  <text x="55" y="171" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Quebra de épicos em stories (L5: INVEST, 3 Cs)</text>
+  <text x="55" y="185" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• ATDD: PO + dev + QA escrevem Gherkin juntos. Stories atendem DoR.</text>
+
+  <rect x="40" y="205" width="640" height="60" rx="6" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1.5" />
+  <text x="55" y="228" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">3. Durante o sprint</text>
+  <text x="55" y="246" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Implementação: TDD pra unitários, ATDD pra aceitação (Cucumber-JVM)</text>
+  <text x="55" y="260" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Verificação contínua (L6): CI roda testes a cada commit</text>
+
+  <rect x="40" y="280" width="640" height="60" rx="6" fill="#dc3545" fillOpacity="0.10" stroke="#dc3545" strokeWidth="1.5" />
+  <text x="55" y="303" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">4. Fim do sprint</text>
+  <text x="55" y="321" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Stories atendem DoD: código + testes + docs + deploy staging</text>
+  <text x="55" y="335" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Sprint Review com stakeholders: validação real (L6) — feedback retorna pro backlog</text>
+
+  <rect x="40" y="355" width="640" height="55" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="55" y="378" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">5. Continuamente</text>
+  <text x="55" y="396" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">• Rastreabilidade (L6): cada story → código → testes → AC ligados no Jira</text>
+  <text x="55" y="406" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">• Retrospectivas: melhoria de processo, ajuste de DoR/DoD/métricas</text>
+</svg>
+
+## Erros comuns em requisitos ágeis
+
+**1. Confundir ágil com "sem documentação".** O Manifesto Ágil diz "software funcionando MAIS QUE documentação abrangente" — não "ZERO documentação". User stories, Gherkin, ADRs, RTM são documentação ágil.
+
+**2. Stories grandes demais.** Story que não cabe num sprint deveria ser épico quebrado. Sintoma: "vamos só começar e ver". Resposta: NÃO. Quebre antes.
+
+**3. Backlog gigante sem refinement.** 500 stories nunca refinadas viram cemitério. Refine só o que vai entrar nos próximos 2-3 sprints; restante fica em épicos macro.
+
+**4. Story Map como artefato único, esquecido.** Patton enfatiza: map é VIVO. Atualize conforme entendimento cresce.
+
+**5. DoR como stage-gate burocrático.** Vira waterfall disfarçado. DoR deve ser guia, não checklist rígido (Mike Cohn).
+
+**6. DoD frouxa.** Time aceita "done" sem testes ou sem documentação. Resultado: débito técnico acumula, qualidade despenca. DoD é compromisso, não sugestão.
+
+**7. Refinement só PO e Scrum Master.** Sem devs e QA, vira priorização sem viabilidade. Three Amigos é o padrão.
+
+**8. Esquecer NFRs.** Backlog cheio de features funcionais, zero stories técnicas pra performance, segurança, monitoring. NFRs viram problemas em produção.
+
+**9. Critérios de aceitação ausentes ou vagos.** "Funciona" não é AC. Gherkin com cenários concretos é o mínimo.
+
+**10. Rastreabilidade ignorada.** Story sem ligação com épico/requisito/teste perde contexto em 3 meses.
+
+## Aplicação no sistema de biblioteca
+
+Time ágil de 5 pessoas (PO + 3 devs + 1 QA), sprints de 2 semanas, ferramenta Jira:
+
+### Início (primeiras 2 semanas, "Sprint 0")
+
+- Elicitação com bibliotecária-chefe + 3 atendentes + representante TI prefeitura (L2)
+- Levantamento de domínio: Ubiquitous Language definida (Leitor, Empréstimo, Acervo) (L3)
+- **Story Mapping** em workshop de 4 horas: backbone (Cadastrar leitor → Buscar → Emprestar → Devolver → Relatórios), MVP identificado
+- SRS macro leve (10 páginas, formato Volere reduzido) como anexo de contrato
+- Backlog inicial criado no Jira com 6 épicos e ~40 stories de alto nível
+
+### DoR adotado (leve, não checklist rígido)
+
+```
+Uma story está pronta pro sprint quando o time concorda que:
+- Está no formato Connextra com benefício claro
+- Tem 1-5 critérios de aceitação em Gherkin
+- Foi estimada (1-13 story points)
+- Cabe num sprint (Small do INVEST)
+- Mockup Figma anexado se envolve UI
+- PO confirmou que está disponível pra dúvidas no sprint
+```
+
+### DoD (compromisso obrigatório)
+
+```
+Story está "Done" quando:
+- PR aprovado por ≥2 devs
+- Testes unitários (JUnit) escritos, cobertura ≥70%
+- Cenários Gherkin (Cucumber-JVM) implementados e passando
+- CI verde (build + testes + lint)
+- Deploy em ambiente de staging com PO validando
+- Documentação atualizada (README do módulo, OpenAPI specs)
+- Story aceita pelo PO no sprint review
+```
+
+### Refinement semanal
+
+- Quarta-feira, 1h30, todo o time + PO
+- Pauta: refinar stories dos próximos 2 sprints, quebrar 1 épico, revisar story map se necessário
+- Saída: stories refinadas com DoR atendido, prontas pra sprint planning
+
+### Rastreabilidade
+
+- Cada story no Jira tem campo "Épico" e "Requisito SRS" (RF-XX)
+- Cenários Cucumber rodam com tag `@RF-07` ligando ao requisito
+- Antes de release, relatório de cobertura: % de requisitos com teste passando
+
+## Aplicação no Carbon Credit Compensation Platform
+
+Equipe Fatec (Bruno, Murilo, Fabiano, Pedro), projeto fechado de ~3 meses:
+
+- **Story Mapping** simplificado: backbone (Submeter inventário → Comprar créditos → Aposentar → Auditar), 1 release única (não há MVP iterativo já que é entrega Fatec)
+- **Sem épicos formais**: 4 grupos de stories alinhados com agregados DDD (Operador, Inventário, Crédito, Auditoria)
+- **Sem DoR/DoD formais escritas**: equipe pequena, acordos verbais funcionam. Mas há critérios implícitos: story só entra em sprint quando entendida pelos 4; story só está "pronta" com testes unitários nos agregados, Gherkin nos cenários críticos (aposentadoria definitiva), README atualizado
+- **Refinement informal**: discussão em reunião semanal de 30min via Discord/WhatsApp
+- **Rastreabilidade leve**: planilha simples ligando requisito → Lei 15.042/2024 → story → classe Java → cenário Gherkin. Suficiente pro contexto, sem overhead de ferramentas formais
+
+## Fechamento da trilha de Engenharia de Requisitos
+
+| Lição | Tema | O que você sabe agora |
+|---|---|---|
+| L1 | Introdução | Por que requisitos importam, papéis, ciclo |
+| L2 | Elicitação | Como descobrir o que stakeholders precisam |
+| L3 | Domínio | Ubiquitous Language, regras de negócio |
+| L4 | Análise | Classificação, priorização (MoSCoW, RICE), ISO 25010 |
+| L5 | Especificação | SRS, Volere, user stories, INVEST, Gherkin |
+| L6 | V&V e Gestão | Validar, verificar, rastrear, gerenciar mudanças |
+| **L7 (esta)** | **Ágil na prática** | **Story Mapping, épicos, refinement, DoR/DoD** |
+
+Você cobriu o ciclo completo da Engenharia de Requisitos — do "descobrir o problema" até "manter o produto vivo após release". Próxima trilha (em ordem natural de aprendizado): **UML 2.0** — modelagem visual dos requisitos especificados aqui.
+
+A trilha B (UML 2.0) vai aprofundar:
+
+- Diagramas de Casos de Uso (mencionados na L5)
+- Diagrama de Classes pra modelagem do domínio (L3)
+- Diagramas de Sequência pra fluxos detalhados
+- Estados, Atividades, e os outros diagramas UML
+- Como UML complementa SRS + user stories sem competir
+
+---
+
+**Referências canônicas usadas nesta lição**:
+
+- Patton, Jeff; Economy, Peter. *User Story Mapping: Discover the Whole Story, Build the Right Product*. O'Reilly Media, 2014, ISBN 978-1-491-90490-9. Forewords de Martin Fowler, Alan Cooper e Marty Cagan. Conceito de Story Maps introduzido por Patton em 2005.
+- Cohn, Mike. *User Stories Applied: For Agile Software Development*. Addison-Wesley, 2004, ISBN 978-0-321-20568-1. Popularização do conceito de épico e decomposição de stories.
+- Rubin, Kenneth. *Essential Scrum: A Practical Guide to the Most Popular Agile Process*. Addison-Wesley, 2012, ISBN 978-0-13-704329-3. Popularização da Definition of Ready.
+- Cohn, Mike. *"The Dangers of a Definition of Ready"*. Mountain Goat Software, ~2015. Crítica influente ao uso rígido de DoR.
+- Schwaber, Ken; Sutherland, Jeff. *The Scrum Guide*. Versão 2020, novembro 2020. Formaliza Definition of Done como commitment do incremento, junto com Product Goal e Sprint Goal. Scrum framework apresentado pela primeira vez em OOPSLA 1995.
+
+**Observações sobre fontes**:
+
+- O termo "grooming" foi substituído por "refinement" no Scrum Guide a partir de 2011 por conotações negativas em inglês — alguns times brasileiros ainda usam "grooming" sem essa conotação.
+- Definition of Ready NÃO está no Scrum Guide oficial (Schwaber e Sutherland nunca a incluíram). É prática emergente popularizada por Kenneth Rubin (2012) e adotada por muitas equipes. Mike Cohn alertou sobre os riscos de uso rígido.
+- A frase "scope doesn't creep, instead understanding grows" é frequentemente atribuída a Jeff Patton no contexto de Story Mapping; aparece no livro e em apresentações dele. Tradução livre: "o escopo não cresce, o entendimento cresce".
+- Story Points popularizados por Mike Cohn em *Agile Estimating and Planning* (Prentice Hall, 2005), embora o conceito apareça antes em times XP.
+- #NoEstimates: movimento liderado por Vasco Duarte (livro *No Estimates*, 2015) e Woody Zuill (palestras desde ~2012). É controverso na comunidade ágil.

@@ -1,0 +1,481 @@
+---
+titulo: "Segment Tree e Fenwick Tree: O Arsenal Secreto do ICPC"
+trilha: "algoritmos"
+duracaoMin: 65
+dificuldade: "intermediario"
+referencias:
+  - "Jon L. Bentley (1977), 'Solutions to Klee's Rectangle Problems', technical report, Carnegie Mellon University — paper que introduziu Segment Trees"
+  - "Peter M. Fenwick (1994), 'A new data structure for cumulative frequency tables', Software: Practice and Experience 24(3), pp. 327-336 — paper original do BIT"
+  - "Boris Y. Ryabko (1989), 'A fast on-line code', Soviet Math. Dokl. 39 — proposta anterior da estrutura"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 14 (Augmenting Data Structures) — base teórica"
+  - "Antti Laaksonen, Competitive Programmer's Handbook (CPH), Cap. 9 — Range Queries"
+  - "MIT OCW 6.851 (Spring 2014), Lecture 12 — Erik Demaine, Advanced Data Structures"
+  - "Codeforces educational rounds — Segment Tree e BIT (Pavel Mavrin)"
+  - "USACO Guide — Silver/Gold/Platinum range data structures"
+  - "cp-algorithms.com — Fenwick Tree, Segment Tree (com prefácio histórico)"
+---
+
+## Por que você precisa dessas duas estruturas
+
+Imagine um problema clássico de competição: você tem um array de **um milhão** de inteiros. Recebe **um milhão de operações** que misturam dois tipos:
+
+1. **Update**: "mude o valor da posição `i` para `v`"
+2. **Query**: "qual a soma dos elementos entre as posições `L` e `R`?"
+
+Solução ingênua: array simples. Updates em O(1), queries em O(N) (varrer o range). Total: O(N²) = **um trilhão** de operações. Vai estourar o tempo limite, sem dúvida.
+
+Solução com prefix sum: array auxiliar `prefix[i] = soma de A[0..i]`. Queries em O(1) (`prefix[R] - prefix[L-1]`), mas updates em O(N) (precisa recalcular todo o prefix a partir da posição modificada). Total: ainda O(N²).
+
+**Tem como ambos serem O(log N)?**
+
+Sim. **Segment Tree** (Jon L. Bentley, 1977) e **Fenwick Tree** (Peter Fenwick, 1994 — também chamada **BIT** ou **Binary Indexed Tree**) são as duas estruturas clássicas que resolvem isso. Updates e queries ambos em O(log N). Pra N = 10^6, isso são 20 operações em vez de um milhão — uma diferença de **50.000x**.
+
+Essas estruturas são os "canivetes suíços" do ICPC. **Aparecem em quase todo regional**. Empresas como Google, Meta, Facebook usam variantes em sistemas de **telemetria em tempo real** (queries por janelas de tempo), **bancos de dados** (índices de range queries), **trading** (agregações sobre históricos), **GIS** (queries espaciais). Mas a aplicação mais visível é em **competição**.
+
+Esta lição cobre as duas estruturas — quando usar cada, como implementar, e por que ambas existem (Fenwick é mais simples e rápida em casos comuns; Segment Tree é mais flexível e poderosa). No fim você vai ter o arsenal pra resolver praticamente qualquer problema de **range queries** em ICPC.
+
+---
+
+## O problema canônico: range queries com updates
+
+Formalizando o que queremos resolver. Dado array `A` de tamanho `N`:
+
+**Operações suportadas**:
+- `update(i, v)`: define `A[i] = v` (ou `A[i] += v`, depende da variante)
+- `query(L, R)`: retorna alguma agregação de `A[L..R]`
+
+**Agregações comuns**: soma, mínimo, máximo, GCD, OR/AND/XOR bit-a-bit, multiplicação. Qualquer função **associativa** funciona.
+
+| Solução | Update | Query | Total para N operações |
+|---|---|---|---|
+| Array simples | O(1) | O(N) | O(N²) |
+| Prefix sum | O(N) | O(1) | O(N²) |
+| **Fenwick Tree** | **O(log N)** | **O(log N)** | **O(N log N)** |
+| **Segment Tree** | **O(log N)** | **O(log N)** | **O(N log N)** |
+
+Pra N = 10^6, O(N²) = 10^12 (12 segundos). O(N log N) = 2×10^7 (0.02 segundos). **600 vezes mais rápido.**
+
+---
+
+## Fenwick Tree (BIT): a estrutura mágica de Peter Fenwick
+
+Começo pela mais simples e elegante.
+
+### A história da Fenwick Tree
+
+Em **1994**, **Peter M. Fenwick**, professor na **University of Auckland** (Nova Zelândia), publicou no journal Software: Practice and Experience 24(3) o paper *"A new data structure for cumulative frequency tables"*. Estava trabalhando em **compressão aritmética adaptativa** — um algoritmo de compressão sem perda que precisa atualizar **frequências de símbolos** dinamicamente, e calcular **somas cumulativas** dessas frequências pra cada símbolo codificado.
+
+Implementações da época eram lentas ou usavam muito espaço. Fenwick propôs uma estrutura que ele chamou de **"Binary Indexed Tree"** (BIT) — usa **representação binária dos índices** pra fazer somas cumulativas e updates em O(log N). Hoje chamamos de **Fenwick Tree** em homenagem a ele.
+
+Curiosidade histórica: o russo **Boris Y. Ryabko** já tinha proposto uma estrutura similar em **1989** no paper *"A fast on-line code"* (Soviet Math. Doklady 39), também no contexto de compressão. Mas o paper do Fenwick foi o que popularizou a ideia em CS ocidental. Caso de **Stigler's Law** (relembrando da Lição 19), mas mais leve — Ryabko às vezes aparece como "Ryabko-Fenwick".
+
+### A ideia: usar os bits do índice como "endereço"
+
+Esse é o ponto onde Fenwick Tree parece magia. A estrutura mantém um array `tree[]` de tamanho N+1 (1-indexed). Cada posição `i` do array armazena uma **soma parcial** que cobre um range específico — e o range é definido pelo **valor binário de `i`**.
+
+Especificamente: `tree[i]` armazena a soma `A[i - lowbit(i) + 1 .. i]`, onde `lowbit(i)` é o **valor do bit menos significativo** de `i`.
+
+`lowbit(i) = i & (-i)` (truque clássico com complemento de dois).
+
+```
+i = 1  = 0001   lowbit = 1    tree[1] = A[1]
+i = 2  = 0010   lowbit = 2    tree[2] = A[1] + A[2]
+i = 3  = 0011   lowbit = 1    tree[3] = A[3]
+i = 4  = 0100   lowbit = 4    tree[4] = A[1] + A[2] + A[3] + A[4]
+i = 5  = 0101   lowbit = 1    tree[5] = A[5]
+i = 6  = 0110   lowbit = 2    tree[6] = A[5] + A[6]
+i = 7  = 0111   lowbit = 1    tree[7] = A[7]
+i = 8  = 1000   lowbit = 8    tree[8] = A[1] + A[2] + ... + A[8]
+```
+
+Visualizando como árvore: cada nó cobre um range de tamanho `lowbit(i)`, e os "pais" no caminho até a raiz cobrem ranges maiores. A altura da árvore é **log N**.
+
+### As duas operações
+
+**Query (prefix sum até `i`)**: soma todos os `tree[]` ao longo do caminho de `i` até `0`, removendo o `lowbit` a cada passo.
+
+```
+query(i):
+    soma = 0
+    enquanto i > 0:
+        soma += tree[i]
+        i -= lowbit(i)        // i &= (i - 1) equivalente
+    retorna soma
+```
+
+**Update (somar `delta` em `A[i]`)**: percorre o caminho **subindo** pela árvore, adicionando `lowbit` a cada passo. Atualiza todos os `tree[]` que cobrem a posição `i`.
+
+```
+update(i, delta):
+    enquanto i <= N:
+        tree[i] += delta
+        i += lowbit(i)
+```
+
+**Range query** `A[L..R]` = `query(R) - query(L-1)`. Subtração de prefix sums, igual ao algoritmo clássico de prefix sum.
+
+Resumo: **3 linhas pra cada operação**. Olha que mágico:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class FenwickTree {
+    private final long[] tree;
+    private final int n;
+
+    public FenwickTree(int n) {
+        this.n = n;
+        this.tree = new long[n + 1];                    // 1-indexed
+    }
+
+    // Soma de A[1..i]
+    public long query(int i) {
+        long soma = 0;
+        while (i > 0) {
+            soma += tree[i];
+            i -= i & -i;                                // remove o lowbit
+        }
+        return soma;
+    }
+
+    // Soma de A[l..r]  (1-indexed, inclusive)
+    public long queryRange(int l, int r) {
+        return query(r) - query(l - 1);
+    }
+
+    // A[i] += delta
+    public void update(int i, long delta) {
+        while (i <= n) {
+            tree[i] += delta;
+            i += i & -i;                                // adiciona o lowbit
+        }
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+class FenwickTree {
+private:
+    std::vector<long long> tree;
+    int n;
+public:
+    FenwickTree(int n) : n(n), tree(n + 1, 0) {}
+
+    long long query(int i) const {
+        long long soma = 0;
+        while (i > 0) {
+            soma += tree[i];
+            i -= i & -i;
+        }
+        return soma;
+    }
+
+    long long queryRange(int l, int r) const {
+        return query(r) - query(l - 1);
+    }
+
+    void update(int i, long long delta) {
+        while (i <= n) {
+            tree[i] += delta;
+            i += i & -i;
+        }
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(log N) por operação. Cada iteração do `while` reduz `i` em pelo menos um bit (query) ou propaga um bit (update). Como `i` tem no máximo `log N` bits significativos, no máximo `log N` iterações.
+
+<ComplexidadeBox melhor="O(log N)" media="O(log N)" pior="O(log N)" />
+
+**Memória**: O(N). Só um array.
+
+<Insight>
+Fenwick Tree é **uma das estruturas mais elegantes em ciência da computação** justamente por sua simplicidade extrema. Cabe em ~15 linhas de código. Não tem nó, ponteiro, herança, classe complexa. **Apenas um array e bit manipulation**. Mesmo assim é O(log N) e funciona perfeitamente em produção. É a estrutura "favorita" de competidores ICPC — quando dá pra usar Fenwick, ninguém usa Segment Tree.
+</Insight>
+
+### Limitações do Fenwick Tree
+
+Apesar da beleza, BIT tem restrições:
+
+1. **Operações reversíveis somente** (geralmente). A versão padrão funciona pra soma porque podemos calcular `query(R) - query(L-1)`. Pra mínimo/máximo, isso não funciona — não tem como "remover" um mínimo de uma soma. Existem variantes mais sofisticadas pra min/max, mas perdem a simplicidade. **Pra min/max, usa Segment Tree**.
+
+2. **Não suporta "lazy propagation"** nativamente. Updates em ranges grandes (somar `delta` em toda `A[L..R]`) precisam de truques específicos (duas BITs, técnica de "soma de diferenças").
+
+3. **Construção O(N log N) ingenuamente**, mas dá O(N) com construção esperta (propagar diretamente os lowbits).
+
+Apesar das limitações, **pra soma + updates pontuais, Fenwick é insuperável** — código menor, constante mais rápida, menos espaço que Segment Tree.
+
+---
+
+## Segment Tree: a estrutura universal
+
+Quando Fenwick não dá conta, **Segment Tree** entra em cena.
+
+### A história da Segment Tree
+
+Foi inventada por **Jon L. Bentley** em **1977** no relatório técnico *"Solutions to Klee's Rectangle Problems"* na Carnegie Mellon University. Bentley estava trabalhando em problemas de **geometria computacional** — especificamente, os problemas formulados por **Victor Klee** sobre interseções entre retângulos paralelos aos eixos.
+
+Naquela época, ICPC nem existia direito (a primeira edição foi em 1970 e ainda era pequena). Bentley criou Segment Trees como ferramenta teórica, não imaginando que décadas depois ela seria a estrela de competições de programação no mundo todo.
+
+Bentley também é famoso pelo livro *"Programming Pearls"* (Communications of the ACM column, depois compilado em 1986) — fonte original de várias dicas clássicas de otimização e descoberta de bugs (incluindo o famoso bug do `mid = (lo + hi) / 2` em busca binária, mencionado na Lição 8).
+
+### A ideia: árvore binária explícita
+
+Diferente de Fenwick, Segment Tree é uma **árvore binária completa** real. A raiz cobre o array inteiro `[0, N-1]`. Cada nó cobre um intervalo, e seus dois filhos cobrem **metades** desse intervalo. Folhas cobrem elementos individuais.
+
+```
+                   [0..7]
+                  /       \
+               [0..3]     [4..7]
+              /     \    /     \
+           [0..1] [2..3][4..5][6..7]
+            / \   / \  / \   / \
+           0  1  2  3 4  5  6  7
+```
+
+Cada nó armazena uma agregação (soma, min, max, etc) dos elementos do seu intervalo. **Total de nós: O(N)** (cerca de 2N suficiente, alocamos 4N pra segurança).
+
+**Query `[L, R]`**: começa na raiz e desce. Pra cada nó:
+- Se intervalo do nó está **completamente fora** de `[L, R]`: ignora
+- Se intervalo do nó está **completamente dentro** de `[L, R]`: usa o valor armazenado
+- Se intervalo do nó está **parcialmente sobreposto**: recursa nos dois filhos
+
+**Update**: caminha da raiz até a folha do índice modificado, atualizando todos os nós do caminho. O(log N) nós.
+
+### Implementação clássica
+
+A representação compacta: usar um array de tamanho `4N` onde o nó `i` tem filhos em `2i` e `2i+1`. Raiz é o índice 1.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class SegmentTreeSum {
+    private final long[] tree;
+    private final int n;
+
+    public SegmentTreeSum(int[] data) {
+        this.n = data.length;
+        this.tree = new long[4 * n];
+        build(1, 0, n - 1, data);
+    }
+
+    private void build(int node, int l, int r, int[] data) {
+        if (l == r) {
+            tree[node] = data[l];
+            return;
+        }
+        int mid = (l + r) / 2;
+        build(2 * node, l, mid, data);
+        build(2 * node + 1, mid + 1, r, data);
+        tree[node] = tree[2 * node] + tree[2 * node + 1];
+    }
+
+    // Soma de A[ql..qr] (0-indexed, inclusive)
+    public long query(int ql, int qr) { return query(1, 0, n - 1, ql, qr); }
+
+    private long query(int node, int l, int r, int ql, int qr) {
+        if (qr < l || r < ql) return 0;                  // completamente fora
+        if (ql <= l && r <= qr) return tree[node];       // completamente dentro
+        int mid = (l + r) / 2;
+        return query(2 * node, l, mid, ql, qr)
+             + query(2 * node + 1, mid + 1, r, ql, qr);
+    }
+
+    // A[i] = valor
+    public void update(int i, int valor) { update(1, 0, n - 1, i, valor); }
+
+    private void update(int node, int l, int r, int i, int valor) {
+        if (l == r) {
+            tree[node] = valor;
+            return;
+        }
+        int mid = (l + r) / 2;
+        if (i <= mid) update(2 * node, l, mid, i, valor);
+        else update(2 * node + 1, mid + 1, r, i, valor);
+        tree[node] = tree[2 * node] + tree[2 * node + 1];
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+class SegmentTreeSum {
+private:
+    std::vector<long long> tree;
+    int n;
+
+    void build(int node, int l, int r, const std::vector<int>& data) {
+        if (l == r) { tree[node] = data[l]; return; }
+        int mid = (l + r) / 2;
+        build(2 * node, l, mid, data);
+        build(2 * node + 1, mid + 1, r, data);
+        tree[node] = tree[2 * node] + tree[2 * node + 1];
+    }
+
+    long long query(int node, int l, int r, int ql, int qr) const {
+        if (qr < l || r < ql) return 0;
+        if (ql <= l && r <= qr) return tree[node];
+        int mid = (l + r) / 2;
+        return query(2 * node, l, mid, ql, qr)
+             + query(2 * node + 1, mid + 1, r, ql, qr);
+    }
+
+    void update(int node, int l, int r, int i, int valor) {
+        if (l == r) { tree[node] = valor; return; }
+        int mid = (l + r) / 2;
+        if (i <= mid) update(2 * node, l, mid, i, valor);
+        else update(2 * node + 1, mid + 1, r, i, valor);
+        tree[node] = tree[2 * node] + tree[2 * node + 1];
+    }
+
+public:
+    SegmentTreeSum(const std::vector<int>& data) : n(data.size()), tree(4 * data.size(), 0) {
+        build(1, 0, n - 1, data);
+    }
+
+    long long query(int ql, int qr) { return query(1, 0, n - 1, ql, qr); }
+    void update(int i, int valor)   { update(1, 0, n - 1, i, valor); }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(log N) por operação. Memória: O(N).
+
+### A grande vantagem do Segment Tree: flexibilidade
+
+Pra mudar de "soma" pra "mínimo", **só altera a função de combinação**:
+
+```java
+tree[node] = Math.min(tree[2 * node], tree[2 * node + 1]);
+```
+
+E retorna `Integer.MAX_VALUE` pro caso "completamente fora" em vez de `0`. Pronto: Segment Tree de mínimo.
+
+Funciona com qualquer operação **associativa**: soma, min, max, GCD, OR, AND, XOR, multiplicação modular, contagem de inversões, polinômios. Por isso é a estrutura "universal" — se você não sabe qual estrutura usar, comece com Segment Tree.
+
+---
+
+## Lazy propagation: range updates em O(log N)
+
+A versão básica do Segment Tree suporta **updates pontuais**. Mas e se você precisar de **range updates** ("soma 5 em todos os elementos de A[L..R]")?
+
+Update ingênuo: caminhar até cada folha do range. O(N) no pior caso. Lento.
+
+A técnica é **lazy propagation**: em vez de propagar o update até as folhas imediatamente, **deixa um marcador** no nó que cobre o range completo. Quando outra operação chega que precisa entrar nesse subárvore, **propaga** o marcador pros filhos antes (ou seja, "preguiçosamente", só quando necessário).
+
+A complexidade fica O(log N) por update e por query, mesmo pra ranges grandes. Implementação é significativamente mais complexa — adiciona ~30 linhas de código. **Vale aprender pra ICPC**: aparece em todo regional.
+
+```
+update(L, R, delta):
+    pra cada nó N percorrido durante o caminho:
+        se N está completamente dentro de [L, R]:
+            tree[N] += (tamanho do range de N) * delta
+            lazy[N] += delta              // marca propagação pendente
+            retorna
+        propagar lazy[N] pros filhos
+        recursa
+```
+
+Para os curiosos: o código completo de lazy propagation está em qualquer referência de ICPC séria. **cp-algorithms.com** tem implementações exemplares.
+
+---
+
+## Fenwick vs Segment Tree: comparação direta
+
+| Aspecto | Fenwick Tree (BIT) | Segment Tree |
+|---|---|---|
+| Inventor | Peter Fenwick (1994) | Jon L. Bentley (1977) |
+| Implementação | ~15 linhas | ~40-50 linhas (sem lazy) |
+| Memória | N (compacta) | 4N |
+| Constante de tempo | **Muito pequena** | Média |
+| Operações suportadas | **Soma, XOR, alguns prefix-friendly** | **Qualquer função associativa** |
+| Range updates | Difícil (precisa de truques) | **Fácil com lazy propagation** |
+| Min/Max query | Limitado | **Direto** |
+| Update pontual | **3 linhas** | ~15 linhas |
+| Range queries com diferentes ops | Não diretamente | **Sim, generalizado** |
+
+**Regra prática**:
+
+- **Soma + updates pontuais** → **Fenwick** (mais simples, mais rápido)
+- **Min/Max + updates pontuais** → **Segment Tree**
+- **Range updates** → **Segment Tree com lazy propagation**
+- **Operações exóticas** (polinômios, intervalos com merge complexo) → **Segment Tree**
+
+Em ICPC, **competidores aprendem ambos** porque os problemas pedem variantes diferentes. Em produção de software, são raros, mas aparecem em **databases** (índices BRIN, B-Tree variants), **time-series databases** (TimescaleDB, InfluxDB usam estruturas semelhantes para queries por janelas).
+
+---
+
+## Aplicações em produção (além de competição)
+
+Apesar de "competitive programming primeiro", essas estruturas aparecem em vários sistemas reais.
+
+**Bancos de Dados**:
+- **Range queries em índices**: índices BRIN (PostgreSQL), índices em colunas time-series
+- **Agregações materializadas**: pré-computar somas/contagens em ranges de tempo
+- **Window functions** (SUM OVER) em algumas implementações otimizadas
+
+**Time-series Databases (TSDB)**:
+- **TimescaleDB**, **InfluxDB**, **Prometheus**: queries por janela temporal usam estruturas similares
+- **OLAP cubes**: agregações multidimensionais sobre fatos históricos
+
+**Sistemas de Trading**:
+- **Order books**: queries de profundidade ("quantos contratos disponíveis entre preços X e Y")
+- **Risk management**: somas de exposição por categoria
+
+**Geographic Information Systems (GIS)**:
+- **Range queries 2D**: extensões 2D de Segment Tree (a aplicação original do Bentley em 1977)
+- **PostGIS**, **MongoDB geospatial indices**
+
+**Otimização de jogos**:
+- **Range queries em mundos abertos**: "quais NPCs estão entre X e Y?"
+
+A formulação 1D que estudamos é a base de muitas dessas aplicações — só que com mais dimensões e otimizações específicas.
+
+---
+
+## Recap
+
+**Range queries com updates** são problemas onde array simples ou prefix sum não basta (O(N) por operação). Pra ter ambos em O(log N), use **Fenwick Tree** ou **Segment Tree**.
+
+**Fenwick Tree** (também **Binary Indexed Tree** ou **BIT**), inventada por **Peter M. Fenwick em 1994** (Software: Practice and Experience 24(3)) — originalmente pra compressão aritmética adaptativa. Boris Ryabko (1989) tinha estrutura similar antes. Usa **representação binária dos índices** + **bit manipulation** (`i & -i` é o `lowbit`). Cabe em ~15 linhas. Limitação: ideal pra **soma**, **XOR**, e operações "reversíveis" — não funciona direto pra min/max.
+
+**Segment Tree**, inventada por **Jon L. Bentley em 1977** (relatório técnico "Solutions to Klee's Rectangle Problems", CMU) — originalmente pra geometria computacional. É uma **árvore binária explícita** onde cada nó representa um intervalo. Mais flexível que Fenwick: suporta qualquer função associativa (soma, min, max, GCD, XOR, etc), aceita **range updates com lazy propagation**, generaliza facilmente pra problemas exóticos.
+
+**Comparação prática**:
+- **Soma + updates pontuais** → Fenwick (mais simples, mais rápido)
+- **Min/Max + updates pontuais** → Segment Tree
+- **Range updates** → Segment Tree com lazy propagation
+- **Operações generalizadas** → Segment Tree
+
+Em **ICPC**, ambas são essenciais — aparecem em quase todo regional. Em produção, são usadas em **bancos de dados de séries temporais** (TimescaleDB, InfluxDB), **trading** (order books), **GIS** (PostGIS), **OLAP cubes**, e qualquer sistema que faz **agregações por janela**.
+
+A trilha de **estruturas de dados** está bem coberta agora:
+- Fundamentos: Arrays, Listas Ligadas, Pilhas, Filas (Lições 2-4)
+- Hash-based: Hash Tables (Lição 5), Bloom Filter (Lição 18)
+- Tree-based: BSTs/Red-Black (Lição 9), Heap (Lição 10), Tries (Lição 16), Segment Tree (Lição 20)
+- Disjoint sets: Union-Find (Lição 15)
+- Index-based: Fenwick Tree (Lição 20)
+- Probabilísticas: HyperLogLog, Count-Min Sketch (Lição 18)
+
+Próximas direções possíveis:
+
+- **Geometria Computacional** — convex hull, line sweep, closest pair (aplicações em GIS, jogos, robótica)
+- **DP avançada** — DP em árvore, bitmask DP, SOS DP (expandir Lição 13)
+- **Fluxo em Redes** — Ford-Fulkerson, Edmonds-Karp, max-flow / min-cut (matching bipartido, segmentação)
+- **Mudar de trilha**: Bancos de Dados, Sistemas Operacionais, Redes, Arquitetura de Software, ou outra trilha do TechStudy

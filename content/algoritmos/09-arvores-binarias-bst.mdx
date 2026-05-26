@@ -1,0 +1,570 @@
+---
+titulo: "Árvores Binárias e BST: Onde a Ordem Sobrevive"
+trilha: "algoritmos"
+duracaoMin: 55
+dificuldade: "intermediario"
+referencias:
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 12 (Binary Search Trees) e Capítulo 13 (Red-Black Trees)"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 3.2 (BST) e 3.3 (Balanced Search Trees)"
+  - "Rudolf Bayer (1972), 'Symmetric Binary B-trees: Data Structure and Maintenance Algorithms', Acta Informatica 1"
+  - "Leonidas Guibas, Robert Sedgewick (1978), 'A Dichromatic Framework for Balanced Trees', 19th IEEE FOCS"
+  - "Robert Sedgewick (2008), 'Left-leaning Red-Black Trees', Princeton — versão simplificada moderna"
+  - "Knuth, The Art of Computer Programming, Vol. 3, Cap. 6.2.2 — Binary Tree Searching"
+  - "OpenJDK 21 source code — TreeMap.java (implementação Red-Black)"
+  - "MIT OCW 6.006 (Spring 2020), Lecture 16 — Binary Search Trees, Erik Demaine"
+---
+
+## A estrutura que sabe manter ordem
+
+Quase todo o que vimos até agora foi sobre **estruturas planas**: arrays, listas, pilhas, filas, hash tables. Elas funcionam bem pra muita coisa, mas têm um ponto cego — **manter dados ordenados enquanto você insere e remove**.
+
+Hash table é a estrutura mais rápida pra buscar pela chave em O(1), mas não tem ordem alguma. Iterar um `HashMap` em Java te dá os pares numa sequência aparentemente aleatória — não tem como pedir "me dá os pares com chave entre 10 e 50" sem percorrer tudo. Pior ainda: se você quiser saber qual é o menor elemento, vai ter que iterar todos.
+
+Array ordenado resolve esses problemas, mas insere e remove no meio em O(n). Pra dados que mudam o tempo todo (uma loja online com pedidos chegando, um leaderboard de jogo com pontuações atualizando, um banco com transações), array ordenado é lento demais.
+
+Aqui entra a **árvore binária de busca** — uma estrutura que faz busca, inserção e remoção em **O(log n)** mantendo a ordem das chaves. E numa engenharia muito bonita que vamos cobrir nesta lição, **árvores balanceadas** garantem esse O(log n) mesmo em casos patológicos. É por isso que `TreeMap` em Java, `std::map` em C++, índices de banco de dados e até o agendador de processos do kernel Linux usam variantes dessa estrutura.
+
+Nesta lição você vai entender desde o conceito básico de árvore até o porquê do **Red-Black Tree** — a estrutura que ganhou a guerra das árvores balanceadas e roda em produção em todos os lugares onde "ordem importa".
+
+---
+
+## Anatomia de uma árvore
+
+Antes do código, vocabulário. Uma árvore é um conjunto de **nós** conectados por **arestas**, com algumas regras simples:
+
+- Tem um nó especial chamado **raiz** (no topo, conceitualmente)
+- Cada nó tem zero ou mais **filhos**
+- Cada nó (exceto a raiz) tem exatamente um **pai**
+- Nós sem filhos são chamados **folhas**
+
+Quando cada nó tem no máximo **dois filhos**, é uma **árvore binária**.
+
+```
+            8           ← raiz
+           / \
+          3   10        ← filhos da raiz
+         / \    \
+        1   6    14     ← netos da raiz
+           / \   /
+          4   7 13      ← folhas (sem filhos)
+```
+
+**Altura da árvore**: o caminho mais longo da raiz até uma folha. Na árvore acima, a altura é 3.
+
+**Profundidade de um nó**: distância dele até a raiz. O `7` está na profundidade 3, o `8` está na profundidade 0 (raiz).
+
+<Insight>
+A analogia com árvores reais é didática, mas tem um detalhe. **A "raiz" fica no topo** na visualização que usamos, e as folhas ficam embaixo. Ou seja, as árvores em CS estão **de cabeça pra baixo** em relação às árvores da natureza. Knuth fez piada com isso no TAOCP Volume 1 — disse que computer scientists desenham árvores assim porque é mais fácil de escrever a raiz primeiro.
+</Insight>
+
+---
+
+## Por que árvores binárias importam
+
+A propriedade-chave: **a altura de uma árvore binária bem balanceada com n nós é aproximadamente log₂(n)**. Pra n = 1 milhão, altura ~20. Pra n = 1 bilhão, ~30.
+
+Por quê isso é importante? Porque muitas operações em árvores são proporcionais à altura. Se a altura é log n, a operação é O(log n).
+
+Mas precisa de bem balanceada. E aí mora o problema — vamos chegar lá.
+
+### Representação em código
+
+Cada nó é uma estrutura simples: valor, ponteiro pro filho esquerdo, ponteiro pro filho direito.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+class TreeNode {
+    int valor;
+    TreeNode esquerda;
+    TreeNode direita;
+
+    TreeNode(int valor) {
+        this.valor = valor;
+        this.esquerda = null;
+        this.direita = null;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+struct TreeNode {
+    int valor;
+    TreeNode* esquerda;
+    TreeNode* direita;
+
+    TreeNode(int v) : valor(v), esquerda(nullptr), direita(nullptr) {}
+};
+```
+
+</Code>
+</CodeSwap>
+
+---
+
+## Traversals: três jeitos de visitar todos os nós
+
+Antes de adicionar a regra de "busca", vamos ver como percorrer uma árvore qualquer. Existem **três traversals** clássicos, cada um com aplicações diferentes:
+
+**Pre-order**: visita a raiz, depois a subárvore esquerda, depois a direita.
+**In-order**: visita a subárvore esquerda, depois a raiz, depois a direita.
+**Post-order**: visita a subárvore esquerda, depois a direita, depois a raiz.
+
+Os nomes vêm da posição da raiz na sequência: **pré**-ordem (raiz antes dos filhos), **em ordem** (raiz no meio), **pós**-ordem (raiz depois dos filhos).
+
+Pra árvore:
+
+```
+       4
+      / \
+     2   6
+    / \   \
+   1   3   7
+```
+
+Os três traversals dão saídas diferentes:
+
+```
+Pre-order:   4, 2, 1, 3, 6, 7      (raiz → esq → dir)
+In-order:    1, 2, 3, 4, 6, 7      (esq → raiz → dir) ← está ORDENADO!
+Post-order:  1, 3, 2, 7, 6, 4      (esq → dir → raiz)
+```
+
+Olha o **in-order**. Saiu em ordem crescente. **Isso não é coincidência** — é a propriedade fundamental das BSTs, e veremos por que daqui a pouco.
+
+### Implementação dos traversals
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class Traversal {
+    public static void preOrder(TreeNode no) {
+        if (no == null) return;
+        System.out.println(no.valor);     // raiz primeiro
+        preOrder(no.esquerda);
+        preOrder(no.direita);
+    }
+
+    public static void inOrder(TreeNode no) {
+        if (no == null) return;
+        inOrder(no.esquerda);
+        System.out.println(no.valor);     // raiz no meio
+        inOrder(no.direita);
+    }
+
+    public static void postOrder(TreeNode no) {
+        if (no == null) return;
+        postOrder(no.esquerda);
+        postOrder(no.direita);
+        System.out.println(no.valor);     // raiz por último
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+void preOrder(TreeNode* no) {
+    if (no == nullptr) return;
+    std::cout << no->valor << "\n";     // raiz primeiro
+    preOrder(no->esquerda);
+    preOrder(no->direita);
+}
+
+void inOrder(TreeNode* no) {
+    if (no == nullptr) return;
+    inOrder(no->esquerda);
+    std::cout << no->valor << "\n";     // raiz no meio
+    inOrder(no->direita);
+}
+
+void postOrder(TreeNode* no) {
+    if (no == nullptr) return;
+    postOrder(no->esquerda);
+    postOrder(no->direita);
+    std::cout << no->valor << "\n";     // raiz por último
+}
+```
+
+</Code>
+</CodeSwap>
+
+Os três são O(n) — visitam cada nó uma vez. A diferença é só **a ordem** em que processam.
+
+### Quando usar cada um
+
+Cada traversal tem aplicações naturais:
+
+- **Pre-order**: serializar uma árvore pra arquivo, copiar uma árvore. Você precisa criar o pai antes dos filhos.
+- **In-order**: produzir saída ordenada de uma BST. Aparece muito em iteradores de `TreeMap`/`std::map`.
+- **Post-order**: liberar memória de uma árvore (precisa destruir os filhos antes do pai, senão perde a referência), avaliar expressões matemáticas em árvores de sintaxe.
+
+<Aviso>
+Em linguagens com gerenciamento automático de memória (Java, Python), você raramente precisa de post-order pra liberar memória — o GC faz isso. Em C++ com `unique_ptr`/`shared_ptr`, também é automático. Pra C cru ou C++ com ponteiros nus, post-order é literalmente como você libera a árvore sem leaks.
+</Aviso>
+
+---
+
+## Binary Search Tree: a árvore com regra de ordem
+
+Uma árvore binária qualquer pode ter qualquer estrutura. Uma **Binary Search Tree (BST)** adiciona uma regra:
+
+> Para todo nó N: tudo na subárvore esquerda é **menor** que N, tudo na subárvore direita é **maior** que N.
+
+```
+         8
+        / \
+       3   10
+      / \   \
+     1   6   14
+        / \  /
+       4   7 13
+```
+
+Verifica essa árvore: 3 < 8, 10 > 8, 1 < 3, 6 > 3, 7 > 6 mas 7 < 8 (precisa caber dentro do "limite da subárvore esquerda" do 8). Tudo certo.
+
+A propriedade vale **recursivamente**: cada subárvore também é uma BST. É essa recursividade que dá o poder.
+
+### Por que in-order produz ordem
+
+Pensa no que o in-order faz: visita esquerda → raiz → direita. Aplicado recursivamente, em qualquer nó a subárvore esquerda é processada **antes** dele, e a direita **depois**. Como tudo na esquerda é menor e tudo na direita é maior, **a saída sai ordenada**.
+
+É elegante: a estrutura da BST e a propriedade de ordenação são duas faces da mesma moeda.
+
+### Buscar em uma BST
+
+A busca é uma versão recursiva da busca binária em array:
+
+1. Compara o alvo com o nó atual
+2. Se igual, achou
+3. Se menor, vai pra esquerda
+4. Se maior, vai pra direita
+5. Se acabou (chegou em null), não está
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static boolean buscar(TreeNode raiz, int alvo) {
+    if (raiz == null) return false;
+    if (alvo == raiz.valor) return true;
+    if (alvo < raiz.valor) {
+        return buscar(raiz.esquerda, alvo);
+    } else {
+        return buscar(raiz.direita, alvo);
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+bool buscar(TreeNode* raiz, int alvo) {
+    if (raiz == nullptr) return false;
+    if (alvo == raiz->valor) return true;
+    if (alvo < raiz->valor) {
+        return buscar(raiz->esquerda, alvo);
+    } else {
+        return buscar(raiz->direita, alvo);
+    }
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(h), onde h é a altura da árvore. Numa árvore balanceada, h = log n, então O(log n). Numa árvore degenerada (vamos ver), h = n, então O(n).
+
+### Inserir em uma BST
+
+Insere um valor mantendo a propriedade da BST. Algoritmo:
+
+1. Comece na raiz
+2. Compare o novo valor com o nó atual
+3. Se menor, vá pra esquerda; se maior, vá pra direita
+4. Quando chegar em null, insira o novo nó ali
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static TreeNode inserir(TreeNode raiz, int valor) {
+    if (raiz == null) {
+        return new TreeNode(valor);
+    }
+    if (valor < raiz.valor) {
+        raiz.esquerda = inserir(raiz.esquerda, valor);
+    } else if (valor > raiz.valor) {
+        raiz.direita = inserir(raiz.direita, valor);
+    }
+    // Se valor == raiz.valor, geralmente ignoramos (sem duplicatas)
+    return raiz;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+TreeNode* inserir(TreeNode* raiz, int valor) {
+    if (raiz == nullptr) {
+        return new TreeNode(valor);
+    }
+    if (valor < raiz->valor) {
+        raiz->esquerda = inserir(raiz->esquerda, valor);
+    } else if (valor > raiz->valor) {
+        raiz->direita = inserir(raiz->direita, valor);
+    }
+    return raiz;
+}
+```
+
+</Code>
+</CodeSwap>
+
+---
+
+## A armadilha: BST degenerada
+
+A propriedade de BST garante que a busca segue um caminho da raiz até alguma folha. Logo, busca é O(altura). Se a altura é log n, somos felizes — O(log n).
+
+Mas **a altura depende da ordem em que você insere os elementos**. Considere o que acontece se você insere `[1, 2, 3, 4, 5]` em ordem:
+
+```
+1
+ \
+  2
+   \
+    3
+     \
+      4
+       \
+        5
+```
+
+A "árvore" virou uma lista ligada! Altura = n. Busca, inserção, remoção: todas **O(n)**. Pior caso possível, anula todo o ganho.
+
+Esse é o problema real das BSTs simples. Em produção, você não controla a ordem em que dados chegam. Se um cliente passa um stream de chaves já ordenadas, sua "árvore" vira lista ligada e seu sistema fica lento.
+
+A solução é o que veremos a seguir: **árvores auto-balanceadas**. Elas detectam quando ficam desbalanceadas demais e fazem **rotações** pra se reorganizar.
+
+---
+
+## Balanceamento: o que mantém O(log n) garantido
+
+Uma árvore é **balanceada** se a altura é O(log n) garantida. Existem várias maneiras de garantir isso. Os dois algoritmos clássicos são:
+
+**AVL Trees** (Adelson-Velsky e Landis, 1962): mantém balanceamento estrito — pra todo nó, as alturas das subárvores esquerda e direita diferem no máximo em 1. Resultado: árvore extremamente balanceada, busca rápida, mas mais trabalho na inserção e remoção pra manter o invariante.
+
+**Red-Black Trees** (Rudolf Bayer 1972, depois popularizadas por Guibas e Sedgewick em 1978): balanceamento mais "frouxo" — a propriedade garante apenas que a altura é no máximo `2 × log(n+1)`. Em compensação, **menos rotações** durante inserção/remoção. Na prática, vence em workloads mistos.
+
+Red-Black ganhou a guerra de produção. **`TreeMap` em Java, `std::map` em C++, agendador de processos do Linux, índices em alguns bancos** — todos usam Red-Black. Vale entender.
+
+---
+
+## Red-Black Tree: uma BST com regras de cor
+
+A ideia central é estranha mas brilhante: cada nó tem uma **cor** (vermelha ou preta). As cores garantem que nenhuma "perna" da árvore fica desproporcionalmente mais longa que outras.
+
+### As cinco regras
+
+Pra ser uma Red-Black Tree válida, a árvore precisa satisfazer:
+
+1. Cada nó é vermelho ou preto
+2. A raiz é preta
+3. Toda folha (representada como `null`, ou um sentinel preto) é preta
+4. Se um nó é vermelho, seus filhos são pretos (sem dois vermelhos consecutivos)
+5. Pra cada nó, todos os caminhos dele até qualquer folha descendente têm o **mesmo número de nós pretos**
+
+Da regra 5 sai um teorema: **a altura é no máximo 2·log(n+1)**. Por quê? O caminho mais curto da raiz a uma folha é todo preto. O caminho mais longo alterna preto-vermelho-preto-vermelho — no máximo o dobro do mais curto. Mais formalmente, demonstrado no CLRS Cap. 13.
+
+### A história das cores
+
+Fato curioso: por que **vermelho** e **preto**? A escolha das cores não veio de teoria matemática. Veio das **impressoras coloridas a laser do Xerox PARC**, onde Guibas e Sedgewick trabalhavam em 1978. **Vermelho e preto** eram as cores que **produziam o melhor contraste e qualidade visual** naquelas impressoras. O conteúdo do paper era sobre balanceamento; as ilustrações iam ficar nítidas. Pronto, virou padrão da indústria.
+
+Outro fato: o **Rudolf Bayer**, em 1972, chamou a estrutura de **"symmetric binary B-trees"**. O nome "red-black" só foi popularizado por Guibas e Sedgewick 6 anos depois, no paper *"A Dichromatic Framework for Balanced Trees"* apresentado no 19º FOCS.
+
+<Insight>
+Vale a pena ler o blog post original do Sedgewick sobre **Left-Leaning Red-Black Trees** (2008). Ele apresenta uma versão simplificada que enxuga a implementação de ~200 linhas pra ~50 linhas. Não é o padrão em produção (Java e C++ usam a versão clássica do livro), mas é didaticamente muito mais clara. Se você quiser entender Red-Black de verdade, comece pela LLRB.
+</Insight>
+
+### Rotações: como a árvore se reequilibra
+
+Quando uma inserção ou remoção quebra alguma das 5 propriedades, a árvore aplica **rotações** — operações locais que reorganizam alguns nós sem violar a propriedade de BST.
+
+Uma rotação à esquerda em torno do nó `x`:
+
+```
+Antes:           Depois:
+   x                y
+  / \              / \
+ a   y     →      x   c
+    / \          / \
+   b   c        a   b
+```
+
+A rotação preserva a ordem in-order (verifica: a, x, b, y, c continuam saindo na mesma ordem). Tudo em a continua menor que x, que continua menor que b, que continua menor que y, que continua menor que c.
+
+A operação custa **O(1)** — só ajusta 3 ponteiros. É a primitiva que torna o auto-balanceamento eficiente.
+
+Implementar Red-Black Tree do zero é uma das tarefas mais cansativas em algoritmos de undergrad. CLRS dedica ~30 páginas com vários casos de rotação. Por isso quase ninguém escreve do zero em produção — usa a biblioteca padrão.
+
+---
+
+## TreeMap e std::map: Red-Black em produção
+
+Ambas as bibliotecas-padrão de Java e C++ usam Red-Black Tree por baixo. Vamos ver o uso.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.TreeMap;
+import java.util.Map;
+
+TreeMap<Integer, String> notas = new TreeMap<>();
+notas.put(85, "João");
+notas.put(72, "Ana");
+notas.put(95, "Bruno");
+notas.put(60, "Carlos");
+
+// Iteração SEMPRE em ordem crescente das chaves (in-order traversal)
+for (Map.Entry<Integer, String> e : notas.entrySet()) {
+    System.out.println(e.getKey() + " → " + e.getValue());
+}
+// 60 → Carlos
+// 72 → Ana
+// 85 → João
+// 95 → Bruno
+
+// Operações que HashMap não tem:
+notas.firstKey();       // 60 — menor chave
+notas.lastKey();        // 95 — maior chave
+notas.floorKey(80);     // 72 — maior chave <= 80
+notas.ceilingKey(80);   // 85 — menor chave >= 80
+notas.subMap(70, 90);   // {72=Ana, 85=João} — range query!
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <map>
+#include <iostream>
+
+std::map<int, std::string> notas;
+notas[85] = "João";
+notas[72] = "Ana";
+notas[95] = "Bruno";
+notas[60] = "Carlos";
+
+// Iteração SEMPRE em ordem crescente (in-order traversal)
+for (const auto& [chave, valor] : notas) {
+    std::cout << chave << " → " << valor << "\n";
+}
+// 60 → Carlos
+// 72 → Ana
+// 85 → João
+// 95 → Bruno
+
+// Operações que unordered_map não tem:
+notas.begin()->first;              // 60 — menor chave
+notas.rbegin()->first;             // 95 — maior chave
+notas.lower_bound(80);             // iterador pro primeiro >= 80 (→ 85)
+notas.upper_bound(80);             // iterador pro primeiro > 80 (→ 85)
+auto begin = notas.lower_bound(70);
+auto end = notas.upper_bound(90);
+// percorre [begin, end) pra range query
+```
+
+</Code>
+</CodeSwap>
+
+Todas as operações acima são O(log n) em ambas as linguagens. **Pra n = 1 milhão de chaves, isso é ~20 comparações por operação.** Praticamente instantâneo.
+
+### O custo de manter ordem
+
+Comparativo direto com hash tables:
+
+| Operação | TreeMap / std::map | HashMap / unordered_map |
+|---|---|---|
+| Inserir / Buscar / Remover | O(log n) garantido | O(1) amortizado |
+| Iteração em ordem | O(n), trivial | O(n log n) — precisa ordenar antes |
+| Achar mínimo/máximo | O(log n) | O(n) — varrer tudo |
+| Range query (chaves entre A e B) | O(log n + k) | O(n) — varrer tudo |
+| Uso de memória | Compacto | ~2-4× os dados (buckets vazios + overhead) |
+| Pior caso | O(log n) | O(log n) Java 8+ (treeified), O(n) C++ |
+
+**Quando usar BST balanceada (TreeMap/std::map)**:
+- Precisa de ordem
+- Range queries frequentes
+- Min/max recorrentes
+- Sistemas de tempo real (sem jitter de rehash)
+
+**Quando usar HashMap/unordered_map**:
+- Só busca por chave exata
+- Não importa ordem
+- Performance pura é prioridade
+
+A diferença prática é muitas vezes 3-10× — HashMap mais rápido pra busca simples, mas TreeMap traz funcionalidades que o outro nem consegue oferecer.
+
+---
+
+## Aplicações reais (todas usando Red-Black)
+
+Pra fechar com sensação de "isso aparece em tudo":
+
+**Linux Kernel - Completely Fair Scheduler (CFS)**: o agendador de processos do Linux usa Red-Black Tree pra rastrear quais processos rodar a seguir, ordenados por "tempo virtual de CPU". Toda vez que o kernel troca de processo, ele consulta a árvore. Bilhões de operações por dia em qualquer servidor Linux.
+
+**Memory mapping (mmap/munmap)**: o kernel mantém os mapeamentos de memória virtual de cada processo em uma Red-Black Tree, permitindo busca rápida por endereço.
+
+**Java HashMap (a partir do Java 8)**: quando um bucket tem 8+ elementos colidindo (TREEIFY_THRESHOLD), o Java converte a lista ligada do bucket em uma **Red-Black Tree**. Vimos isso na lição de Hash Tables. É o mesmo conceito.
+
+**MySQL InnoDB e PostgreSQL**: índices usam **B-Trees** ou **B+Trees**, generalizações de árvores balanceadas otimizadas pra disco. Conceito relacionado mas com fator de ramificação muito maior (100+ filhos por nó em vez de 2).
+
+**Computational geometry**: kd-trees, interval trees, segment trees — todas variações de árvores balanceadas pra dados espaciais.
+
+**JavaScript engines (V8, etc.)**: usam Red-Black ou variantes pra muitas estruturas internas como propriedades de objetos ordenadas.
+
+---
+
+## Outras árvores que vale conhecer
+
+A família é grande. Pra você ter contexto do que existe sem precisar implementar nada:
+
+**Heap (Priority Queue)**: árvore quase completa onde cada pai é maior (ou menor) que os filhos. Não é BST — não tem ordem entre irmãos. Excelente pra "qual é o maior/menor agora?". Base do Dijkstra e A*. Veremos numa lição futura.
+
+**Trie**: árvore de prefixos pra strings. Cada caminho da raiz a uma folha é uma string. Usada em auto-complete, dicionários, IPs. Não é uma BST tradicional, mas é parente próxima.
+
+**B-Tree e B+Tree**: árvores balanceadas com fator de ramificação alto (50-200+). Otimizadas pra disco onde cada acesso é caro. Padrão em bancos de dados.
+
+**Splay Tree**: BST que "move pra cima" elementos acessados recentemente. Não tem O(log n) garantido por operação, mas tem amortizado. Bom pra acessos com localidade temporal.
+
+**Segment Tree** e **Fenwick Tree (BIT)**: estruturas pra range queries em arrays (soma, mínimo, máximo). Aparecem muito em ICPC. Diferentes de BST, mas usam estrutura de árvore.
+
+---
+
+## Recap
+
+Árvores binárias são a estrutura que mantém ordem permitindo modificações eficientes. Cada nó tem ao máximo 2 filhos, e a árvore tem altura logarítmica quando balanceada.
+
+Existem **três traversals** clássicos (pre-order, in-order, post-order), cada um com uma aplicação natural. O in-order é especialmente importante: **em uma BST, in-order produz saída ordenada**.
+
+**BST** adiciona a regra "tudo na esquerda é menor, tudo na direita é maior". Permite busca, inserção e remoção em O(h), onde h é a altura. O problema é que sem cuidado, h pode virar n — a árvore degenera em lista ligada.
+
+**Árvores auto-balanceadas** resolvem isso. AVL é mais estrito (mais rápido pra ler, mais caro pra escrever). Red-Black é mais frouxo mas mais barato em operações mistas — e por isso domina produção.
+
+**Red-Black Tree** tem 5 regras envolvendo cores que garantem altura O(log n). Inventada por Rudolf Bayer em 1972 (com nome diferente) e popularizada por Guibas e Sedgewick em 1978. Os nomes das cores vieram das impressoras a laser do Xerox PARC.
+
+`TreeMap` em Java e `std::map` em C++ usam Red-Black por baixo. Suportam range queries, min/max, floor/ceiling — funcionalidades que `HashMap` não consegue oferecer. O custo é O(log n) em vez de O(1) por operação.
+
+Onde encontrar Red-Black em produção: agendador do Linux, mmap, índices de bancos, V8 JavaScript, e dentro do próprio HashMap do Java 8+ pra mitigar buckets com colisões.
+
+Próxima lição: **Heap e Priority Queue** — outra estrutura baseada em árvore, mas com regra de ordem diferente. É a estrutura por trás de Dijkstra, A*, e qualquer problema de "pegue o próximo de maior prioridade".

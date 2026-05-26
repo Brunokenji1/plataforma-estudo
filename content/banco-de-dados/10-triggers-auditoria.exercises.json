@@ -1,0 +1,127 @@
+[
+  {
+    "id": "trig-01",
+    "enunciado": "Qual a diferença fundamental entre triggers BEFORE, AFTER e INSTEAD OF?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São sinônimos — apenas estilos diferentes de nomear",
+      "BEFORE: roda antes da operação efetivar; pode ABORTAR ou MODIFICAR a linha sendo gravada (retornar NULL em BEFORE FOR EACH ROW cancela a operação no PostgreSQL). AFTER: roda depois; reage ao fato consumado; valor de retorno é ignorado. INSTEAD OF: roda NO LUGAR da operação; apenas em views; permite tornar views complexas (com JOIN/agregação) updatable",
+      "BEFORE é mais rápido que AFTER",
+      "INSTEAD OF só existe em MySQL"
+    ],
+    "resposta": 1,
+    "explicacao": "Diferença documentada na documentação oficial do PostgreSQL (postgresql.org/docs/current/sql-createtrigger.html). CITAÇÃO LITERAL: 'The trigger can be specified to fire before the operation is attempted on a row (before constraints are checked and the INSERT, UPDATE, or DELETE is attempted); or after the operation has completed (after constraints are checked and the INSERT, UPDATE, or DELETE has completed); or instead of the operation (in the case of inserts, updates or deletes on a view)'. BEFORE: a trigger pode INTERFERIR — modificar os valores que serão gravados (alterar NEW), ou cancelar completamente a operação retornando NULL. Casos típicos: validação que rejeita gravação, normalização (forçar lowercase em email), preencher campos automáticos como created_at. AFTER: a operação JÁ ACONTECEU. Trigger reage ao resultado. PostgreSQL docs: 'If the trigger fires after the event, all changes, including the effects of other triggers, are visible to the trigger'. Casos típicos: auditoria, propagar mudança para outras tabelas, notificações, manutenção de campos agregados. INSTEAD OF: trigger SUBSTITUI a operação. Aplicável apenas em VIEWS — quando o banco não sabe como traduzir DML em views complexas (com JOIN, GROUP BY), você define manualmente. PostgreSQL docs: 'It is the responsibility of the trigger's function to perform the necessary modifications to the view's underlying base table(s)'. Heurística: BEFORE quando precisa interferir; AFTER quando só reage; INSTEAD OF apenas em views complexas precisando virar updatable."
+  },
+  {
+    "id": "trig-02",
+    "enunciado": "Em SQL Server, o que são as tabelas INSERTED e DELETED e como elas se relacionam com cada tipo de operação?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São tabelas físicas que precisam ser criadas manualmente",
+      "São PSEUDO-TABELAS memory-resident criadas e gerenciadas AUTOMATICAMENTE pelo SQL Server. INSERTED contém linhas APÓS a operação (válida em INSERT e UPDATE); DELETED contém linhas ANTES da operação (válida em DELETE e UPDATE). Em UPDATE: deleted = valores antigos, inserted = valores novos. Estrutura idêntica à tabela base. Não podem ser modificadas direto nem ter DDL aplicada",
+      "São arquivos de log do sistema",
+      "São views materializadas"
+    ],
+    "resposta": 1,
+    "explicacao": "Documentado na Microsoft Learn (learn.microsoft.com/en-us/sql/relational-databases/triggers/use-the-inserted-and-deleted-tables). CITAÇÃO LITERAL: 'DML trigger statements use two special tables: the deleted and inserted tables. SQL Server automatically creates and manages these tables. You can use these temporary, memory-resident tables to test the effects of certain data modifications and to set conditions for DML trigger actions. You cannot directly modify the data in the tables or perform data definition language (DDL) operations on the tables, such as CREATE INDEX'. MAPEAMENTO por operação: (1) INSERT — inserted tem linhas novas, deleted VAZIA; (2) DELETE — inserted VAZIA, deleted tem linhas removidas; (3) UPDATE — AMBAS preenchidas; deleted tem valores ANTIGOS, inserted tem valores NOVOS (correlacionar por PK via JOIN). ESTRUTURA: 'Each column in the inserted and deleted tables maps directly to a column in the base table' (Microsoft docs) — colunas idênticas à tabela base. PADRÃO em UPDATE: SELECT i.coluna AS valor_novo, d.coluna AS valor_antigo FROM inserted i INNER JOIN deleted d ON i.pk = d.pk. CONTRASTE COM POSTGRESQL: PostgreSQL usa NEW (registro com valores novos) e OLD (registro com valores antigos) acessados diretamente no corpo da função — não há JOIN porque cada linha é processada individualmente em FOR EACH ROW. SQL Server processa em conjunto. RESTRIÇÕES históricas: text/ntext/image não funcionam em AFTER triggers (deprecated desde 2005; use varchar(max)/nvarchar(max)/varbinary(max))."
+  },
+  {
+    "id": "trig-03",
+    "enunciado": "Como uma trigger SQL Server se comporta quando um UPDATE afeta MÚLTIPLAS linhas?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Roda uma vez por linha automaticamente",
+      "A trigger SQL Server roda UMA VEZ por STATEMENT, não por linha. Se o UPDATE afetar 1000 linhas, a trigger roda 1 vez, mas inserted e deleted contém 1000 linhas cada. Você precisa escrever LÓGICA BASEADA EM CONJUNTO (set-based) processando inserted/deleted como tabelas. Anti-pattern: SELECT @var = coluna FROM inserted (pega só uma linha aleatória, perde as outras 999)",
+      "Roda recursivamente até processar todas",
+      "Aborta se houver mais de 1 linha"
+    ],
+    "resposta": 1,
+    "explicacao": "Comportamento crítico documentado: triggers SQL Server disparam UMA VEZ POR STATEMENT, independente do número de linhas afetadas. CITAÇÃO de fonte (dbschema.com/blog/sql-server/create-trigger/): 'SQL Server triggers fire once per statement, not once per row, so a single update can place many rows into inserted and deleted'. CONSEQUÊNCIA: pra UPDATE que afeta 1000 linhas, a trigger executa 1 vez, mas inserted e deleted contém 1000 linhas cada. ANTI-PATTERN CLÁSSICO que pega muito iniciante: 'DECLARE @id INT; SELECT @id = id FROM inserted; -- depois usa @id' — quando inserted tem 1000 linhas, SELECT INTO variável pega apenas UMA linha (aleatória, sem ORDER BY). As outras 999 são silenciosamente ignoradas. PADRÃO CORRETO (set-based): processar inserted/deleted como tabelas: 'INSERT INTO auditoria (id, valor_novo, valor_antigo) SELECT i.id, i.valor, d.valor FROM inserted i JOIN deleted d ON i.id = d.id'. Toda linha afetada vira uma linha na auditoria. PARA OPERAÇÕES UPDATE multi-linha onde precisa lógica diferente por linha: ainda fica set-based, com CASE WHEN ou separando em múltiplos INSERTs com WHERE. CONTRASTE COM POSTGRESQL: PostgreSQL FOR EACH ROW dispara uma vez por linha — você processa NEW/OLD individualmente, lógica fica natural por linha. FOR EACH STATEMENT no PostgreSQL é o equivalente do comportamento padrão SQL Server, e tem mesma armadilha: trabalha em conjunto, não linha-por-linha."
+  },
+  {
+    "id": "trig-04",
+    "enunciado": "Em PostgreSQL, qual o significado dos identificadores especiais NEW e OLD em uma função de trigger?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Variáveis aleatórias do PL/pgSQL",
+      "NEW: registro com os VALORES NOVOS, disponível em INSERT (linha sendo inserida) e UPDATE (estado após a mudança). OLD: registro com os VALORES ANTERIORES, disponível em UPDATE (estado antes) e DELETE (linha sendo removida). Ambos são tipo ROW da tabela e podem ser modificados (NEW) em triggers BEFORE pra alterar o que será gravado. Em STATEMENT-level triggers, NEW e OLD são NULL",
+      "Tabelas de log do PostgreSQL",
+      "Funções built-in pra calcular timestamps"
+    ],
+    "resposta": 1,
+    "explicacao": "NEW e OLD documentados em postgresql.org/docs/current/plpgsql-trigger.html (capítulo 41.10 - Trigger Functions). NEW: registro do tipo ROW representando os VALORES NOVOS. Disponível em INSERT (a linha sendo inserida) e UPDATE (linha após a mudança). NULL em DELETE e em statement-level triggers. CITAÇÃO da documentação: 'new database row for INSERT/UPDATE operations in row-level triggers. This variable is null in statement-level triggers and for DELETE operations'. OLD: registro representando os VALORES ANTERIORES. Disponível em UPDATE (estado antes da mudança) e DELETE (a linha sendo removida). NULL em INSERT e em statement-level triggers. ACESSO a campos: 'NEW.coluna_nome' ou 'OLD.coluna_nome' — sintaxe de campo de record. MODIFICAÇÃO: em triggers BEFORE FOR EACH ROW, você pode MODIFICAR NEW pra alterar o que será efetivamente gravado. Exemplo: 'NEW.email := LOWER(NEW.email); RETURN NEW;' normaliza email pra minúsculas antes da gravação. Em AFTER triggers, modificações em NEW não têm efeito (já foi gravado). RETORNO da função: em BEFORE FOR EACH ROW, retorne NEW pra continuar a operação, NEW modificado pra alterar valores, ou NULL pra cancelar a operação inteira. Em AFTER triggers, valor de retorno é IGNORADO mas boa prática retornar NEW (INSERT/UPDATE) ou OLD (DELETE). OUTROS identificadores especiais documentados: TG_OP (string com a operação), TG_TABLE_NAME (nome da tabela), TG_WHEN (BEFORE/AFTER/INSTEAD OF), TG_LEVEL (ROW ou STATEMENT), TG_TABLE_SCHEMA, TG_RELID."
+  },
+  {
+    "id": "trig-05",
+    "enunciado": "Por que FULL OUTER JOIN entre inserted e deleted é a abordagem clássica para uma trigger de auditoria genérica no SQL Server?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas convenção sem razão técnica",
+      "Porque cobre as 3 operações (INSERT/UPDATE/DELETE) com UMA única trigger e UMA única query. INSERT: só inserted tem linhas → FULL OUTER traz linhas com colunas de deleted NULL (registro com _antes NULL); DELETE: só deleted tem linhas → registro com _depois NULL; UPDATE: ambos têm linhas → registro completo com antes E depois. Detecta a operação por presença/ausência em cada lado",
+      "Porque INNER JOIN não funciona em triggers",
+      "Apenas pra forçar uso de SQL standard"
+    ],
+    "resposta": 1,
+    "explicacao": "FULL OUTER JOIN é padrão real e elegante porque exatamente UMA estrutura SQL cobre os três cenários sem precisar de três triggers separadas. RAZÃO técnica: a presença/ausência em inserted/deleted CARACTERIZA a operação (Microsoft Learn documenta o mapeamento). INSERT: inserted tem N linhas, deleted vazia. FULL OUTER JOIN retorna as linhas de inserted com TODAS as colunas de deleted como NULL — quando você projeta isso como auditoria, gera registro com '_Antes' colunas NULL e '_Depois' preenchidas. DELETE: deleted tem N linhas, inserted vazia. FULL OUTER JOIN retorna linhas de deleted com colunas de inserted como NULL — registro com '_Antes' preenchidas e '_Depois' NULL. UPDATE: ambos com N linhas, JOIN por PK pareia valor antigo com novo. FULL OUTER comporta esses pares — registros com '_Antes' E '_Depois' preenchidos. DETECÇÃO da operação: padrão clássico é 'IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) THEN UPDATE ELSE IF EXISTS (SELECT 1 FROM inserted) THEN INSERT ELSE DELETE'. VANTAGENS: (1) UMA trigger CREATE TRIGGER ... AFTER INSERT, UPDATE, DELETE — em vez de três; (2) UMA query INSERT com SELECT FROM inserted FULL OUTER JOIN deleted — em vez de três queries; (3) consistência no formato da auditoria — todo registro tem mesma estrutura; (4) fácil estender pra novas tabelas — mesma estrutura, ajustar nomes de colunas. ALTERNATIVA: três triggers separadas (uma por evento) — funciona mas verboso e propenso a esquecimento. ALTERNATIVA modernas: temporal tables (SQL Server 2016+, SYSTEM_VERSIONING) fazem auditoria automaticamente sem trigger custom — vale considerar pra projetos novos."
+  },
+  {
+    "id": "trig-06",
+    "enunciado": "O que é RECURSÃO DIRETA em triggers SQL Server e como o SQL Server lida com ela por padrão?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Recursão é sempre permitida sem controle",
+      "Recursão direta acontece quando uma trigger executa operação que dispara ELA MESMA (UPDATE em pedido dispara trigger, trigger faz outro UPDATE em pedido → loop). SQL Server BLOQUEIA recursão direta de AFTER triggers POR PADRÃO (RECURSIVE_TRIGGERS database option = OFF). Limite máximo de nesting (incluindo trigger chamando outra trigger em tabela diferente): 32 NÍVEIS. Ultrapassando, erro e rollback",
+      "Recursão direta é sempre permitida sem limite",
+      "Apenas no Oracle existe esse conceito"
+    ],
+    "resposta": 1,
+    "explicacao": "Comportamento documentado em Microsoft Learn (learn.microsoft.com/en-us/sql/relational-databases/triggers/create-nested-triggers). RECURSÃO DIRETA: trigger T em tabela X executa operação que dispara o próprio T novamente. EXEMPLO trivial: 'CREATE TRIGGER tr ON pedido AFTER UPDATE AS UPDATE pedido SET obs = X WHERE id IN (SELECT id FROM inserted)' — esse UPDATE dispara o próprio trigger. SEM proteção, loop infinito. COMO SQL SERVER PROTEGE: 'An AFTER trigger does not call itself recursively unless the RECURSIVE_TRIGGERS database option is set' (Microsoft Learn). Default RECURSIVE_TRIGGERS = OFF. CITAÇÃO literal: 'Only direct recursion of AFTER triggers is prevented when the RECURSIVE_TRIGGERS database option is set to OFF'. RECURSÃO INDIRETA: trigger em tabela A modifica tabela B, que tem trigger que modifica tabela A — esse tipo é controlado por OUTRA opção, 'nested triggers' no nível de servidor (default ON). Pra desabilitar recursão indireta: 'EXEC sp_configure nested_triggers, 0'. LIMITE de nesting documentado: 32 níveis. CITAÇÃO: 'SQL Server supports the nesting of triggers up to a maximum of 32 levels'. Ultrapassando, erro 'Maximum stored procedure, function, trigger, or view nesting level exceeded (limit 32)' e a transação INTEIRA aborta com rollback. FUNÇÃO útil pra controlar manualmente: TRIGGER_NESTLEVEL() retorna nível atual de nesting; usado em condições como 'IF (SELECT TRIGGER_NESTLEVEL()) > 5 RETURN' pra abortar pre-32 níveis. RECOMENDAÇÃO GERAL: evite triggers recursivas se possível — viraram código difícil de debugar e manter. Quando precisar, controle por flag em coluna (processado BOOLEAN) ou variável de sessão."
+  },
+  {
+    "id": "trig-07",
+    "enunciado": "Por que trigger que envia email ou faz integração externa é considerada anti-pattern?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas tradição arbitrária",
+      "Trigger roda na MESMA TRANSAÇÃO que disparou. Operações externas (email, HTTP, fila) são LENTAS (centenas de ms até segundos) e podem FALHAR. Consequências: (1) transação fica longa, locks segurados, contenção; (2) falha externa força rollback de transação que deveria suceder; (3) timeouts derrubam batches inteiros; (4) tentativa de retry retransmite email/integração. Padrão correto: OUTBOX — grave evento em tabela, worker assíncrono consome",
+      "Triggers não suportam IO de rede",
+      "Apenas em PostgreSQL é problema"
+    ],
+    "resposta": 1,
+    "explicacao": "Anti-pattern bem documentado em literatura de design de sistemas distribuídos. PROBLEMAS específicos: (1) TRANSAÇÃO LONGA: trigger executa SÍNCRONO dentro da transação original. Se enviar email demora 800ms, sua transação demora 800ms a mais. Locks ficam segurados nas linhas afetadas pelo UPDATE original. Em batch de 1000 atualizações, 800s a mais; (2) FALHA EXTERNA = ROLLBACK INDEVIDO: servidor SMTP fora do ar? Exceção propaga, transação aborta, mudança no banco que deveria ter sido feita é DESFEITA. Tentativa novamente — mesmo problema, dados nunca mudam; (3) CONTENÇÃO: outras transações esperando lock nas tabelas que sua transação longa segurou — deadlocks aumentam, throughput cai; (4) DEBUG difícil: log diz 'transação X falhou', motivo é 'SMTP timeout' lá em servidor de email — distância semântica enorme; (5) RETRY problema: se aplicação retenta a operação, email é enviado DUAS VEZES (uma falhou no meio, outra completa). Sem idempotência, cliente recebe email duplicado. PADRÃO CORRETO — OUTBOX PATTERN: trigger grava EVENTO em tabela 'pending_events' (apenas insert local, rápido, transacional). Worker SEPARADO (job agendado, daemon, message consumer) lê tabela, faz chamada externa, marca como processado. Vantagens: (a) transação original rápida e atômica — INSERT na tabela é parte do mesmo commit; (b) falha externa NÃO causa rollback do dado de negócio; (c) worker pode retentar com backoff exponencial; (d) idempotência fácil via ID do evento; (e) escalável — N workers consumindo. IMPLEMENTAÇÃO em sistemas reais: outbox + RabbitMQ, outbox + Kafka, outbox + AWS SQS, ou simplesmente outbox + cron job lendo tabela. TRIGGERS DEVEM SER MILISSEGUNDOS — qualquer operação que pode demorar fica em worker assíncrono. REGRA DE OURO: dentro de trigger, só fazer operações no MESMO BANCO, sem IO de rede, sem chamadas externas."
+  },
+  {
+    "id": "trig-08",
+    "enunciado": "Em PostgreSQL, qual a vantagem de usar IS DISTINCT FROM em vez de != no WHEN de uma trigger?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "É só sintaxe alternativa equivalente",
+      "IS DISTINCT FROM trata NULL CORRETAMENTE. Operador != ou <> retorna NULL quando algum dos lados é NULL — em SQL three-valued logic, NULL != NULL é NULL (não TRUE nem FALSE). Em condição WHEN, isso significa que mudança envolvendo NULL passa despercebida. IS DISTINCT FROM trata NULL como valor — NULL IS DISTINCT FROM 'X' é TRUE, NULL IS DISTINCT FROM NULL é FALSE",
+      "É mais rápido",
+      "Apenas estilo de código"
+    ],
+    "resposta": 1,
+    "explicacao": "Detalhe sutil mas IMPORTANTE em SQL. PostgreSQL (e ANSI SQL padrão) usa LÓGICA DE TRÊS VALORES: TRUE, FALSE, NULL. Operadores de comparação (=, !=, <>, <, >, etc.) retornam NULL quando algum operando é NULL. EXEMPLO: NULL != 'X' resulta em NULL, NÃO em TRUE. NULL != NULL resulta em NULL, NÃO em FALSE. CONSEQUÊNCIA em trigger: 'CREATE TRIGGER ... WHEN (OLD.status != NEW.status) EXECUTE ...' tem bug — se OLD.status era NULL e NEW.status virou 'ATIVO' (mudança real), NULL != 'ATIVO' resulta em NULL, WHEN condition resulta NULL, trigger NÃO DISPARA. Mudança importante perdida. IS DISTINCT FROM trata NULL como valor especial mas comparável. CITAÇÃO da documentação PostgreSQL: 'IS DISTINCT FROM' é operador que retorna TRUE quando os valores são diferentes, considerando NULL como valor único — diferente de qualquer não-NULL, igual a outro NULL. TABELA DE COMPARAÇÃO: NULL IS DISTINCT FROM 'X' → TRUE; 'X' IS DISTINCT FROM NULL → TRUE; NULL IS DISTINCT FROM NULL → FALSE; 'A' IS DISTINCT FROM 'B' → TRUE; 'A' IS DISTINCT FROM 'A' → FALSE. PATTERN correto em WHEN: 'WHEN (OLD.status IS DISTINCT FROM NEW.status)' — dispara em todas mudanças reais, incluindo NULL→valor, valor→NULL, valor→valor diferente. Não dispara em valor→mesmo_valor nem NULL→NULL. COROLÁRIO: também tem 'IS NOT DISTINCT FROM' (oposto). 'A IS NOT DISTINCT FROM B' é equivalente a 'A = B' MAS tratando NULL = NULL como TRUE. APLICAÇÃO em outras situações: WHERE clauses, CASE WHEN, GROUP BY (com NULL como categoria). SQL Server tem operador equivalente? Não tem IS DISTINCT FROM padrão até SQL Server 2022, mas pode ser simulado: '(a <> b OR (a IS NULL AND b IS NOT NULL) OR (a IS NOT NULL AND b IS NULL))'. Mais verboso, mas mesmo resultado."
+  },
+  {
+    "id": "trig-09",
+    "enunciado": "Quais são alternativas a triggers para implementar updated_at automático em uma tabela?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas trigger funciona",
+      "(1) GENERATED COLUMN: PostgreSQL 12+ tem colunas geradas, mas só baseadas em outras colunas da MESMA linha — não funciona pra 'momento da última atualização'; (2) DEFAULT NOW() em INSERT cobre criação, mas não atualização; (3) Aplicação seta updated_at explicitamente em cada UPDATE — funciona se TODOS os caminhos passam pela aplicação; (4) JPA @LastModifiedDate / Hibernate @UpdateTimestamp — Spring auditing automático; (5) TEMPORAL TABLES (SQL Server 2016+, SYSTEM_VERSIONING) — Banco mantém histórico completo. Trigger é solução tradicional mas não única",
+      "Stored procedure substitui sempre",
+      "Apenas em PostgreSQL 18+"
+    ],
+    "resposta": 1,
+    "explicacao": "Múltiplas abordagens válidas, cada uma com trade-off. (1) APPLICATION-LEVEL: cada UPDATE inclui 'updated_at = NOW()' (ou WHERE da app inclui). VANTAGEM: simples, visível no código. DESVANTAGEM: depende de TODOS os caminhos passarem pela app — script SQL ad-hoc, migration, importação CSV podem esquecer. Quebra a garantia. (2) JPA AUDITING: Spring Data JPA com @EntityListeners(AuditingEntityListener.class) e @LastModifiedDate em campo LocalDateTime. Hibernate alternativa: @UpdateTimestamp. VANTAGENS: declarativo, integrado ao framework. DESVANTAGEM: só funciona via JPA — operações SQL fora não tocam updated_at. (3) GENERATED COLUMN PostgreSQL 12+: 'updated_at TIMESTAMPTZ GENERATED ALWAYS AS (...)' — mas LIMITAÇÃO crítica documentada: colunas geradas em PostgreSQL precisam ser determinísticas e baseadas em outras COLUNAS da mesma linha. NOW() não é determinística — não pode ser usada. Portanto GENERATED COLUMN NÃO RESOLVE updated_at. (4) TRIGGER (clássica): BEFORE UPDATE trigger que faz 'NEW.updated_at := NOW()'. GARANTIA TOTAL: independe de quem fez o UPDATE — app, script, migration. Trabalho mínimo, custo zero. (5) SQL SERVER TEMPORAL TABLES (2016+): tabela com SYSTEM_VERSIONING — SQL Server mantém automaticamente tabela histórica com TODA versão da linha, com SysStartTime e SysEndTime. Não só updated_at, mas histórico completo. Acesso temporal com 'FOR SYSTEM_TIME AS OF datetime'. VANTAGEM: histórico automático sem custom. CUSTO: tabela cresce com cada UPDATE. (6) DATABASE DEFAULT em UPDATE: alguns SGBDs permitem default em UPDATE também ('ON UPDATE CURRENT_TIMESTAMP' em MySQL). MySQL específico — PostgreSQL e SQL Server não suportam isso nativamente. RECOMENDAÇÃO: para projetos novos Spring Boot — JPA @LastModifiedDate + trigger BACKUP no banco pra casos não-JPA. Para SQL Server moderno — temporal tables se precisa histórico além de só timestamp. Para garantia máxima — trigger é incontornável."
+  },
+  {
+    "id": "trig-10",
+    "enunciado": "Verdadeiro ou falso: triggers são sempre a melhor solução pra implementar regras de negócio, porque garantem que a regra seja aplicada não importa quem altere a tabela.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. A garantia é REAL (trigger roda independente de quem alterou), mas o trade-off em manutenibilidade frequentemente NÃO compensa. Triggers são CÓDIGO INVISÍVEL — não aparecem no código da aplicação, não aparecem em diagramas de classe, não aparecem em log de aplicação. Pra entender o que acontece quando 'UPDATE pedido SET status = X' é executado, dev precisa ler código da app E listar TODOS os triggers da tabela pedido. Em sistemas grandes com 50 tabelas e 100 triggers, isso vira pesadelo de manutenção. PROBLEMAS específicos de regras de negócio em triggers: (1) DEBUG: erro 'transação X falhou' não dá pista de QUAL trigger falhou. Stack trace mostra linha da app, não da trigger. Precisa investigar logs do banco; (2) TESTES: testar trigger requer subir banco real (ou H2/Testcontainers). Muito mais lento que mock unitário; (3) CONTROLE DE VERSÃO: trigger fica no banco; código de migration (Flyway/Liquibase) precisa ser disciplinado pra capturar mudanças em triggers — fácil divergir entre ambientes; (4) PORTABILIDADE: trigger PostgreSQL não roda em SQL Server e vice-versa. Lógica de negócio fica ligada ao SGBD; (5) PERFORMANCE: triggers em cascata multiplicam I/O silenciosamente. Query 'simples' vira monstro escondido; (6) ESPALHAMENTO de lógica: regras espalhadas entre app e banco — onde está a fonte da verdade? Difícil documentar; (7) RECURSÃO: triggers que disparam outras viram fáceis de criar acidentalmente. Limite 32 níveis SQL Server / pode estourar stack PostgreSQL. POSIÇÃO de arquitetos modernos (Robert C. Martin, Martin Fowler, Vlad Mihalcea): LÓGICA DE NEGÓCIO na APLICAÇÃO (Service Layer Spring, Use Cases Clean Architecture, Domain Entities DDD). Banco GUARDA DADOS. Triggers apenas pra: (a) auditoria; (b) updated_at automático; (c) constraints complexas inexpressáveis em CHECK; (d) manutenção de denormalização; (e) sincronização entre tabelas redundantes. Tudo MAIS DE LÓGICA — calcular desconto, validar fluxo de pedido, aplicar regra de pagamento — fica na app. EM EQUIPES MISTAS: regra na app é VISÍVEL pra todo dev que precisa entender o sistema. Regra em trigger é VISÍVEL apenas pra DBAs e quem se lembra de procurar. Onboarding de novo dev em sistema com lógica em triggers é MUITO mais difícil. CONCLUSÃO: a 'garantia' do trigger é real, mas custa caro em manutenibilidade. Use triggers com PARCIMÔNIA, pra casos específicos onde a garantia é essencial e a lógica é simples (auditoria, timestamps). Lógica de negócio complexa → camada de aplicação."
+  }
+]

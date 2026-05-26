@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a pergunta de teste mais útil pra decidir se algo é Entity ou Value Object, segundo Evans (2003)?",
+      "opcoes": [
+        "Esse objeto tem mais de 5 atributos?",
+        "Importa QUAL objeto é, ou só importa O QUE ele contém?",
+        "Esse objeto precisa ser persistido em banco?",
+        "Esse objeto será usado em mais de uma classe?"
+      ],
+      "correta": 1,
+      "explicacao": "Evans (2003, capítulo 5) formula explicitamente: 'isto importa qual objeto é, ou só importa o que ele contém?'. Se importa QUAL (continuidade de identidade), é Entity. Se importa só O QUE (atributos definem tudo), é Value Object. Account é Entity porque dois Accounts com mesmo saldo são contas diferentes; Money é Value Object porque duas notas de R$10 são intercambiáveis. As outras opções confundem com critérios irrelevantes: número de atributos não decide, persistência é ortogonal (tanto Entity quanto VO podem ser persistidos), e reuso não tem relação com identidade conceitual."
+    },
+    {
+      "id": "ex2",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Value Objects podem ser mutáveis quando isso simplifica o código.",
+      "correta": false,
+      "explicacao": "Falso. Evans (2003, cap. 5) é categórico: Value Objects DEVEM ser imutáveis quando compartilháveis, e na prática quase sempre devem ser. A imutabilidade traz três garantias: thread-safety por construção (sem locks), validação que permanece válida pra sempre (se passou no construtor, está OK), e substituição segura (a mesma instância pode ser cacheada em qualquer lugar). Pra 'alterar' um VO você cria outro: `dinheiro.somar(novo)` retorna um novo Money, não modifica o original. Em Java moderno, `record` resolve isso elegantemente."
+    },
+    {
+      "id": "ex3",
+      "tipo": "multipla-escolha",
+      "pergunta": "Por que código externo a um Aggregate só pode acessar objetos internos através da raiz?",
+      "opcoes": [
+        "Pra reduzir o número de classes públicas no diretório",
+        "Porque é regra de orientação a objetos pura",
+        "Pra garantir que os invariantes do agregado sejam respeitados atomicamente",
+        "Pra facilitar a geração automática de código"
+      ],
+      "correta": 2,
+      "explicacao": "A motivação é consistência, não estética. Se dois lugares do código pudessem alterar objetos internos de um agregado em paralelo, cada um manteria seu invariante local mas poderia quebrar um invariante global (ex: soma de itens não bate com total). A raiz controla todos os invariantes do agregado em transações atômicas (Evans, 2003, cap. 6). As outras opções confundem com motivações superficiais — DDD não é sobre estética nem geração de código."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Vaughn Vernon, em 'Effective Aggregate Design' (2011), defende uma regra fundamental sobre tamanho de agregados. Qual?",
+      "opcoes": [
+        "Agregados devem ter no máximo 7 ± 2 objetos (limite da memória humana)",
+        "Design agregados PEQUENOS, evitando o instinto de juntar tudo relacionado num único agregado",
+        "Agregados devem ter exatamente uma Entity raiz e nenhuma outra Entity",
+        "Agregados devem conter todos os objetos referenciados pelo Aggregate Root"
+      ],
+      "correta": 1,
+      "explicacao": "Vernon (2011, 'Effective Aggregate Design Part I', dddcommunity.org/library/vernon_2011/) define quatro rules of thumb pra design de agregados: (1) Model True Invariants in Consistency Boundaries; (2) Design Small Aggregates; (3) Reference Other Aggregates By Identity; (4) Use Eventual Consistency Outside the Boundary. A opção B descreve a Regra 2, e Vernon é direto: agregados grandes são quase sempre erro de modelagem. O instinto inicial é juntar tudo que se relaciona dentro do mesmo agregado — Customer com todos os Orders, Order com todos os OrderItems, etc. Resultado: locks longos, transações que carregam centenas de objetos, conflitos de concorrência em qualquer operação. A heurística: olhe pra cada associação e pergunte 'preciso garantir invariante atômico aqui?'. Se não, separe em agregados diferentes. A opção D descreve o anti-pattern que Vernon combate."
+    },
+    {
+      "id": "ex5",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Quando um Aggregate precisa apontar pra outro Aggregate, a referência deve ser feita pelo ID, não pelo objeto inteiro.",
+      "correta": true,
+      "explicacao": "Verdadeiro. É a segunda regra de Vernon (2011, Part II): 'Reference Other Aggregates By Identity'. Três motivos práticos: (1) limita o tamanho do agregado em memória — não carrega o grafo inteiro; (2) evita confusão de propriedade — um agregado não pode acidentalmente alterar objetos de outro; (3) permite consistência eventual entre agregados — mudanças num CreditoCarbono não precisam refletir atomicamente em CompensacaoEmissao. No Carbon Credit Platform, ItemCompensacao guarda `CreditoId` (Value Object com o ID), não `CreditoCarbono` inteiro. Quando precisar dos dados, pede ao repository."
+    },
+    {
+      "id": "ex6",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual classe deve ter Repository em um Bounded Context?",
+      "opcoes": [
+        "Toda Entity do modelo",
+        "Apenas raízes de Aggregates (Aggregate Roots)",
+        "Toda Entity e todo Value Object persistido",
+        "Apenas classes anotadas com @Entity do JPA"
+      ],
+      "correta": 1,
+      "explicacao": "Evans (2003, cap. 6) é explícito: somente raízes de Aggregates têm Repository. Objetos internos do agregado (Entities locais ou Value Objects) NÃO devem ter Repository próprio — você os acessa navegando a partir da raiz. Isso reforça a regra de acesso ao agregado: se objetos internos tivessem Repository, código externo poderia carregá-los direto e burlar os invariantes da raiz. A opção D é especialmente perigosa porque confunde anotação técnica (@Entity do JPA, que vale pra QUALQUER classe persistida) com conceito DDD (Aggregate Root, que é decisão de modelagem)."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a regra de ouro para Factories em DDD?",
+      "opcoes": [
+        "Toda classe deve ter pelo menos uma Factory",
+        "Factories devem implementar a interface Singleton",
+        "A criação é atômica: ou o agregado fica completo e válido, ou a Factory lança exceção",
+        "Factories devem usar reflection pra criar objetos dinamicamente"
+      ],
+      "correta": 2,
+      "explicacao": "Evans (2003, cap. 6): criação é ATÔMICA. Ou o agregado fica completo e válido, ou a Factory lança exceção. Nada de retornar um agregado parcial pro código cliente 'terminar de montar'. A razão: se a Factory devolve um objeto incompleto, o código cliente assume responsabilidade por invariantes que deveriam ser da Factory, e qualquer caminho de código que esqueça uma etapa produz um agregado inválido em produção. As outras opções confundem com padrões técnicos não relacionados (Singleton, reflection) ou inventam regras inexistentes."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quais são as três características obrigatórias de um Domain Service segundo Evans (2003)?",
+      "opcoes": [
+        "É @Stateless, usa @Transactional, e retorna DTO",
+        "Representa conceito do domínio, envolve múltiplos objetos do domínio, e é stateless",
+        "Tem nome terminando em Service, está no pacote application, e implementa interface",
+        "É instanciado via Spring, tem testes unitários, e é thread-safe"
+      ],
+      "correta": 1,
+      "explicacao": "Evans (2003, cap. 5) define três características que TODAS devem estar presentes: (1) a operação representa um conceito do domínio (não é plumbing técnico); (2) a operação envolve múltiplos objetos do domínio (se envolvesse só um, seria método daquela classe); (3) a operação é stateless (não guarda estado entre chamadas). O exemplo clássico é transferência entre contas: não pertence à conta origem nem destino, envolve as duas, e não guarda estado. As outras opções confundem com convenções técnicas (anotações Spring, nomenclatura) que são ortogonais à definição conceitual."
+    },
+    {
+      "id": "ex9",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Criar uma classe XxxService pra cada agregado, contendo toda a lógica de negócio, e deixar as classes do domínio como sacos de getters/setters é uma boa aplicação de DDD.",
+      "correta": false,
+      "explicacao": "Falso. Esse é exatamente o anti-pattern do Anemic Domain Model, descrito por Martin Fowler em 'AnemicDomainModel' (martinfowler.com/bliki/AnemicDomainModel.html, 25 de novembro de 2003). Fowler argumenta que essa abordagem é DDD apenas na superfície: você tem objetos com nomes do domínio, mas eles não têm comportamento — toda lógica vive em Services. Isso quebra o princípio central da orientação a objetos (dados e comportamento juntos) e elimina os benefícios de Aggregates (invariantes guardados pelos próprios objetos). Domain Service é EXCEÇÃO, usado quando uma operação não tem dono natural. A maioria do comportamento mora nos próprios objetos do domínio."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "No agregado CompensacaoEmissao do Carbon Credit Platform, qual invariante crítica a raiz precisa proteger?",
+      "opcoes": [
+        "Toda CompensacaoEmissao deve ter pelo menos 3 itens",
+        "A soma de toneladas dos ItemCompensacao não pode exceder o totalToneladas da CompensacaoEmissao",
+        "O CNPJ do emissor deve ter exatamente 14 dígitos",
+        "O status só pode ser RASCUNHO ou EFETIVADA"
+      ],
+      "correta": 1,
+      "explicacao": "A invariante 'soma(itens.toneladas) <= totalToneladas' é o que justifica o agregado existir como unidade de consistência. Sem essa invariante atômica, dois lugares do código poderiam reservar créditos em paralelo, ultrapassar o total pedido, e ninguém perceberia até a auditoria. O método `reservarCredito()` da raiz verifica essa invariante ANTES de adicionar o item, garantindo que o agregado nunca fique em estado inválido. A opção A inventa uma regra arbitrária; a C é validação do Value Object CNPJ (que aconteceria no construtor dele, não na raiz da compensação); a D ignora o estado intermediário EFETIVADA e outros possíveis estados como CANCELADA."
+    }
+  ]
+}

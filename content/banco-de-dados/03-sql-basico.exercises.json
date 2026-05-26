@@ -1,0 +1,127 @@
+[
+  {
+    "id": "sql-01",
+    "enunciado": "Qual a ORDEM LÓGICA de execução de uma query SQL com SELECT, FROM, WHERE, GROUP BY, HAVING e ORDER BY?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Na ordem em que aparecem na query: SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY",
+      "FROM/JOIN → WHERE → GROUP BY → HAVING → SELECT → DISTINCT → ORDER BY → LIMIT. Por isso você NÃO PODE usar alias do SELECT no WHERE (WHERE executa antes), mas PODE no ORDER BY (executa depois). Saber essa ordem ajuda a entender erros do otimizador",
+      "ORDER BY executa primeiro, depois SELECT, depois WHERE",
+      "A ordem é aleatória, decidida pelo otimizador"
+    ],
+    "resposta": 1,
+    "explicacao": "Ordem LÓGICA de execução (independente da ordem que você escreve no código): (1) FROM + JOIN — monta o conjunto inicial cruzando tabelas; (2) WHERE — filtra LINHAS individuais; (3) GROUP BY — agrupa linhas que passaram do WHERE; (4) HAVING — filtra GRUPOS após agregação; (5) SELECT — projeta as colunas finais (cria aliases aqui); (6) DISTINCT — remove duplicatas; (7) ORDER BY — ordena resultado final; (8) LIMIT/OFFSET — pagina. CONSEQUÊNCIAS PRÁTICAS: (a) NÃO PODE usar alias do SELECT no WHERE — alias só existe depois do SELECT; (b) PODE usar alias no ORDER BY — executa depois; (c) HAVING vê resultados agregados, WHERE vê linhas individuais. O otimizador pode reordenar FISICAMENTE pra performance, mas a SEMÂNTICA segue essa ordem lógica. Erro típico: 'WHERE total > 100' quando 'total' é um alias do SELECT — falha porque WHERE roda antes do SELECT. Solução: usa subquery ou repete a expressão."
+  },
+  {
+    "id": "sql-02",
+    "enunciado": "Quem criou o SQL e em que ano foi padronizado pela ANSI?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Edgar F. Codd em 1970",
+      "Donald D. Chamberlin e Raymond F. Boyce na IBM em 1974 (paper 'SEQUEL: A Structured English Query Language' no SIGFIDET Workshop). Renomeado para SQL por questão de marca (SEQUEL era marca registrada da Hawker Siddeley). Padronizado pela ANSI em 1986 (ANSI X3.135-1986), pela ISO em 1987 (ISO 9075:1987). Versão atual: ISO/IEC 9075:2023",
+      "Larry Ellison em 1979, com o Oracle V2",
+      "Tim Berners-Lee em 1989"
+    ],
+    "resposta": 1,
+    "explicacao": "Donald D. Chamberlin e Raymond F. Boyce, ambos na IBM, no projeto System R, em 1974, paper 'SEQUEL: A Structured English Query Language' apresentado no ACM SIGFIDET Workshop on Data Description, Access and Control. Baseado no modelo relacional de Codd (1970). NOME ORIGINAL: SEQUEL — 'Structured English Query Language'. Renomeado pra SQL por questão de MARCA REGISTRADA (Hawker Siddeley, empresa britânica de aviação, tinha 'SEQUEL' registrado). Por isso muitos pronunciam 'sequel' até hoje, mas o nome oficial é S-Q-L. TIMELINE: 1974 paper original; 1979 Oracle V2 (primeiro RDBMS comercial); 1981 IBM SQL/DS; 1983 IBM DB2; 1986 ANSI X3.135-1986 (SQL-86); 1987 ISO 9075:1987; 1989, 1992, 1996, 1999, 2003, 2006, 2008, 2011, 2016, 2023 revisões. SQL-92 é a versão mais influente — formalizou JOIN syntax explícito (INNER JOIN, LEFT JOIN), CASE expressions, subqueries, isolation levels. Curiosidade: Boyce morreu em 1974 aos 26 anos antes do paper sair (BCNF leva o nome dele, da Lição 2)."
+  },
+  {
+    "id": "sql-03",
+    "enunciado": "Qual a DIFERENÇA prática entre 'IS NULL' e '= NULL' em SQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São equivalentes",
+      "= NULL nunca retorna nada porque NULL não é igual a nada (nem a si mesmo). NULL é tri-state — comparações com NULL retornam UNKNOWN, não TRUE nem FALSE. Para verificar NULL, use 'IS NULL' (ou 'IS NOT NULL'). É bug clássico em produção — query parece estar 'sem retornar nada' por causa desse detalhe",
+      "= NULL é mais rápido",
+      "= NULL só funciona em PostgreSQL"
+    ],
+    "resposta": 1,
+    "explicacao": "= NULL NUNCA retorna nada porque NULL não tem igualdade — nem com ele mesmo (NULL = NULL retorna UNKNOWN). SQL usa LÓGICA TRI-STATE: TRUE, FALSE e UNKNOWN. Operações com NULL geralmente retornam UNKNOWN, que o WHERE descarta como se fosse FALSE. Por isso 'WHERE email = NULL' nunca traz nada. Use sempre 'IS NULL' ou 'IS NOT NULL'. OUTRAS PEGADINHAS COM NULL: (a) operações aritméticas — 5 + NULL = NULL; (b) concatenação de strings — em alguns SGBDs 'olá' || NULL = NULL; (c) agregações ignoram NULL — SUM(coluna) e AVG(coluna) ignoram, MAS COUNT(*) conta todas as linhas; COUNT(coluna) só conta não-NULLs; (d) NOT IN com lista contendo NULL retorna 0 linhas — use NOT EXISTS quando puder ter NULLs; (e) GROUP BY trata todos os NULLs como um grupo único. BOA PRÁTICA: declare colunas como NOT NULL sempre que possível — elimina classe inteira de bugs. NULL é justificável quando o valor é genuinamente desconhecido (data_demissao em funcionário ativo), não como 'placeholder' por preguiça."
+  },
+  {
+    "id": "sql-04",
+    "enunciado": "Qual o resultado de um INNER JOIN entre Aluno e Matricula se 2 alunos não têm nenhuma matrícula?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Os 2 alunos aparecem com NULL na coluna de Matricula",
+      "Os 2 alunos sem matrícula NÃO APARECEM no resultado. INNER JOIN retorna apenas linhas onde existe correspondência (match) em AMBOS os lados da condição ON. Para incluir alunos sem matrícula, use LEFT JOIN — alunos aparecem com NULL nas colunas da Matricula",
+      "Erro de execução",
+      "Os 2 alunos aparecem duplicados"
+    ],
+    "resposta": 1,
+    "explicacao": "INNER JOIN retorna APENAS interseção — linhas com match em ambos os lados da condição ON. Alunos sem matrícula são descartados; matrículas sem aluno correspondente (não deveria acontecer com FK ativa, mas teoricamente) também. Pra incluir alunos sem matrícula, use LEFT JOIN: 'SELECT a.nome, m.disciplina_id FROM Aluno a LEFT JOIN Matricula m ON a.id = m.aluno_id'. Resultado: alunos sem matrícula aparecem com NULL em m.disciplina_id. Mnemônica visual: LEFT JOIN = 'tudo da tabela ESQUERDA, com match da DIREITA'; RIGHT JOIN = espelho (raramente usado, pode sempre reescrever como LEFT); FULL OUTER JOIN = união completa (tudo de A + tudo de B + match no meio); CROSS JOIN = produto cartesiano (cada A com cada B). Bug clássico: usar INNER JOIN quando precisava de LEFT e perder dados silenciosamente. Sempre considere: 'linhas SEM match devem aparecer no resultado?' Se sim → LEFT/RIGHT/FULL; se não → INNER."
+  },
+  {
+    "id": "sql-05",
+    "enunciado": "Qual a REGRA fundamental do GROUP BY?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "GROUP BY só funciona com inteiros",
+      "Todas as colunas no SELECT que NÃO estão dentro de função agregada (COUNT, SUM, AVG, MIN, MAX) DEVEM estar no GROUP BY. PostgreSQL e MySQL 8+ rejeitam violação como erro. MySQL antigo com ONLY_FULL_GROUP_BY=OFF aceitava mas retornava resultado INDETERMINADO — bug clássico",
+      "GROUP BY substitui ORDER BY",
+      "É opcional — sempre pode ser omitido"
+    ],
+    "resposta": 1,
+    "explicacao": "Regra do GROUP BY: TODA coluna no SELECT que NÃO está em função agregada deve aparecer no GROUP BY. Razão semântica: quando agrupa por X, cada linha do resultado representa UM grupo de X — então só faz sentido mostrar (a) o valor do próprio X que define o grupo, ou (b) AGREGAÇÃO sobre outras colunas (média, soma, contagem). EXEMPLO ERRADO: 'SELECT curso, nome, COUNT(*) FROM Aluno GROUP BY curso' — não tem como mostrar UM nome por curso quando há vários alunos. PostgreSQL responde: 'ERROR: column \"nome\" must appear in the GROUP BY clause or be used in an aggregate function'. MySQL ATÉ 5.7 com ONLY_FULL_GROUP_BY=OFF (default antigo!) aceitava esse SQL e retornava QUALQUER UM dos nomes — comportamento indeterminado, bug clássico em produção. MySQL 8.0+ default agora é ONLY_FULL_GROUP_BY=ON (padrão SQL). Pra mostrar valores agregados de cada linha: use STRING_AGG (PostgreSQL) / GROUP_CONCAT (MySQL) — 'SELECT curso, STRING_AGG(nome, \\', \\') FROM Aluno GROUP BY curso' concatena nomes."
+  },
+  {
+    "id": "sql-06",
+    "enunciado": "Qual a DIFERENÇA entre WHERE e HAVING?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São equivalentes, escolha por gosto",
+      "WHERE filtra LINHAS INDIVIDUAIS antes do agrupamento; HAVING filtra GRUPOS após agregação. WHERE não pode usar funções agregadas (COUNT, AVG); HAVING pode. Exemplo: WHERE m.nota > 7 filtra matrículas individuais; HAVING COUNT(*) >= 5 filtra grupos com pelo menos 5 elementos",
+      "WHERE é mais rápido sempre",
+      "HAVING só funciona em ORDER BY"
+    ],
+    "resposta": 1,
+    "explicacao": "WHERE: filtra LINHAS INDIVIDUAIS antes do GROUP BY. Não pode usar funções agregadas porque agregação ainda não aconteceu. Executa imediatamente após FROM/JOIN, reduzindo o conjunto antes do agrupamento. HAVING: filtra GRUPOS após GROUP BY e agregação. Pode usar funções agregadas (esse é o ponto). EXEMPLO COMBINADO: 'SELECT a.curso, COUNT(*) AS alunos_acima_7 FROM Aluno a JOIN Matricula m ON a.id = m.aluno_id WHERE m.nota > 7 GROUP BY a.curso HAVING COUNT(*) >= 2'. Interpretação: (1) WHERE m.nota > 7 — filtra MATRÍCULAS com nota > 7 (linhas individuais); (2) GROUP BY a.curso — agrupa por curso; (3) HAVING COUNT(*) >= 2 — mantém apenas cursos com 2+ dessas matrículas. RESULTADO: cursos com pelo menos 2 alunos tendo notas acima de 7. PERFORMANCE: WHERE primeiro reduz dados, sempre prefira quando possível. HAVING só pra condições que dependem do resultado da agregação. ERROR comum: usar agregação no WHERE — 'WHERE COUNT(*) > 5' falha; tem que ser HAVING."
+  },
+  {
+    "id": "sql-07",
+    "enunciado": "Qual a sintaxe CORRETA de JOIN moderna (SQL-92+)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "FROM Aluno, Matricula WHERE Aluno.id = Matricula.aluno_id",
+      "FROM Aluno a INNER JOIN Matricula m ON a.id = m.aluno_id — sintaxe explícita SQL-92+. Vantagens sobre vírgula no FROM: (1) separa condição de junção das condições de filtro; (2) impossível esquecer e gerar CROSS JOIN acidental; (3) padroniza tipos de join (INNER, LEFT, RIGHT, FULL); (4) muito mais legível em queries complexas",
+      "JOIN Aluno WITH Matricula USING Aluno.id",
+      "MERGE Aluno AND Matricula BY Aluno.id"
+    ],
+    "resposta": 1,
+    "explicacao": "Sintaxe moderna SQL-92+: 'FROM tabela1 INNER JOIN tabela2 ON condição'. Funciona em PostgreSQL, MySQL, Oracle, SQL Server, SQLite e todos os SGBDs maduros. Tipos: INNER JOIN (= JOIN), LEFT JOIN (= LEFT OUTER JOIN), RIGHT JOIN, FULL OUTER JOIN, CROSS JOIN. SINTAXE ANTIGA (PRE-SQL-92, vírgula no FROM): 'FROM Aluno, Matricula WHERE Aluno.id = Matricula.aluno_id'. Funciona mas é ANTI-PATTERN: (1) MISTURA condições de junção com filtros — fica difícil ler; (2) ESQUECER a condição = CROSS JOIN acidental = produto cartesiano (4 alunos × 1000 matrículas = 4000 linhas em vez de 4); (3) NÃO SUPORTA outer joins de forma padrão (Oracle tinha sintaxe '(+)', SQL Server tinha '*=' e '=*' — todos não-portáveis). SQL-92 introduziu sintaxe explícita exatamente pra eliminar esses problemas. CONVENÇÃO: sempre escreva 'INNER JOIN' explicitamente em vez de só 'JOIN' (são idênticos mas deixa intenção clara para quem lê). REGRA: ALIAS curto e descritivo — 'Aluno a JOIN Matricula m' melhor que 'Aluno aluno JOIN Matricula matricula'."
+  },
+  {
+    "id": "sql-08",
+    "enunciado": "Por que UPDATE ou DELETE sem WHERE é considerado BUG CLÁSSICO em produção?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque é mais lento",
+      "Porque AFETA TODAS AS LINHAS da tabela. 'UPDATE Aluno SET semestre = 1' (sem WHERE) zera o semestre de TODOS os alunos. 'DELETE FROM Pedido' (sem WHERE) deleta TODOS os pedidos. SEM transação, é irreversível. Boa prática: rodar SELECT com o mesmo WHERE primeiro pra confirmar o conjunto afetado. Clientes SQL têm 'safe update mode' que bloqueia operações sem WHERE",
+      "Porque não funciona em PostgreSQL",
+      "Porque sempre retorna erro"
+    ],
+    "resposta": 1,
+    "explicacao": "UPDATE/DELETE sem WHERE afeta TODAS AS LINHAS da tabela. É bug clássico que destrói dados em produção. Exemplos catastróficos: (a) 'UPDATE Aluno SET semestre = 1' zera o semestre de TODOS — pode ser milhões de registros perdidos; (b) 'DELETE FROM Pedido' deleta TODOS os pedidos; (c) 'UPDATE Funcionario SET salario = 5000' nivela todos os salários — desastre real que aconteceu em empresas. Sem transação ativa, é IRREVERSÍVEL (sem backup). BOAS PRÁTICAS: (1) SEMPRE rode SELECT com o mesmo WHERE primeiro: 'SELECT * FROM Aluno WHERE curso = \\'ADS\\' AND semestre = 4' — confirma o conjunto que será afetado antes de UPDATE; (2) USE TRANSAÇÃO em produção: BEGIN; UPDATE ...; (verifica resultado); COMMIT ou ROLLBACK; (3) Clientes SQL (DBeaver, DataGrip, MySQL Workbench, pgAdmin) têm SAFE UPDATE MODE que BLOQUEIA UPDATE/DELETE sem WHERE — DEIXE LIGADO em produção; (4) Empresas sérias têm REVIEW de queries destrutivas antes de aprovar; (5) Backup recente obrigatório antes de migration manual. GitLab teve incidente em 2017 onde engenheiro deletou DB de produção achando que era staging — perdeu 300GB de dados, postou 'pós-mortem' famoso sobre o incidente."
+  },
+  {
+    "id": "sql-09",
+    "enunciado": "Para verificar se um aluno NÃO TEM nenhuma matrícula, qual abordagem é PREFERÍVEL: NOT IN ou NOT EXISTS?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "NOT IN é sempre melhor",
+      "São equivalentes",
+      "NOT EXISTS é PREFERÍVEL porque NOT IN tem comportamento traiçoeiro com NULLs — se a subquery retorna qualquer NULL, NOT IN retorna 0 linhas SEMPRE (NULL semantics). NOT EXISTS funciona corretamente com NULL. Pode também ser mais rápido em alguns otimizadores",
+      "NOT IN só funciona em MySQL"
+    ],
+    "resposta": 2,
+    "explicacao": "NOT EXISTS é preferível por causa do COMPORTAMENTO COM NULLS. Exemplo: 'SELECT nome FROM Aluno WHERE id NOT IN (SELECT aluno_id FROM Matricula)'. SE a tabela Matricula tem QUALQUER linha com aluno_id = NULL, o resultado da subquery contém NULL. NOT IN então faz: 'id NOT IN (1, 2, 3, NULL)' que SQL avalia como 'id ≠ 1 AND id ≠ 2 AND id ≠ 3 AND id ≠ NULL'. A última comparação retorna UNKNOWN (tri-state), e UNKNOWN AND qualquer coisa = UNKNOWN (não TRUE), então NENHUMA linha passa. RESULTADO: 0 alunos retornados, mesmo se houver alunos sem matrícula. BUG silencioso. SOLUÇÃO: NOT EXISTS — 'SELECT nome FROM Aluno a WHERE NOT EXISTS (SELECT 1 FROM Matricula m WHERE m.aluno_id = a.id)'. NOT EXISTS trabalha com 'a subquery retorna alguma linha?' — booleano direto, sem problema com NULLs internos. PERFORMANCE: na maioria dos otimizadores modernos, NOT EXISTS é IGUAL OU MAIS RÁPIDO que NOT IN (PostgreSQL e MySQL 8+ otimizam ambos para anti-join). Em SGBDs antigos NOT EXISTS costumava ser mais lento; hoje em dia raramente é. REGRA PRÁTICA: use NOT EXISTS por padrão; use NOT IN apenas com LISTAS LITERAIS pequenas (NOT IN (1, 2, 3))."
+  },
+  {
+    "id": "sql-10",
+    "enunciado": "Verdadeiro ou falso: SQL é uma linguagem PROCEDURAL — você precisa especificar passo-a-passo como buscar os dados.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. SQL é DECLARATIVA — você diz O QUE quer, não COMO buscar. Essa é a propriedade FUNDAMENTAL que diferenciou SQL dos modelos anteriores (hierárquico, em rede) que eram PROCEDURAIS. Em CODASYL dos anos 70, pra buscar dados você escrevia: 'FIND first record where X; GET; MOVE TO area Y; OBTAIN next sibling; ...' — 30+ linhas de chamadas com cursors manuais. Em SQL: 'SELECT nome FROM Aluno WHERE curso = ADS ORDER BY semestre DESC'. Você descreve o resultado desejado, o OTIMIZADOR DO SGBD descobre como executar — qual índice usar, qual ordem de joins, qual algoritmo (hash join, merge join, nested loop). DECLARATIVA = você descreve O RESULTADO; PROCEDURAL = você descreve OS PASSOS. Vantagens da declarativa: (1) MENOS CÓDIGO — uma query SQL substitui dezenas de linhas de procedural; (2) PORTABILIDADE — a MESMA query roda em PostgreSQL, MySQL, Oracle sem mudança (em teoria); (3) OTIMIZAÇÃO AUTOMÁTICA — o otimizador escolhe a melhor estratégia baseado em estatísticas dos dados; (4) PARALELISMO — SGBD pode paralelizar internamente sem você se preocupar. Foi um dos motivos do modelo relacional dominar 55 anos — produtividade do desenvolvedor. Patricia Selinger (IBM, 1979) criou o primeiro OTIMIZADOR DE CONSULTAS baseado em custo, que tornou SQL viável em produção — ela é uma das figuras menos conhecidas mas mais importantes da história de bancos de dados."
+  }
+]

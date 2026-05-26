@@ -1,0 +1,577 @@
+---
+titulo: "Levantamento de Requisitos de Domínio"
+descricao: "Como descobrir não só o que o sistema deve fazer, mas o modelo conceitual do negócio. Knowledge Crunching de Eric Evans (DDD), Event Storming de Alberto Brandolini, Domain Storytelling de Hofer e Schwentner."
+---
+
+A Lição 2 cobriu técnicas gerais de elicitação: entrevistas, workshops, observação, prototipação, personas. Funcionam bem pra descobrir **o que o sistema deve fazer**. Mas existe uma camada anterior, frequentemente ignorada em projetos acadêmicos e mesmo em equipes profissionais: descobrir **como o negócio realmente funciona** — o vocabulário, os conceitos, as regras, as relações entre entidades. Isso é levantamento de requisitos de domínio.
+
+A diferença é sutil mas importante. Pra um sistema de biblioteca:
+
+- **Requisito funcional**: "O sistema deve permitir registrar um empréstimo."
+- **Requisito de domínio**: "O que é um empréstimo? Quais regras o governam? Quando ele começa, quando termina? Quem pode tomar emprestado? Existem tipos diferentes de empréstimo? O que acontece quando um livro emprestado é dado como perdido? Reservas viram empréstimos automaticamente ou requerem ação?"
+
+Sem responder essas perguntas, você pode construir uma funcionalidade "registrar empréstimo" que funciona tecnicamente mas viola regras do negócio que ninguém articulou. O retrabalho aparece depois: "ah, mas a gente sempre fez diferente quando o livro é do acervo restrito".
+
+Esta lição cobre três técnicas modernas pra descobrir o modelo de domínio: **Knowledge Crunching** (Eric Evans, fundamento do DDD), **Event Storming** (Alberto Brandolini) e **Domain Storytelling** (Stefan Hofer e Henning Schwentner). As três compartilham uma filosofia: colocar especialistas do domínio e técnicos numa sala e construir entendimento compartilhado em vez de transcrever requisitos.
+
+<Insight>
+Em quase todo projeto que dá errado, o problema raiz aparece muito depois: a equipe técnica entendeu o domínio diferente do que os especialistas do negócio entendiam. Cada lado achava que estava falando do mesmo "cliente", do mesmo "pedido", do mesmo "empréstimo" — mas as palavras significavam coisas sutilmente diferentes. Eric Evans dedicou um livro inteiro a esse problema. A solução que ele propõe começa com uma coisa simples: **usar a mesma linguagem em todos os artefatos**, do código à conversa com o cliente.
+</Insight>
+
+## Por que descobrir o domínio importa
+
+Imagine que você foi contratado pra construir um sistema para uma editora especializada em livros didáticos. Você nunca trabalhou com editoras. Em uma entrevista inicial, o gerente comercial menciona:
+
+> "A gente precisa controlar tiragens, edições, reimpressões e adoções. Cada adoção gera uma demanda previsível, mas tem o problema das prefeituras que adotam e não compram porque o pregão atrasa, aí a gente tem que segurar a tiragem."
+
+Se você não conhece o domínio, vai pedir o glossário. O gerente vai te olhar como se você fosse de outro planeta — pra ele, todas essas palavras são óbvias. Mas elas têm significados precisos que você precisa aprender:
+
+- **Tiragem** ≠ **Edição** ≠ **Reimpressão**. Uma edição é uma versão revisada do conteúdo; uma reimpressão é nova impressão sem mudança; uma tiragem é a quantidade física impressa de uma vez.
+- **Adoção** é uma escola escolher um livro como obrigatório — gera previsão de venda, mas a venda em si depende de pregão público (no caso de escolas públicas).
+
+Sem aprender esse vocabulário, você vai modelar errado. Vai criar uma entidade "Livro" com um campo "quantidade" e fim. Vai descobrir tarde que o modelo está fundamentalmente errado quando precisar diferenciar primeira tiragem da segunda edição da terceira reimpressão da segunda edição.
+
+Eric Evans chamou esse processo de aprendizado contínuo de **Knowledge Crunching** — moer conhecimento. Mas antes dele, vamos a um conceito mais fundamental.
+
+## Linguagem Ubíqua (Ubiquitous Language)
+
+Conceito central do livro *Domain-Driven Design: Tackling Complexity in the Heart of Software* de Eric Evans (Addison-Wesley, 20 de agosto de 2003, ISBN 978-0321125217 — o livro ganhou na comunidade DDD o apelido informal de "the blue book" por causa da capa azul). A ideia é simples e profunda:
+
+> **Use a mesma linguagem em todos os lugares**: nas conversas com especialistas do domínio, na documentação, nos diagramas, no código, nos testes, nos nomes de tabelas. Sem tradução entre "linguagem do negócio" e "linguagem técnica".
+
+Por que isso importa? Porque toda tradução perde informação. Quando o especialista diz "empréstimo" e o programador codifica como `Loan`, parece a mesma coisa. Mas se "empréstimo" no domínio da biblioteca tem regras específicas (prazo, renovação, multa, suspensão) e `Loan` no código vira só uma tabela com data início e data fim, você quebrou a ponte conceitual. Quando uma regra nova aparece ("empréstimos de livros raros precisam de aprovação da direção"), ninguém sabe onde colocar — porque `Loan` é genérico demais.
+
+Linguagem ubíqua aplicada à biblioteca:
+
+| Termo do domínio | Definição (combinada com especialista) | Como aparece no código |
+|---|---|---|
+| **Exemplar** | Cópia física específica de um livro (cada livro pode ter vários exemplares com mesmo ISBN) | `Exemplar`, não `BookCopy` ou `Item` |
+| **Empréstimo** | Vínculo temporário de um exemplar a um leitor com prazo e regras | `Emprestimo`, não `Loan` |
+| **Renovação** | Extensão de prazo de um empréstimo existente, com limites | `Renovacao`, não `Renewal` |
+| **Reserva** | Marca pra ser o próximo a pegar emprestado um título cujos exemplares estão todos emprestados | `Reserva`, não `Reservation` |
+| **Devolução em atraso** | Retorno após data prevista, gera multa | `DevolucaoEmAtraso` |
+| **Acervo restrito** | Subconjunto de exemplares com regras especiais de empréstimo | `AcervoRestrito` |
+
+Note três coisas:
+
+1. **Termos em português** (idioma do domínio). Se o especialista fala português, o código fala português. Tradução pra inglês perde matiz e força um glossário paralelo.
+2. **Termos do domínio, não termos técnicos**. `Emprestimo` (conceito de negócio) e não `EmprestimoEntity` ou `EmprestimoDTO`.
+3. **Definições combinadas**. Não é o programador inventando o que cada palavra significa — é diálogo com especialista até concordarem.
+
+Sobre acentos em identificadores de código: Java, C# e a maioria das linguagens modernas aceitam acentos (`class Renovação` compila), mas a convenção da comunidade é evitar — por compatibilidade com ferramentas, encoding, e copy-paste em terminais. A escolha pragmática é usar a forma sem acento no código (`Renovacao`, `Emprestimo`) mas manter os acentos em toda a documentação, conversas, glossário e UI. Isso preserva a Linguagem Ubíqua no entendimento sem criar problemas técnicos.
+
+A Lei 13.709/2018 (LGPD) lida com "titular de dados", "operador", "controlador", "tratamento". Esses são termos do domínio jurídico-regulatório. Se você está construindo um sistema afetado por LGPD, **esses são os termos que devem aparecer no código** — não `User` genérico.
+
+<Aviso>
+Tradução de termos pra inglês "porque convenção de programação" é uma das fontes silenciosas mais comuns de bugs em projetos. Quando "exemplar" vira `book`, "tiragem" vira `quantity`, "adoção" vira `selection` — você perdeu o domínio. O código continua compilando, mas conversas sobre regras de negócio param de fazer sentido. Quando uma regra nova aparece, ninguém sabe onde implementar.
+</Aviso>
+
+## Knowledge Crunching (Eric Evans)
+
+No capítulo 1 do livro de Evans (2003), intitulado "Crunching Knowledge", o termo descreve o processo iterativo de:
+
+1. Conversar com especialistas do domínio
+2. Construir modelos conceituais (rascunhos, diagramas, listas de termos)
+3. Validar os modelos com os especialistas — eles dizem onde está errado
+4. Refinar
+5. Repetir até o modelo refletir adequadamente o domínio
+
+Não é uma fase única — é prática contínua durante o projeto inteiro. Toda vez que uma regra nova aparece, toda vez que o negócio muda, toda vez que o time descobre uma exceção que nunca foi documentada — você "mói" mais conhecimento.
+
+**Características importantes**:
+
+- **Modelos vivos**: o modelo de domínio não é documento estático. Evolui com o entendimento.
+- **Termos negociados**: quando especialistas usam dois termos diferentes pra mesma coisa (ou o mesmo termo pra coisas diferentes), você negocia: "vamos chamar de X em todos os contextos a partir daqui".
+- **Modelo conectado ao código**: os modelos do whiteboard precisam virar classes do código com o mesmo nome. Se divergir, o modelo está errado ou o código está errado — não dá pra ter dois modelos.
+
+Pra uma biblioteca, uma sessão de Knowledge Crunching com a bibliotecária responsável pode revelar coisas como:
+
+- "Renovação não é sempre permitida — se tem fila de reserva, não dá."
+- "Acervo restrito empresta, mas só pra pesquisador cadastrado, e prazo é 7 dias em vez de 14."
+- "Quando exemplar é perdido, o leitor paga reposição, mas o valor depende se o livro está esgotado ou não."
+
+Cada uma dessas afirmações é informação que **não** apareceria numa entrevista genérica sobre "como funciona o empréstimo". Aparece quando o analista volta com um modelo rascunhado ("é mais ou menos assim que eu entendi?") e o especialista corrige.
+
+## Event Storming (Alberto Brandolini)
+
+**Alberto Brandolini**, consultor italiano de DDD, inventou o Event Storming em 2013 (apresentado publicamente em 2012, sistematizado em 2013 como técnica). O livro de referência é *Introducing EventStorming: An act of Deliberate Collective Learning*, publicado pelo próprio autor via Leanpub (atualmente em versão *draft* contínua — não tem ISBN tradicional). O método também é descrito em detalhe em eventstorming.com.
+
+A ideia central: em vez de tentar modelar o domínio diretamente (classes, entidades), comece pelos **eventos de domínio** — coisas que aconteceram. Eventos são sempre no passado: "Empréstimo Registrado", "Livro Devolvido", "Multa Aplicada", "Reserva Cancelada".
+
+### Por que começar por eventos
+
+Eventos são o nível de abstração mais natural pros especialistas do domínio. Pergunte ao bibliotecário "quais entidades existem no sistema?" e ele fica confuso. Pergunte "o que acontece no dia-a-dia?" e ele descreve uma sequência: "alguém chega com livro, eu verifico se é dele, registro a devolução, atualizo a fila de reserva, devolvo o cartão". Cada um desses é um evento.
+
+Eventos têm propriedades úteis pra modelagem:
+
+- **Imutabilidade**: já aconteceu, não muda mais
+- **Atemporalidade do passado**: "Empréstimo Registrado" é fato; "Empréstimo Sendo Registrado" não existe
+- **Granularidade natural**: cada evento é uma unidade de mudança no sistema
+- **Conexão com regras**: eventos disparam outros eventos via regras ("Empréstimo Registrado em Atraso" dispara "Multa Aplicada")
+
+### Como funciona um workshop de Event Storming
+
+**Setup físico**:
+
+- Uma parede grande e vazia (5+ metros)
+- Rolo de papel kraft pra cobrir a parede (forma o "modelo")
+- Post-its de várias cores (essencial — cada cor tem significado)
+- Canetas pra todos
+- Em remoto: ferramenta como Miro, Mural ou EventStorming.com Tool
+
+**Participantes**: 6 a 15 pessoas. Mistura crítica: **especialistas do domínio** (quem entende o negócio) + **técnicos** (quem vai construir o sistema) + 1 facilitador. Sem especialistas do domínio, o workshop não funciona — é o ponto inteiro da técnica.
+
+**Notação por cor canônica** (estabelecida por Brandolini):
+
+<svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Notação do Event Storming (Brandolini)</text>
+
+  <rect x="40" y="60" width="120" height="80" rx="4" fill="#ff9248" stroke="#cc6700" strokeWidth="1.5" />
+  <text x="100" y="90" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Evento</text>
+  <text x="100" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">de Domínio</text>
+  <text x="100" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(LARANJA)</text>
+  <text fill="#fff" x="100" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Empréstimo Registrado"</text>
+  <text fill="#fff" x="100" y="173" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Livro Devolvido"</text>
+
+  <rect x="180" y="60" width="120" height="80" rx="4" fill="#5fa9f8" stroke="#1a6fc7" strokeWidth="1.5" />
+  <text x="240" y="90" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Comando</text>
+  <text x="240" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(AZUL)</text>
+  <text x="240" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">imperativo</text>
+  <text fill="#fff" x="240" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Registrar Empréstimo"</text>
+  <text fill="#fff" x="240" y="173" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Renovar Empréstimo"</text>
+
+  <rect x="320" y="60" width="120" height="80" rx="4" fill="#fde74c" stroke="#c4a900" strokeWidth="1.5" />
+  <text x="380" y="90" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Agregado</text>
+  <text x="380" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(AMARELO)</text>
+  <text x="380" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">entidade central</text>
+  <text fill="#fff" x="380" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Empréstimo"</text>
+  <text fill="#fff" x="380" y="173" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Exemplar"</text>
+
+  <rect x="460" y="60" width="120" height="80" rx="4" fill="#c79de5" stroke="#7c4ba5" strokeWidth="1.5" />
+  <text x="520" y="90" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Política</text>
+  <text x="520" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(ROXO/LILÁS)</text>
+  <text x="520" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">"sempre que..."</text>
+  <text fill="#fff" x="520" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"se atrasou, aplicar multa"</text>
+  <text fill="#fff" x="520" y="173" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"se há reserva, não renovar"</text>
+
+  <rect x="600" y="60" width="100" height="80" rx="4" fill="#a9d8a9" stroke="#5e9a5e" strokeWidth="1.5" />
+  <text x="650" y="90" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Ator</text>
+  <text x="650" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(VERDE)</text>
+  <text x="650" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">quem comanda</text>
+  <text fill="#fff" x="650" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Bibliotecário"</text>
+  <text fill="#fff" x="650" y="173" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Leitor"</text>
+
+  <rect x="40" y="210" width="160" height="60" rx="4" fill="#ffb6c1" stroke="#c87683" strokeWidth="1.5" />
+  <text x="120" y="232" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Sistema Externo</text>
+  <text x="120" y="248" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(ROSA)</text>
+  <text x="120" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">fora do bounded context</text>
+
+  <rect x="220" y="210" width="160" height="60" rx="4" fill="#fdd49b" stroke="#cc8920" strokeWidth="1.5" />
+  <text x="300" y="232" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#000">Read Model</text>
+  <text x="300" y="248" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">(LARANJA CLARO)</text>
+  <text x="300" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#000">vista de consulta</text>
+
+  <rect x="400" y="210" width="160" height="60" rx="4" fill="#ff5252" stroke="#a01818" strokeWidth="1.5" />
+  <text x="480" y="232" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700" fill="#fff">Hotspot</text>
+  <text x="480" y="248" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#fff">(VERMELHO)</text>
+  <text x="480" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fill="#fff">dúvida, conflito, risco</text>
+
+  <line x1="40" y1="300" x2="680" y2="300" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text fill="#fff" x="360" y="325" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Fluxo típico:</text>
+  <text fill="#fff" x="360" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">Ator (verde) → Comando (azul) → Agregado (amarelo) → Evento (laranja)</text>
+  <text fill="#fff" x="360" y="365" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">Política (roxo) escuta evento e dispara novo comando</text>
+  <text fill="#fff" x="360" y="385" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Hotspots (vermelho) marcam pontos de incerteza pra discutir depois</text>
+</svg>
+
+### Fluxo típico de um workshop Big Picture (3 horas a 1 dia)
+
+**Fase 1 — Chaotic exploration (30-45 min)**: todos os participantes recebem post-its laranjas e canetas. Tarefa: escrever todos os eventos de domínio que conseguirem lembrar, **um por post-it**, no passado ("Empréstimo Registrado", "Livro Devolvido"). Colar na parede sem ordem. Vai gerar caos — esse é o ponto. Funciona como brainstorm livre.
+
+**Fase 2 — Enforcing timeline (30-60 min)**: o facilitador conduz o grupo a organizar os post-its laranjas em **ordem temporal** da esquerda pra direita. Aparecem duplicatas (juntar), eventos sinônimos (escolher um termo — linguagem ubíqua aplicada), eventos vagos (refinar), lacunas (adicionar).
+
+**Fase 3 — People & Systems (30 min)**: adicionar atores (verde) e sistemas externos (rosa). Quem causa cada evento? Que sistema externo está envolvido?
+
+**Fase 4 — Commands & Policies (30-60 min)**: pra cada evento, identificar o comando que o causou (azul, antes do evento). Identificar políticas (roxo) que reagem a eventos e disparam novos comandos.
+
+**Fase 5 — Walk-through e hotspots**: percorrer toda a parede contando a história do negócio. Pontos confusos ou onde participantes discordam viram **hotspots** (vermelho) — não resolvidos no workshop, ficam pra investigação posterior.
+
+**Output**: uma parede inteira com a história do domínio. Foto disso é input pra modelagem (entidades, agregados, contextos) e pra requisitos funcionais.
+
+### Variantes
+
+- **Big Picture**: visão geral do domínio inteiro. Primeira sessão, exploratória.
+- **Process Modeling**: um processo específico em profundidade (ex: "fluxo de devolução de livro com atraso e multa").
+- **Software Design / Aggregates**: foco em modelar agregados pra implementação. Pra equipes técnicas, depois das duas primeiras variantes.
+
+### Pontos fortes
+
+- **Engajamento alto** — formato visual, físico, colaborativo. Pessoas que ficam quietas em entrevistas participam.
+- **Velocidade** — em um dia, você modela domínios que entrevistas demorariam semanas.
+- **Hotspots explicitam ignorância** — em vez de cada um achar que entendeu, conflitos viram post-its vermelhos visíveis.
+- **Linguagem ubíqua emerge naturalmente** — durante a fase 2, o grupo NEGOCIA termos.
+
+### Limitações
+
+- **Depende de facilitador** experiente; sem facilitação, vira bagunça.
+- **Difícil em remoto sem ferramenta apropriada** — perde-se a energia física da parede.
+- **Especialistas do domínio precisam estar presentes** — sem eles, é só técnicos especulando.
+- **Não substitui análise**: o workshop produz matéria-prima, ainda precisa virar requisitos formais (Lição 5).
+
+## Domain Storytelling (Hofer & Schwentner)
+
+**Stefan Hofer** e **Henning Schwentner**, consultores alemães da WPS — Workplace Solutions, sistematizaram o método no livro *Domain Storytelling: A Collaborative, Visual, and Agile Way to Build Domain-Driven Software*, publicado pela Addison-Wesley em 2021 (ISBN 978-0137458912, parte da Addison-Wesley Signature Series editada por Vaughn Vernon). Site da comunidade: domainstorytelling.org.
+
+A ideia central é diferente do Event Storming: em vez de modelar por eventos isolados, **conte histórias do domínio** usando uma linguagem pictográfica simples. Uma história tem ator, ação, objeto e destino.
+
+### A linguagem pictográfica
+
+Notação canônica do livro:
+
+- **Ator** (humano ou sistema): boneco palito, com nome embaixo (`Bibliotecário`, `Leitor`)
+- **Objeto de trabalho** (work object): caixa com nome do objeto (`livro`, `cartão de leitor`, `comprovante`)
+- **Atividade**: seta que conecta ator → objeto → destino, numerada na ordem da história, com verbo no presente em cima
+- **Anotações**: notas explicativas (regras, condições, exceções)
+
+A história é uma sequência numerada de setas. Lê-se como narrativa: "O bibliotecário (1) recebe o livro do leitor, (2) consulta o sistema, (3) verifica o prazo, (4) registra a devolução, ..."
+
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-ds" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.85" />
+    </marker>
+  </defs>
+
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Domain Storytelling — devolução de livro na biblioteca</text>
+
+  <circle cx="70" cy="120" r="14" fill="none" stroke="currentColor" strokeWidth="2" />
+  <line x1="70" y1="134" x2="70" y2="170" stroke="currentColor" strokeWidth="2" />
+  <line x1="70" y1="145" x2="55" y2="160" stroke="currentColor" strokeWidth="2" />
+  <line x1="70" y1="145" x2="85" y2="160" stroke="currentColor" strokeWidth="2" />
+  <line x1="70" y1="170" x2="55" y2="190" stroke="currentColor" strokeWidth="2" />
+  <line x1="70" y1="170" x2="85" y2="190" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="70" y="210" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Leitor</text>
+
+  <rect x="180" y="100" width="80" height="50" rx="4" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="220" y="130" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11">livro</text>
+
+  <circle cx="370" cy="120" r="14" fill="none" stroke="currentColor" strokeWidth="2" />
+  <line x1="370" y1="134" x2="370" y2="170" stroke="currentColor" strokeWidth="2" />
+  <line x1="370" y1="145" x2="355" y2="160" stroke="currentColor" strokeWidth="2" />
+  <line x1="370" y1="145" x2="385" y2="160" stroke="currentColor" strokeWidth="2" />
+  <line x1="370" y1="170" x2="355" y2="190" stroke="currentColor" strokeWidth="2" />
+  <line x1="370" y1="170" x2="385" y2="190" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="370" y="210" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Bibliotecário</text>
+
+  <rect x="490" y="100" width="100" height="50" rx="4" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="540" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11">empréstimo</text>
+  <text fill="#fff" x="540" y="140" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11">no sistema</text>
+
+  <rect x="620" y="100" width="80" height="50" rx="4" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="660" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11">multa</text>
+  <text fill="#fff" x="660" y="140" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11">(se atraso)</text>
+
+  <path d="M 90 125 L 175 125" stroke="currentColor" strokeWidth="1.6" fill="none" markerEnd="url(#seta-ds)" />
+  <text fill="#fff" x="132" y="115" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">1 entrega</text>
+
+  <path d="M 265 125 L 355 125" stroke="currentColor" strokeWidth="1.6" fill="none" markerEnd="url(#seta-ds)" />
+  <text fill="#fff" x="310" y="115" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">2 recebe</text>
+
+  <path d="M 390 125 L 485 125" stroke="currentColor" strokeWidth="1.6" fill="none" markerEnd="url(#seta-ds)" />
+  <text fill="#fff" x="437" y="115" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">3 consulta</text>
+
+  <path d="M 590 125 L 615 125" stroke="currentColor" strokeWidth="1.6" fill="none" markerEnd="url(#seta-ds)" />
+  <text fill="#fff" x="603" y="100" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">4 gera</text>
+
+  <rect x="200" y="250" width="320" height="80" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1" strokeDasharray="5,3" />
+  <text fill="#fff" x="360" y="270" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Anotações (regras)</text>
+  <text fill="#fff" x="360" y="289" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">multa aplicada se data devolução &gt; data prevista</text>
+  <text fill="#fff" x="360" y="305" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">R$ 0,50 por dia útil até teto de R$ 30,00</text>
+  <text fill="#fff" x="360" y="321" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">não acumula com suspensão automática</text>
+</svg>
+
+A história lida em linguagem natural: *"O leitor entrega o livro ao bibliotecário, que recebe o livro, consulta o empréstimo no sistema e, se houver atraso, gera multa segundo as regras anotadas."*
+
+### Por que histórias funcionam
+
+Storytelling é a forma mais antiga de comunicação humana. Quando você pede a um especialista pra **contar a história** de como funciona o atendimento, ele recorre a um modo natural — diferente de "descrever o processo formal". Aparecem detalhes, exceções, ordem real dos passos, atores secundários que entrevistas formais não revelam.
+
+Domain Storytelling captura essas histórias visualmente em tempo real, com o especialista vendo o diagrama emergir enquanto fala. Erros de entendimento aparecem imediatamente — "não, eu não recebo o livro, é o leitor que devolve no balcão automático".
+
+### Formato do workshop
+
+**Setup**:
+
+- Quadro branco grande, papel kraft, ou ferramenta digital (Egon.io é o oficial, gratuito, em domainstorytelling.org)
+- Modelador desenhando enquanto especialista narra
+- 1 a 2 horas por história
+- 3 a 8 participantes (menor que Event Storming)
+
+**Roles**:
+
+- **Domain Expert** (o "storyteller"): conta a história
+- **Listener** (o "modelador"): desenha a história em tempo real
+- **Audience**: outros stakeholders que escutam e contribuem
+
+**Fluxo**:
+
+1. Definir escopo da história ("vamos contar como funciona uma devolução com atraso")
+2. Especialista conta passo a passo
+3. Modelador desenha cada passo numerado
+4. Audience pergunta, especialista refina
+5. Anotações capturam regras
+6. Quando completa, ler a história em voz alta — se soa estranho, refinar
+
+### Quando Event Storming vs Domain Storytelling
+
+Ambos descobrem domínio em workshop colaborativo. Diferenças práticas:
+
+| Aspecto | Event Storming | Domain Storytelling |
+|---|---|---|
+| **Unidade básica** | Evento de domínio (passado) | História com ator-ação-objeto |
+| **Notação** | 6+ cores de post-it | Pictográfica simples (palitos, caixas, setas) |
+| **Tamanho do grupo** | 6-15 | 3-8 |
+| **Duração** | Meio dia a 1 dia | 1-2 horas por história |
+| **Cobertura** | Domínio inteiro de uma vez (Big Picture) | Uma história/cenário por sessão |
+| **Energia** | Caótica, em pé, parede grande | Mais calma, narrativa estruturada |
+| **Mais útil para** | Explorar domínio desconhecido | Refinar processo específico |
+| **Output direto** | Mural com 200+ post-its | Diagrama narrativo limpo |
+| **Curva de aprendizado** | Média (notação tem muitos elementos) | Baixa (notação é intuitiva) |
+
+Não são exclusivos — Hofer e Schwentner (2021) sugerem combinar: Event Storming pra mapear domínio inteiro, depois Domain Storytelling pra aprofundar processos específicos.
+
+## Conectando com Bounded Contexts (DDD estratégico)
+
+Knowledge Crunching, Event Storming e Domain Storytelling descobrem o **domínio**. Mas domínios grandes têm subdivisões — diferentes partes do negócio podem usar o mesmo termo significando coisas diferentes. Eric Evans (2003) chamou essas divisões de **Bounded Contexts** (contextos delimitados).
+
+Pra uma biblioteca grande, podem existir múltiplos contextos:
+
+- **Acervo**: catalogação, classificação, inventário físico. "Livro" aqui é registro bibliográfico.
+- **Empréstimo**: registrar, renovar, devolver. "Livro" aqui é exemplar específico vinculado a um leitor.
+- **Aquisição**: comprar livros novos, processar doações. "Livro" aqui é item de compra com fornecedor.
+- **Multas e Pendências**: cobrança, suspensões. "Livro" aqui é dívida pendente.
+
+Cada contexto tem sua linguagem ubíqua **interna** e seu modelo próprio. O mesmo conceito real ("livro") aparece de formas diferentes em cada um — e isso é correto. Tentar ter um modelo único para tudo é fonte de complexidade desnecessária.
+
+O **Context Map** (também de Evans 2003) mostra como contextos se conectam:
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-ctx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.85" />
+    </marker>
+  </defs>
+
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Context Map — Biblioteca (simplificado)</text>
+
+  <ellipse cx="180" cy="120" rx="110" ry="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="180" y="115" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Acervo</text>
+  <text fill="#fff" x="180" y="135" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Livro = registro bibliográfico</text>
+  <text fill="#fff" x="180" y="150" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">CDD, ISBN, exemplares</text>
+
+  <ellipse cx="540" cy="120" rx="110" ry="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="540" y="115" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Empréstimo</text>
+  <text fill="#fff" x="540" y="135" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Livro = exemplar vinculado</text>
+  <text fill="#fff" x="540" y="150" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">prazo, renovação, devolução</text>
+
+  <ellipse cx="180" cy="280" rx="110" ry="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="180" y="275" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Aquisição</text>
+  <text fill="#fff" x="180" y="295" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Livro = item de compra</text>
+  <text fill="#fff" x="180" y="310" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">fornecedor, custo, NF</text>
+
+  <ellipse cx="540" cy="280" rx="110" ry="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="540" y="275" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Multas</text>
+  <text fill="#fff" x="540" y="295" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Livro = dívida pendente</text>
+  <text fill="#fff" x="540" y="310" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">valor, vencimento, leitor</text>
+
+  <path d="M 290 120 L 430 120" stroke="currentColor" strokeWidth="2" fill="none" markerEnd="url(#seta-ctx)" />
+  <text fill="#fff" x="360" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">consulta</text>
+  <text fill="#fff" x="360" y="138" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Customer / Supplier</text>
+
+  <path d="M 290 280 L 430 280" stroke="currentColor" strokeWidth="2" fill="none" markerEnd="url(#seta-ctx)" />
+  <text fill="#fff" x="360" y="270" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">incorpora</text>
+  <text fill="#fff" x="360" y="298" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Shared Kernel</text>
+
+  <path d="M 540 175 L 540 225" stroke="currentColor" strokeWidth="2" fill="none" markerEnd="url(#seta-ctx)" />
+  <text fill="#fff" x="600" y="205" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">gera</text>
+
+  <path d="M 180 175 L 180 225" stroke="currentColor" strokeWidth="2" fill="none" markerEnd="url(#seta-ctx)" />
+  <text fill="#fff" x="240" y="205" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">alimenta</text>
+</svg>
+
+Cada contexto pode ter seu próprio modelo, seu próprio banco de dados, sua própria equipe. As setas mostram dependências e o tipo de relação (Customer-Supplier, Shared Kernel, Anticorruption Layer — esses padrões aparecem no capítulo 14 do livro de Evans, *Maintaining Model Integrity*, dentro da Parte IV "Strategic Design").
+
+Se você já estudou DDD em outras lições ou cursos, esses conceitos vão soar familiares — vale revisitar agora com o foco específico em elicitação que esta lição apresenta.
+
+## Aplicação no sistema de biblioteca
+
+Plano realista de levantamento de domínio para o sistema de biblioteca (continuação do plano de 6 semanas da Lição 2):
+
+**Sessão 1 — Knowledge Crunching inicial (2 horas)**:
+- Bibliotecário experiente + analista
+- Construir glossário inicial: exemplar, empréstimo, renovação, reserva, devolução, multa, acervo, acervo restrito, suspensão
+- Definir cada termo formalmente
+- Registrar disagreements e ambiguidades
+
+**Sessão 2 — Event Storming Big Picture (4-6 horas)**:
+- Diretor + 3 bibliotecários + analista + dev (5-6 pessoas)
+- Mapear todos os eventos de domínio: cadastros, empréstimos, devoluções, multas, baixas, doações, descartes
+- Identificar atores, comandos, políticas
+- Marcar hotspots para investigação posterior
+
+**Sessão 3 — Domain Storytelling de processos críticos (3-4 horas, em 2 ou 3 histórias)**:
+- História 1: empréstimo normal de exemplar de acervo aberto
+- História 2: empréstimo de acervo restrito (regras especiais)
+- História 3: devolução com atraso + multa + suspensão
+
+**Sessão 4 — Context Map (2 horas)**:
+- Identificar bounded contexts: Acervo, Empréstimo, Aquisição, Multas, Cadastro de Leitores
+- Desenhar relacionamentos
+- Definir prioridades de implementação
+
+**Output consolidado**:
+- Glossário com 30-50 termos de domínio definidos
+- Foto/diagrama do Event Storming
+- 3-5 Domain Stories desenhadas
+- Context Map dos bounded contexts
+- Lista de hotspots e questões em aberto
+
+Esse material vira **input direto** pra:
+- L4 — Análise e Classificação (que NFR aplicar a cada contexto)
+- L5 — Especificação (SRS por bounded context)
+- Trilha B — UML 2.0 (diagramas de classes refletindo o modelo de domínio)
+- Implementação — agregados, repositórios, serviços de domínio (DDD tático)
+
+## Aplicação no Carbon Credit Compensation Platform
+
+No contexto do seu projeto Fatec, levantamento de domínio é especialmente relevante porque o domínio (mercado de carbono) é **denso, regulado e não óbvio**. Os termos têm definições legais precisas.
+
+**Glossário inicial (extraído da Lei 15.042/2024 e do GHG Protocol)**:
+
+| Termo | Definição |
+|---|---|
+| **Emissão** | Liberação de gases de efeito estufa (GEE) à atmosfera, medida em toneladas de CO₂ equivalente (tCO₂e) |
+| **Escopo 1** | Emissões diretas de fontes próprias da organização (combustão, processos industriais) |
+| **Escopo 2** | Emissões indiretas de energia elétrica comprada |
+| **Escopo 3** | Outras emissões indiretas da cadeia de valor |
+| **Crédito de carbono** | Ativo representando 1 tonelada de CO₂e reduzida ou removida, certificado por padrão (VCS, Gold Standard) |
+| **CBE** | Cota Brasileira de Emissões — ativo fungível representando o direito de emitir 1 tCO₂e, distribuído pelo órgão gestor do SBCE aos operadores regulados, conforme art. 2º, VI, da Lei 15.042/2024 |
+| **CRVE** | Certificado de Redução ou Remoção Verificada de Emissões — ativo fungível representando a efetiva redução ou remoção de 1 tCO₂e segundo metodologia credenciada, conforme art. 2º, III, da Lei 15.042/2024 |
+| **Compensação** | Ato de neutralizar uma emissão pelo cancelamento (retirement) de um crédito equivalente |
+| **Operador** (do SBCE) | Empresa ou instalação que emite mais de 25 mil tCO₂e/ano, sujeita às obrigações do mercado regulado |
+| **Aposentadoria** (retirement, termo internacional usado em padrões como VCS) | Cancelamento definitivo de um crédito — impede revenda e completa a compensação |
+
+**Event Storming aplicável (sessão hipotética)**:
+
+Eventos de domínio (post-its laranjas):
+- "Inventário de Emissões Submetido"
+- "Inventário Verificado por Auditor"
+- "Crédito Adquirido"
+- "Compensação Solicitada"
+- "Compensação Aprovada"
+- "Crédito Aposentado"
+- "Relatório de Conformidade Gerado"
+
+Comandos (azuis): "Submeter Inventário", "Comprar Crédito", "Solicitar Compensação", "Aposentar Crédito".
+
+Políticas (roxas): "Quando inventário verificado, calcular cota de emissão", "Quando compensação aprovada, aposentar crédito automaticamente", "Quando ano fiscal encerra, gerar relatório SBCE".
+
+Atores (verdes): Operador, Auditor Independente, Verificador SBCE.
+
+Hotspots prováveis (vermelhos): "Como tratar créditos de fora do Brasil?", "O que acontece se inventário é rejeitado pelo verificador?", "Quem aprova compensação — sistema ou operador humano?".
+
+**Bounded Contexts prováveis**:
+
+- **Inventário de Emissões**: cálculo e auditoria das emissões da empresa
+- **Mercado de Créditos**: compra e venda de créditos
+- **Compensação**: vinculação de créditos a emissões pra neutralizar
+- **Conformidade Regulatória**: relatórios pro SBCE, auditoria
+
+Esse exercício, mesmo simulado entre o grupo (Bruno + Murilo + Fabiano + Pedro Chaves), produz entendimento profundo do domínio antes de codificar. É a diferença entre construir um sistema "que parece um mercado de carbono" e construir um sistema que realmente reflete as regras e a linguagem do mercado.
+
+## Erros comuns no levantamento de domínio
+
+**1. Pular a linguagem ubíqua.** Programador adota termos técnicos genéricos (`Item`, `Transaction`, `Record`) por hábito, especialista usa termos do negócio. Tradução constante perde informação, dificulta diálogo, esconde regras.
+
+**2. Modelar antes de entender.** Equipe técnica desenha modelo conceitual sem especialista presente. Vira ficção. Modelo bonito que não bate com a realidade do negócio.
+
+**3. Confundir bounded contexts com módulos técnicos.** Bounded context é divisão **conceitual** (linguagem e modelo diferentes). Módulo técnico é divisão **arquitetural**. Frequentemente coincidem, mas nem sempre.
+
+**4. Achar que workshop substitui Knowledge Crunching contínuo.** Um Event Storming não termina o trabalho. O entendimento de domínio evolui ao longo de meses de projeto. Toda nova regra descoberta exige refinar o modelo.
+
+**5. Ignorar regras de exceção.** O fluxo "happy path" é fácil. As regras de negócio importantes estão nas exceções: "mas se o leitor é menor de idade, precisa autorização do responsável"; "se a multa passa de R$ 100, suspende automaticamente". Knowledge Crunching cava exceções.
+
+**6. Modelar do código pra cima.** Começar pela estrutura de tabelas/classes e tentar encaixar o domínio depois. Domain-driven significa exatamente o contrário — modele o domínio primeiro, deixe o código refletir o modelo.
+
+**7. Adotar DDD/Event Storming como ritual sem aprender.** "Vamos fazer Event Storming" sem facilitador treinado, sem especialista do domínio, sem entender por que fazer. Vira teatro caro.
+
+## Resumo visual
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Levantamento de Requisitos de Domínio — visão geral</text>
+
+  <ellipse cx="360" cy="200" rx="120" ry="50" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="360" y="195" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Modelo de Domínio</text>
+  <text fill="#fff" x="360" y="213" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">linguagem ubíqua + regras</text>
+
+  <rect x="40" y="70" width="180" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="130" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Knowledge Crunching</text>
+  <text fill="#fff" x="130" y="113" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Eric Evans (2003)</text>
+  <text fill="#fff" x="130" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">processo contínuo</text>
+  <text fill="#fff" x="130" y="142" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">conversa + modelo + valida</text>
+
+  <rect x="500" y="70" width="180" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="590" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Event Storming</text>
+  <text fill="#fff" x="590" y="113" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Brandolini (2013)</text>
+  <text fill="#fff" x="590" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">workshop, post-its</text>
+  <text fill="#fff" x="590" y="142" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">eventos no passado</text>
+
+  <rect x="40" y="280" width="180" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="130" y="305" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Domain Storytelling</text>
+  <text fill="#fff" x="130" y="323" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Hofer &amp; Schwentner (2021)</text>
+  <text fill="#fff" x="130" y="338" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">narrativa + pictografia</text>
+  <text fill="#fff" x="130" y="352" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">um cenário por sessão</text>
+
+  <rect x="500" y="280" width="180" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="590" y="305" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Context Map</text>
+  <text fill="#fff" x="590" y="323" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Evans (2003)</text>
+  <text fill="#fff" x="590" y="338" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">bounded contexts</text>
+  <text fill="#fff" x="590" y="352" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">relacionamentos entre eles</text>
+
+  <line x1="220" y1="110" x2="245" y2="180" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.4" />
+  <line x1="500" y1="110" x2="475" y2="180" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.4" />
+  <line x1="220" y1="320" x2="245" y2="225" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.4" />
+  <line x1="500" y1="320" x2="475" y2="225" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.4" />
+
+  <rect x="260" y="380" width="200" height="30" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="400" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Output: modelo + glossário + contextos</text>
+</svg>
+
+## Próximos passos
+
+| Lição | Tema |
+|---|---|
+| L1 | Introdução à Engenharia de Requisitos |
+| L2 | Elicitação de Requisitos |
+| **L3 (esta)** | Levantamento de Requisitos de Domínio |
+| **L4 (próxima)** | Análise e Classificação — FURPS+, MoSCoW, ISO/IEC 25010 |
+| L5 | Especificação e Documentação — SRS, ISO/IEC/IEEE 29148, Volere |
+| L6 | Validação, Verificação e Gestão |
+| L7 | Requisitos Ágeis |
+
+A L4 vai cobrir como CLASSIFICAR os requisitos descobertos (na L2 e L3) por tipo, prioridade e atributos de qualidade — preparando o terreno pra especificação formal na L5.
+
+---
+
+**Referências canônicas usadas nesta lição**:
+
+- Evans, Eric. *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley Professional, 1ª edição, 20 de agosto de 2003, ISBN 978-0321125217, 560 páginas. Apelidado na comunidade DDD de "the blue book" (pela capa azul). Capítulo 1 ("Crunching Knowledge"), capítulo 2 ("Communication and the Use of Language" — onde introduz Ubiquitous Language), capítulo 14 ("Maintaining Model Integrity" — Bounded Contexts e Context Map).
+- Brandolini, Alberto. *Introducing EventStorming: An act of Deliberate Collective Learning*. Leanpub (versão em draft contínua, sem ISBN fixo). Site da técnica: eventstorming.com. Apresentação inicial: 2012; sistematização: 2013.
+- Hofer, Stefan; Schwentner, Henning. *Domain Storytelling: A Collaborative, Visual, and Agile Way to Build Domain-Driven Software*. Addison-Wesley Professional (Addison-Wesley Signature Series editada por Vaughn Vernon), 2021, ISBN 978-0137458912. Site da comunidade: domainstorytelling.org. Ferramenta gratuita oficial: Egon.io.
+- Vernon, Vaughn. *Implementing Domain-Driven Design*. Addison-Wesley Professional, 2013, ISBN 978-0321834577. Conhecido na comunidade DDD pelo apelido "the red book" (capa vermelha), complementa o livro de Evans com foco em implementação prática.
+
+**Observações sobre fontes**:
+
+- O livro de Brandolini *Introducing EventStorming* é vendido na Leanpub em formato draft contínuo desde 2017 — não tem ISBN tradicional nem edição "final". A versão atualmente disponível tem capítulos numerados mas declaradamente incompleto.
+- Domain Storytelling é mais recente que Event Storming (livro de 2021 vs técnica de 2013), o que pode justificar diferença de adoção entre as duas. A escolha entre uma e outra na prática frequentemente é uma questão de preferência de equipe e tipo de problema — ambas funcionam bem para descobrir o domínio.
+- DDD é uma área extensa que esta lição apenas introduz na perspectiva de RE. Para implementação prática (agregados, repositórios, factories, services — DDD tático), recomendo o livro de Vaughn Vernon *Implementing Domain-Driven Design* e o conteúdo de DDD da Trilha de Arquitetura desta plataforma.
+- A Lei 15.042/2024 brasileira ainda está sendo regulamentada — as regras práticas do SBCE serão definidas em decretos complementares ao longo de 2025-2026. Os termos técnicos do GHG Protocol (Escopos 1, 2, 3) estão estáveis desde a publicação do GHG Protocol Corporate Standard original em 2001 (revisado em 2004), iniciativa WRI/WBCSD lançada em 1998.

@@ -1,0 +1,132 @@
+[
+  {
+    "id": "prob-01",
+    "enunciado": "Quem inventou o Bloom Filter e em que ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Burton Howard Bloom, em 1970, no paper 'Space/Time Trade-offs in Hash Coding with Allowable Errors' (Communications of the ACM 13(7))",
+      "Philippe Flajolet, em 1984, junto com o Flajolet-Martin algorithm",
+      "Donald Knuth, em 1968, em The Art of Computer Programming",
+      "Graham Cormode, em 2003, junto com Count-Min Sketch"
+    ],
+    "resposta": 0,
+    "explicacao": "Burton Howard Bloom, em 1970, no paper 'Space/Time Trade-offs in Hash Coding with Allowable Errors' (Communications of the ACM 13(7), pp. 422-426). Bloom trabalhava na Computer Usage Company em Newton Upper Falls, Massachusetts. O paper tem mais de 8.000 citações e introduziu a ideia revolucionária de TROCAR EXATIDÃO POR MEMÓRIA — admitir uma pequena taxa de erro controlada permite usar ordem de magnitude menos memória. Originou toda uma família de estruturas probabilísticas (sketches) usadas em sistemas distribuídos modernos: Counting Bloom, Cuckoo Filter, HyperLogLog, Count-Min Sketch, MinHash, Quotient Filter."
+  },
+  {
+    "id": "prob-02",
+    "enunciado": "Qual o TIPO DE ERRO que um Bloom Filter pode cometer?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Falso positivo E falso negativo (ambos)",
+      "Apenas falso negativo — pode dizer 'não está' quando está",
+      "Apenas FALSO POSITIVO — pode dizer 'está' quando não está. NUNCA falso negativo",
+      "Nenhum erro — sempre exato"
+    ],
+    "resposta": 2,
+    "explicacao": "Apenas falso positivo, nunca falso negativo. Se Bloom diz 'não está', você tem CERTEZA que o elemento não foi inserido (porque pelo menos um dos k bits estaria zerado). Se Bloom diz 'está', pode ser falso positivo (k bits foram ligados por outros elementos, formando colisão acidental). Essa assimetria é o que torna Bloom útil: em aplicações como cache lookup ou verificação prévia de disco, falso positivo só significa 'fazer mais uma verificação', enquanto falso negativo seria desastroso ('achei que não tinha, mas tinha — perdi dado'). Por isso Cassandra, HBase, RocksDB usam Bloom antes de disk seeks: se Bloom diz 'não tem', pula o seek; se diz 'pode ter', confirma indo no disco."
+  },
+  {
+    "id": "prob-03",
+    "enunciado": "Quantos BITS por elemento um Bloom Filter precisa para taxa de falso positivo de ~1%?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "1 bit",
+      "Cerca de 10 bits (mais precisamente ~9.6 bits)",
+      "Cerca de 100 bits",
+      "Depende do tamanho do elemento"
+    ],
+    "resposta": 1,
+    "explicacao": "~9.6 bits por elemento pra 1% de falso positivo. Pra 0.1%, ~14.4 bits. Pra 0.01%, ~19.2 bits. A fórmula clássica: pra k ótimo (k = (m/n) × ln(2)), a taxa de falso positivo é ~0.6185^(m/n). Compare com hash table tradicional: pra n strings de 100 caracteres cada, hash table precisa de pelo menos ~800n bits, enquanto Bloom usa ~10n bits — 80× menos memória. O TAMANHO DO ELEMENTO NÃO IMPORTA pro Bloom, porque ele só armazena bits de hash, não o conteúdo. Por isso é tão eficiente pra strings longas (URLs, paths, identificadores grandes)."
+  },
+  {
+    "id": "prob-04",
+    "enunciado": "Qual é a LIMITAÇÃO mais importante de um Bloom Filter clássico?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Só funciona com inteiros",
+      "Não suporta REMOÇÃO — zerar bits de um elemento removido pode zerar bits que outros elementos também usam, gerando falsos negativos. Variantes como Counting Bloom Filter resolvem isso usando contadores em vez de bits, ao custo de 4-8x mais memória",
+      "Não funciona com mais de 1000 elementos",
+      "É mais lento que hash table"
+    ],
+    "resposta": 1,
+    "explicacao": "Não suporta remoção segura. Se você zerar os k bits de um elemento removido, pode estar zerando bits que outros elementos compartilham — quebrando o invariante 'nunca falso negativo'. Counting Bloom Filter substitui cada bit por um contador pequeno (4 bits = 0-15 colisões), e remoção decrementa em vez de zerar. Custa 4-8x mais memória. Outras limitações: NÃO PERMITE ITERAR pelos elementos (Bloom não armazena conteúdo, só hashes); SATURA com muitas inserções (todos os bits ficam em 1, falso positivo dispara) — precisa dimensionar corretamente desde o início; é PROBABILÍSTICO (admite erro). Apesar dessas limitações, é uma das estruturas mais usadas em sistemas distribuídos."
+  },
+  {
+    "id": "prob-05",
+    "enunciado": "O HyperLogLog responde qual pergunta?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Esse elemento está no set?",
+      "Quantas vezes esse elemento apareceu?",
+      "Quantos elementos DISTINTOS (cardinalidade) existem no set?",
+      "Quão similares são dois conjuntos?"
+    ],
+    "resposta": 2,
+    "explicacao": "Cardinalidade — quantos elementos distintos existem. Aplicação clássica: 'quantos visitantes únicos meu site teve hoje?'. Naive: HashSet com cada user ID — para 100 milhões de únicos com IDs de 16 bytes, são 1.6 GB de RAM. HyperLogLog responde com ~0.81% de erro usando apenas ~12 KB (~1.5 KB pra precisão menor). Independente da cardinalidade ser 100 ou 100 bilhões. As outras opções correspondem a outros sketches: 'está no set' = Bloom Filter; 'frequência' = Count-Min Sketch; 'similaridade entre sets' = MinHash."
+  },
+  {
+    "id": "prob-06",
+    "enunciado": "Qual é a INTUIÇÃO ESTATÍSTICA por trás do HyperLogLog?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Conta o número de bits ligados após hashing",
+      "Se você hasheia n strings aleatórias, o MAIOR número de zeros à esquerda nos hashes binários é aproximadamente log₂(n) — então invertendo, se vimos um hash com Z zeros à esquerda, estimamos cardinalidade ~2^Z. HLL refina isso usando muitos buckets e harmonic mean",
+      "Calcula a média aritmética de todos os hashes",
+      "Conta o número de hashes únicos em uma tabela"
+    ],
+    "resposta": 1,
+    "explicacao": "Cada bit de um hash uniforme tem 50% de chance de ser 0. Probabilidade de hash começar com k zeros é 1/2^k. Se você hasheia n strings aleatórias, espera ver pelo menos um hash começando com ~log₂(n) zeros. Operacionalmente: se o MÁXIMO de zeros à esquerda visto foi Z, estimamos cardinalidade ~2^Z. Detalhe importante: o hash é DETERMINÍSTICO, então passar 'alice' mil vezes não afeta — sempre dá os mesmos zeros. Estamos contando DISTINTOS. HLL refina essa ideia bruta usando m buckets (cada um com seu próprio máximo de zeros, escolhido pelos primeiros bits do hash) e HARMONIC MEAN (robusta a outliers, ao contrário da geométrica). Erro final: ~1.04/√m, então 16384 buckets dá ~0.81% de erro."
+  },
+  {
+    "id": "prob-07",
+    "enunciado": "Quem inventou o HyperLogLog?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Burton Bloom, em 1970",
+      "Philippe Flajolet, Éric Fusy, Olivier Gandouet e Frédéric Meunier, em 2007 — culminação de uma linhagem de 30+ anos: Flajolet-Martin (1984) → LogLog (2003) → HyperLogLog (2007) → HLL++ Google (Heule et al, 2013)",
+      "Sergey Brin e Larry Page, em 1998 (Google)",
+      "Robert Tarjan, em 1975"
+    ],
+    "resposta": 1,
+    "explicacao": "Philippe Flajolet (1948-2011) e equipe, em 2007, no paper 'HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm' (Analysis of Algorithms AofA). Linhagem completa: (1) 1984 - Flajolet & G. Nigel Martin, 'Probabilistic Counting Algorithms for Database Applications' — Flajolet-Martin algorithm; (2) 2003 - Durand & Flajolet, LogLog; (3) 2007 - HyperLogLog (usa HARMONIC mean em vez de geométrica); (4) 2013 - Heule, Nunkesser, Hall (Google), 'HyperLogLog in Practice' — HLL++ com hash de 64 bits e sparse representation. Philippe Flajolet é uma das figuras centrais em pesquisa de algoritmos analíticos, co-autor do livro 'Analytic Combinatorics' (Cambridge, 2009)."
+  },
+  {
+    "id": "prob-08",
+    "enunciado": "Qual a função do Google BigQuery que usa HyperLogLog por baixo dos panos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "COUNT(*) — sempre que conta linhas",
+      "APPROX_COUNT_DISTINCT() — retorna a contagem aproximada de elementos distintos com ~1% de erro, MAS rodando em SEGUNDOS sobre tabelas com bilhões de linhas (onde COUNT DISTINCT exato demoraria horas ou ficaria sem memória)",
+      "BLOOM_FILTER() — filtra registros",
+      "SAMPLE() — pega amostra aleatória"
+    ],
+    "resposta": 1,
+    "explicacao": "APPROX_COUNT_DISTINCT() do BigQuery usa HLL++ (variante do Google que melhora o HLL original). Por que importa: COUNT(DISTINCT user_id) FROM tabela_com_bilhoes_de_linhas exigiria ordenar/deduplicar tudo — pode levar HORAS ou simplesmente ficar OOM (out of memory). APPROX_COUNT_DISTINCT roda em segundos usando ~12 KB de memória por agregação, com erro ~1%. A diferença prática é tão grande que muita empresa tolera o erro pequeno pra ter dashboards que respondem em tempo razoável. Outras bibliotecas/sistemas que expõem HLL nativo: Redis (PFADD/PFCOUNT/PFMERGE), Amazon Redshift, Apache Druid, Facebook Presto, ClickHouse, Snowflake. É a estrutura probabilística mais ubíqua em data warehouses modernos."
+  },
+  {
+    "id": "prob-09",
+    "enunciado": "O Count-Min Sketch responde 'qual a frequência de x?'. Qual tipo de ERRO ele comete?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Pode subestimar a frequência real",
+      "Sempre exato",
+      "SUPERESTIMA a frequência, mas NUNCA subestima — porque cada contador conta no mínimo as vezes que o elemento apareceu; pode contar 'a mais' por colisões de hash com outros elementos. Tomar o MÍNIMO entre as d estimativas reduz o impacto das colisões",
+      "Aleatório — pode dar pra mais ou pra menos"
+    ],
+    "resposta": 2,
+    "explicacao": "Count-Min sempre SUPERESTIMA (count_estimado >= count_real). Por quê: o sketch mantém matriz d × w. Quando elemento aparece, incrementa count[i][h_i(x)] em todas as d linhas. Quando consulta, pega o MÍNIMO desses d valores. Como o elemento foi incrementado em todas as posições, cada uma tem pelo menos a frequência real — mas pode ter mais devido a colisões com outros elementos hashando para o mesmo bucket. Tomar o MÍNIMO entre as d estimativas reduz o impacto (provavelmente pelo menos uma linha não teve colisão na posição relevante). Garantia formal: com w = ⌈e/ε⌉ e d = ⌈ln(1/δ)⌉, o erro de superestimação é no máximo ε × (total de elementos processados) com probabilidade 1 - δ."
+  },
+  {
+    "id": "prob-10",
+    "enunciado": "Por que estruturas probabilísticas (sketches) são DOMINANTES em sistemas distribuídos modernos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque são mais simples de implementar",
+      "Porque trabalham apenas com inteiros pequenos",
+      "Porque são COMPONÍVEIS (mergeable) — dois sketches de shards diferentes podem ser combinados trivialmente (Bloom: OR bit-a-bit; HLL: max bucket-a-bucket; Count-Min: soma posição-a-posição). Isso permite agregação distribuída sem precisar juntar todos os dados num lugar — fundamental em escala 'web'",
+      "Porque sempre dão respostas exatas"
+    ],
+    "resposta": 2,
+    "explicacao": "COMPONIBILIDADE é a chave. Bloom Filters podem ser unidos com OR bit-a-bit (resultado = bloom_A OR bloom_B = filtro do set união). HLLs podem ser unidos com MAX bucket-a-bucket (resultado = max(buckets_A, buckets_B), cardinalidade da união). Count-Min Sketches podem ser unidos com SOMA posição-a-posição. Em sistemas distribuídos com milhares de shards, cada um pode manter seu próprio sketch local. No final, MERGE todos pra agregação global — sem precisar mover os dados originais (que podem ser petabytes). Compare com agregação EXATA, que requer juntar todos os dados num lugar — frequentemente impossível em escala web. Por isso Cassandra, BigQuery, Cloudflare, Akamai, Bitcoin e basicamente toda infraestrutura de escala usam sketches: trocam pequeno erro por economia massiva de memória + agregação distribuída trivial."
+  }
+]

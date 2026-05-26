@@ -1,0 +1,746 @@
+---
+titulo: "Recursão e Backtracking: Pensar em Função de Si Mesmo"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Donald Knuth, The Art of Computer Programming, Vol. 4A, Seção 7.2.2 — Backtrack Programming"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 4 (Divide-and-Conquer) e Apêndice A.1 (Sums)"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 2.3 — Recursion (Quicksort context)"
+  - "Schachzeitung (1848) — Max Bezzel propondo o problema das 8 rainhas"
+  - "Franz Nauck (1850), Illustrirte Zeitung — primeira solução publicada do 8-Queens, generalização para N-Queens"
+  - "Oracle Java SE 21 Docs — StackOverflowError e Thread.setStackSize"
+  - "Competitive Programmer's Handbook, Antti Laaksonen — Cap. 5 (Complete Search) e Cap. 6 (Greedy)"
+---
+
+## A coisa que mais trava cérebro de programador iniciante
+
+Tem dois conceitos que parecem destinados a confundir gente que está começando. O primeiro é ponteiro. O segundo é recursão. Os dois são abstratos do mesmo jeito: você sabe a definição, sabe escrever o código, e mesmo assim a primeira meia dúzia de vezes que tenta usar parece que está fazendo mágica.
+
+A boa notícia: depois que cai a ficha, recursão vira a ferramenta mais elegante que você tem pra resolver uma família inteira de problemas. Quase todo algoritmo de árvore, divisão e conquista, programação dinâmica, busca em grafos e geração de combinações se apoia em recursão. Sem ela, você consegue resolver os problemas, mas com 3x mais código e metade da clareza.
+
+A má notícia: recursão é genuinamente difícil de visualizar. A pilha de chamadas que está rodando dentro do seu programa não é mostrada por padrão em lugar nenhum. Você tem que construir o modelo mental sozinho.
+
+Esta lição vai gastar bastante tempo no modelo mental — talvez mais do que outras lições da trilha. Vale a pena. Quem entende recursão de verdade lê código de grafos e árvores binárias como prosa; quem não entende lê tudo igual hieróglifo.
+
+---
+
+## Matrioska, espelho e o impulso de pedir ajuda pra um colega
+
+Antes do código, três analogias que vão acompanhar a gente.
+
+**A matrioska.** Aquelas bonecas russas de madeira que vêm uma dentro da outra. Você abre a boneca grande e encontra uma menor. Abre a menor e tem outra ainda menor. Em algum ponto chega numa que não abre mais (a "boneca-base"). Cada boneca é estruturalmente igual à outra, só com tamanho diferente. **Recursão é exatamente isso.**
+
+**Dois espelhos de frente um pro outro.** Você fica entre dois espelhos e vê sua imagem refletida várias vezes, cada uma menor que a anterior. Em teoria seriam infinitas, mas na prática param em algum ponto (luz se atenua, espelho não é perfeito). Recursão **sem caso-base** seria como espelhos perfeitos: nunca para. Em código, isso te dá `StackOverflowError`.
+
+**Pedir ajuda pra um colega que também não sabe.** Você precisa calcular a fatorial de 5. Você não lembra como. Pergunta pro colega ao lado: "qual é a fatorial de 4? Eu prometo que sei como continuar a partir daí". O colega também não lembra, e pergunta pro próximo: "qual é a fatorial de 3?". E assim vai descendo a fileira até alguém saber a fatorial de 0 (que é 1, fato decorado). Esse colega passa o 1 pra trás. Quem perguntou fatorial de 1 calcula `1 × 1 = 1` e passa pra trás. E assim a resposta sobe de volta pela cadeia até chegar em você com `120`.
+
+Essa última analogia é a mais útil. **Cada chamada recursiva é um colega que delega o trabalho pra outro, confiando que o resultado vai voltar.** O trabalho do programador é apenas escrever o que cada colega faz: como ele formula a pergunta menor pro próximo, e como ele combina o resultado que volta.
+
+---
+
+## A receita da recursão
+
+Toda função recursiva tem duas partes obrigatórias. Falte uma, o programa explode.
+
+### Caso-base: a saída de emergência
+
+O caso-base é uma condição em que a função **devolve uma resposta direta, sem chamar a si mesma de novo**. Sem caso-base, a recursão nunca para. É a boneca-base da matrioska, é o colega no fim da fila que finalmente sabe a resposta.
+
+```java
+if (n == 0) return 1;  // caso-base: fatorial(0) é 1, definição direta
+```
+
+### Caso recursivo: confiar em si mesmo
+
+O caso recursivo é a parte onde a função **chama uma versão menor de si mesma** e usa o resultado dela pra produzir a sua própria resposta.
+
+```java
+return n * fatorial(n - 1);  // confio que fatorial(n-1) vai me dar o número certo
+```
+
+Aqui está o salto mental difícil. Você está escrevendo `fatorial`, e a função `fatorial(n - 1)` ainda não terminou de ser escrita — você está no meio dela. Mesmo assim, você usa essa chamada como se ela funcionasse. **Isso é o ato de fé da recursão.** Em lógica formal isso se chama "hipótese de indução": você assume que a função funciona pra entradas menores, e mostra que aí ela funciona pra `n` também.
+
+### Por que a ordem importa
+
+Em quase todo problema, **o caso-base vem antes do caso recursivo**. Você primeiro checa "estou no fim?" e só se não estiver é que delega.
+
+Veja o que acontece se você inverte:
+
+```java
+// Errado
+int fatorial(int n) {
+    return n * fatorial(n - 1);   // nunca para, nem com n=0
+    if (n == 0) return 1;          // morto, nunca executa
+}
+```
+
+Aqui a função chama `fatorial(-1)`, depois `fatorial(-2)`, e segue eternamente até o `StackOverflowError`. O caso-base nunca tem chance de disparar porque o `return` na primeira linha sequestra o controle antes.
+
+---
+
+## A pilha de chamadas, ou: onde a recursão mora
+
+Agora a parte que ninguém te contou direito.
+
+Quando seu programa chama uma função, o sistema operacional reserva um pedacinho de memória chamado **stack frame**. Esse frame guarda os argumentos da função, as variáveis locais, e onde voltar quando ela terminar. Os frames são empilhados — literalmente uma pilha, LIFO, como vimos nas lições anteriores.
+
+Quando você chama uma função recursiva 5 vezes seguidas sem nenhuma delas terminar, você tem **5 frames empilhados ao mesmo tempo** na memória. Cada um esperando o frame de cima terminar pra retomar.
+
+Aqui é onde o trace fica iluminador. Considere `fatorial(4)`:
+
+```
+Chamada inicial:           Pilha:
+fatorial(4)                | fatorial(4)  n=4 |
+
+fatorial(4) chama fatorial(3):
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(3) chama fatorial(2):
+                           | fatorial(2)  n=2 |
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(2) chama fatorial(1):
+                           | fatorial(1)  n=1 |
+                           | fatorial(2)  n=2 |
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(1) chama fatorial(0):
+                           | fatorial(0)  n=0 |
+                           | fatorial(1)  n=1 |
+                           | fatorial(2)  n=2 |
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(0) retorna 1 (caso-base!), desempilha:
+                           | fatorial(1)  n=1 |   ← agora calcula 1 * 1 = 1
+                           | fatorial(2)  n=2 |
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(1) retorna 1, desempilha:
+                           | fatorial(2)  n=2 |   ← calcula 2 * 1 = 2
+                           | fatorial(3)  n=3 |
+                           | fatorial(4)  n=4 |
+
+fatorial(2) retorna 2, desempilha:
+                           | fatorial(3)  n=3 |   ← calcula 3 * 2 = 6
+                           | fatorial(4)  n=4 |
+
+fatorial(3) retorna 6, desempilha:
+                           | fatorial(4)  n=4 |   ← calcula 4 * 6 = 24
+
+fatorial(4) retorna 24.    [pilha vazia]
+```
+
+A pilha cresce até o caso-base, então murcha de volta enquanto cada chamada combina o resultado da próxima com o seu próprio cálculo. **Recursão e pilha são a mesma coisa vista de ângulos diferentes** — pelo código você vê a recursão, pela memória você vê a pilha.
+
+Implementação completa em Java e C++:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static long fatorial(int n) {
+    if (n == 0) return 1;            // caso-base
+    return n * fatorial(n - 1);      // caso recursivo
+}
+
+// fatorial(4) = 4 * fatorial(3)
+//             = 4 * 3 * fatorial(2)
+//             = 4 * 3 * 2 * fatorial(1)
+//             = 4 * 3 * 2 * 1 * fatorial(0)
+//             = 4 * 3 * 2 * 1 * 1 = 24
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long fatorial(int n) {
+    if (n == 0) return 1;            // caso-base
+    return n * fatorial(n - 1);      // caso recursivo
+}
+
+// fatorial(4) = 4 * fatorial(3)
+//             = 4 * 3 * fatorial(2)
+//             = 4 * 3 * 2 * fatorial(1)
+//             = 4 * 3 * 2 * 1 * fatorial(0)
+//             = 4 * 3 * 2 * 1 * 1 = 24
+```
+
+</Code>
+</CodeSwap>
+
+<Insight>
+**Por que `fatorial(0) = 1`?** Convenção matemática. A multiplicação tem um elemento neutro (o 1), e definindo fatorial(0) = 1 deixa todas as fórmulas envolvendo combinatória funcionarem direito (binomiais, séries de Taylor, etc.). Em programação você herda essa convenção — nunca discuta.
+</Insight>
+
+---
+
+## Quando recursão vira armadilha: Fibonacci
+
+A sequência de Fibonacci é definida assim: cada número é a soma dos dois anteriores, começando com 0 e 1.
+
+```
+fib(0) = 0
+fib(1) = 1
+fib(n) = fib(n-1) + fib(n-2)    para n >= 2
+
+Sequência: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, ...
+```
+
+A definição é literalmente recursiva. Traduzir pra código é tentador:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Versão ingênua — funciona, mas é catastroficamente lenta
+public static long fibIngenuo(int n) {
+    if (n <= 1) return n;
+    return fibIngenuo(n - 1) + fibIngenuo(n - 2);
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// Versão ingênua — funciona, mas é catastroficamente lenta
+long fibIngenuo(int n) {
+    if (n <= 1) return n;
+    return fibIngenuo(n - 1) + fibIngenuo(n - 2);
+}
+```
+
+</Code>
+</CodeSwap>
+
+Funciona. Pra `fib(10)` responde rápido. Pra `fib(40)` já demora alguns segundos. Pra `fib(50)` você espera, espera, espera, e desiste. Por quê?
+
+### A árvore de chamadas
+
+Diferente do fatorial, que faz **uma** chamada recursiva, o Fibonacci faz **duas**. Isso muda tudo. Olha a árvore de chamadas pra `fib(5)`:
+
+```
+                      fib(5)
+                     /      \
+                fib(4)       fib(3)
+               /     \       /    \
+           fib(3)  fib(2)  fib(2)  fib(1)
+           /   \    / \     / \
+         fib(2) fib(1) ...
+         /  \
+       fib(1) fib(0)
+```
+
+Quantas vezes `fib(2)` é calculada? Três. `fib(3)`? Duas. `fib(1)`? Cinco. Pra `fib(50)` o número de chamadas é da ordem de **2⁵⁰**, que é mais ou menos um quatrilhão. Um computador moderno faz uns 10⁹ operações por segundo. Faz a conta.
+
+A complexidade é **O(2ⁿ)** — exponencial. O programa faz a mesma conta milhões de vezes porque cada subárvore é recalculada do zero, sem memória de que isso já foi feito.
+
+### Memoização: o caderno de respostas
+
+A solução é simples e elegante: **lembrar as respostas que já calculamos**. Antes de calcular `fib(7)`, olhamos numa tabela. Se o valor está lá, devolvemos direto. Se não, calculamos, guardamos, e devolvemos.
+
+Em português coloquial: o colega da fileira agora carrega um caderninho. Antes de delegar pro próximo, abre o caderno e procura. "Ah, fatorial de 7? Já calculei semana passada, é 5040". A cadeia de delegação corta cedo.
+
+Essa técnica se chama **memoização** (com dois "z" em inglês: *memoization*, do termo *memo*, lembrete) e é a base da **programação dinâmica** — assunto de uma trilha futura inteira.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+
+private static Map<Integer, Long> memo = new HashMap<>();
+
+public static long fibMemo(int n) {
+    if (n <= 1) return n;
+    if (memo.containsKey(n)) return memo.get(n);  // cache hit
+    long res = fibMemo(n - 1) + fibMemo(n - 2);
+    memo.put(n, res);                              // cache write
+    return res;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <unordered_map>
+
+std::unordered_map<int, long> memo;
+
+long fibMemo(int n) {
+    if (n <= 1) return n;
+    auto it = memo.find(n);
+    if (it != memo.end()) return it->second;     // cache hit
+    long res = fibMemo(n - 1) + fibMemo(n - 2);
+    memo[n] = res;                                // cache write
+    return res;
+}
+```
+
+</Code>
+</CodeSwap>
+
+Com memoização, o `fib(50)` responde instantâneo. A complexidade cai de O(2ⁿ) pra **O(n)**, porque cada valor é calculado uma única vez e depois reaproveitado.
+
+<Aviso>
+Memoização troca **tempo** por **memória**. Você gasta O(n) de espaço no map pra economizar tempo exponencial. Quase sempre vale a pena, mas em sistemas de memória restrita (microcontroladores, jogos com budget apertado) você precisa pensar duas vezes.
+</Aviso>
+
+### A versão iterativa
+
+Pra completar o tour: dá pra escrever Fibonacci sem recursão nenhuma. Só com um loop e duas variáveis.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static long fibIter(int n) {
+    if (n <= 1) return n;
+    long a = 0, b = 1;
+    for (int i = 2; i <= n; i++) {
+        long temp = a + b;
+        a = b;
+        b = temp;
+    }
+    return b;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long fibIter(int n) {
+    if (n <= 1) return n;
+    long a = 0, b = 1;
+    for (int i = 2; i <= n; i++) {
+        long temp = a + b;
+        a = b;
+        b = temp;
+    }
+    return b;
+}
+```
+
+</Code>
+</CodeSwap>
+
+O(n) tempo, **O(1) de espaço**. Sem stack, sem map. Pra Fibonacci puro, essa é a forma definitiva. **Recursão nem sempre é a melhor escolha** — é uma das lições que essa série de exemplos ensina.
+
+---
+
+## Stack overflow é real
+
+Em Java, a stack de cada thread tem tamanho fixo — por padrão, na JVM HotSpot, é **512 KB** (na Linux x64) ou **1 MB** em algumas configurações. Cada frame de função recursiva ocupa alguns bytes — digamos 50-100 bytes pra uma função simples. Conta básica: você consegue empilhar entre **5.000 e 10.000 frames** antes de explodir.
+
+```java
+public static int contar(int n) {
+    return 1 + contar(n + 1);   // sem caso-base, recursão infinita
+}
+
+// Chamando contar(0):
+// Exception in thread "main" java.lang.StackOverflowError
+//     at Main.contar(Main.java:2)
+//     at Main.contar(Main.java:2)
+//     at Main.contar(Main.java:2)
+//     ... 11502 more
+```
+
+Aquele número no fim do stack trace é uma boa estimativa do limite real da sua JVM. **Esse limite é real e finito.** Em problemas práticos de ICPC, qualquer recursão com profundidade acima de 10⁴ vai precisar de cuidado.
+
+<Insight>
+**Linguagens funcionais resolvem esse problema com Tail Call Optimization (TCO).** Se a última coisa que sua função faz é chamar a si mesma (chamada de cauda), o compilador reaproveita o frame atual em vez de criar um novo. Resultado: recursão de profundidade arbitrária sem estourar a stack. Java e C++ **não fazem TCO** — Brian Goetz já disse que adicionar isso na JVM seria caro demais. Scheme, Haskell, OCaml fazem. Em Java e C++, profundidade grande exige conversão pra iteração ou aumento manual da stack via `Thread.setStackSize`.
+</Insight>
+
+---
+
+## Backtracking: recursão que sabe voltar atrás
+
+Até aqui, recursão pra calcular um valor. Mas tem uma classe de problemas onde a recursão serve pra **explorar todas as possibilidades** de uma solução, abandonando caminhos que não levam a lugar nenhum.
+
+Imagine que você está num labirinto. Tem três corredores na sua frente. Você escolhe um, anda um pouco, e chega num beco sem saída. O que faz? **Volta atrás e tenta outro.** Se aquele também não funciona, volta de novo. Se você esgotar todas as opções de um cruzamento, volta mais um nível.
+
+Isso é backtracking. **Recursão é a estrutura natural** porque "voltar atrás um passo" é exatamente o que acontece quando uma chamada recursiva retorna — você volta pro frame anterior, com o estado de antes da exploração.
+
+A analogia clássica é o **fio de Ariadne**. Na mitologia grega, Teseu entrou no labirinto pra matar o Minotauro. Antes, Ariadne deu pra ele um novelo de barbante: amarra na entrada, vai desenrolando enquanto anda, e na hora de voltar segue o fio. O fio é a pilha de chamadas — cada nó é uma decisão tomada, cada retorno é "recolher o fio um passo".
+
+---
+
+## Padrão geral do backtracking
+
+Quase todo problema de backtracking segue a mesma estrutura:
+
+```
+funcao backtrack(estado_atual):
+    se estado_atual é uma solução completa:
+        registra a solução
+        retorna
+
+    para cada escolha possível a partir daqui:
+        se a escolha é válida (não fere regras):
+            aplica a escolha (modifica estado_atual)
+            backtrack(estado_atual)         ← desce na recursão
+            desfaz a escolha (volta estado_atual)   ← O VOLTAR ATRÁS
+```
+
+O segredo está nos dois últimos passos: **aplicar a escolha, descer, desfazer a escolha**. O "desfazer" é o que faz o algoritmo poder explorar a próxima opção do mesmo nível sem contaminação do que veio antes.
+
+---
+
+## Problema clássico: permutações de [1, 2, 3]
+
+**Problema**: dada uma lista, gere todas as permutações possíveis. Para `[1, 2, 3]`:
+
+```
+[1, 2, 3]
+[1, 3, 2]
+[2, 1, 3]
+[2, 3, 1]
+[3, 1, 2]
+[3, 2, 1]
+```
+
+Total: 3! = 6 permutações.
+
+**Como pensar**: pra cada posição, escolho um elemento que ainda não usei. Quando preencho todas as posições, é uma permutação. Quando volto, desmarco o elemento pra ele poder ser usado em outras tentativas.
+
+A árvore de decisões pra `[1, 2, 3]`:
+
+```
+                      []
+                      
+            /         |        \
+          [1]        [2]       [3]
+          / \        / \       / \
+        [1,2][1,3] [2,1][2,3] [3,1][3,2]
+         |    |     |    |     |    |
+      [1,2,3][1,3,2][2,1,3][2,3,1][3,1,2][3,2,1]
+```
+
+Cada folha é uma permutação completa. Cada caminho da raiz à folha são as decisões tomadas.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public List<List<Integer>> permutacoes(int[] nums) {
+    List<List<Integer>> resultado = new ArrayList<>();
+    boolean[] usado = new boolean[nums.length];
+    List<Integer> atual = new ArrayList<>();
+    backtrack(nums, usado, atual, resultado);
+    return resultado;
+}
+
+private void backtrack(int[] nums, boolean[] usado,
+                       List<Integer> atual,
+                       List<List<Integer>> resultado) {
+    if (atual.size() == nums.length) {
+        resultado.add(new ArrayList<>(atual));   // cópia: a lista vai mudar
+        return;
+    }
+    for (int i = 0; i < nums.length; i++) {
+        if (usado[i]) continue;                  // pular elementos já usados
+        usado[i] = true;                         // aplica a escolha
+        atual.add(nums[i]);
+        backtrack(nums, usado, atual, resultado); // desce
+        atual.remove(atual.size() - 1);           // desfaz a escolha
+        usado[i] = false;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+void backtrack(const std::vector<int>& nums,
+               std::vector<bool>& usado,
+               std::vector<int>& atual,
+               std::vector<std::vector<int>>& resultado) {
+    if (atual.size() == nums.size()) {
+        resultado.push_back(atual);     // cópia
+        return;
+    }
+    for (size_t i = 0; i < nums.size(); i++) {
+        if (usado[i]) continue;
+        usado[i] = true;                // aplica a escolha
+        atual.push_back(nums[i]);
+        backtrack(nums, usado, atual, resultado);  // desce
+        atual.pop_back();               // desfaz a escolha
+        usado[i] = false;
+    }
+}
+
+std::vector<std::vector<int>> permutacoes(std::vector<int>& nums) {
+    std::vector<std::vector<int>> resultado;
+    std::vector<bool> usado(nums.size(), false);
+    std::vector<int> atual;
+    backtrack(nums, usado, atual, resultado);
+    return resultado;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n! × n). Tem n! permutações, e copiar cada uma pra lista de resultados custa O(n). Inevitável — você está produzindo exatamente n! coisas.
+
+<ComplexidadeBox melhor="O(n! × n)" media="O(n! × n)" pior="O(n! × n)" />
+
+<Insight>
+O padrão "fazer escolha → descer recursão → desfazer escolha" é tão recorrente em programação que ganhou nome próprio em comunidades de competição: **state mutation pattern**. Veja em quase todo problema de geração combinatória (subsets, combinações, partições) e em busca exaustiva (Sudoku, N-Queens, palavras cruzadas).
+</Insight>
+
+---
+
+## Problema clássico: N-Queens
+
+Esse é o **canônico** dos canônicos. A versão original com 8 rainhas foi proposta em **1848** pelo compositor de xadrez alemão **Max Bezzel** no jornal *Schachzeitung*. Dois anos depois, em **1850**, **Franz Nauck** publicou a primeira solução e generalizou pra `N` rainhas em tabuleiro `N × N`. Carl Friedrich Gauss tentou — mas a análise dele ficou incompleta. Mais tarde, **Donald Knuth** dedicou várias páginas ao problema no Volume 4A do TAOCP pra ilustrar técnicas de poda em backtracking.
+
+**Problema**: colocar `N` rainhas num tabuleiro `N × N` de xadrez de modo que **nenhuma rainha ataque outra** — nem na mesma linha, nem coluna, nem diagonal.
+
+Pra N=4, há 2 soluções. Pra N=8, há 92. Pra N=14, há 365.596. Não existe fórmula fechada — só dá pra contar enumerando.
+
+### A estratégia
+
+**O insight que faz tudo encaixar**: como cada linha pode ter no máximo uma rainha (senão se atacam), basta decidir **em qual coluna a rainha de cada linha vai**. O problema vira escolher uma coluna pra linha 0, depois pra linha 1, etc.
+
+Pra cada linha tentamos cada coluna. Antes de colocar, verificamos se a posição não conflita com nenhuma rainha já colocada (em linhas anteriores). Se for válida, colocamos e descemos pra próxima linha. Se chegamos à linha `N`, é uma solução completa.
+
+A verificação de conflito é o coração da poda: se a coluna está ocupada, descarta. Se a diagonal `linha - coluna` ou a anti-diagonal `linha + coluna` já tem rainha, descarta. Três sets bastam pra fazer essa checagem em O(1) por tentativa.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public List<List<String>> solveNQueens(int n) {
+    List<List<String>> resultado = new ArrayList<>();
+    int[] rainhas = new int[n];                  // rainhas[i] = coluna da rainha na linha i
+    Set<Integer> colsOcupadas = new HashSet<>();
+    Set<Integer> diag1 = new HashSet<>();         // r - c
+    Set<Integer> diag2 = new HashSet<>();         // r + c
+
+    backtrack(0, n, rainhas, colsOcupadas, diag1, diag2, resultado);
+    return resultado;
+}
+
+private void backtrack(int linha, int n, int[] rainhas,
+                       Set<Integer> cols, Set<Integer> d1, Set<Integer> d2,
+                       List<List<String>> resultado) {
+    if (linha == n) {
+        resultado.add(montarTabuleiro(rainhas, n));
+        return;
+    }
+    for (int col = 0; col < n; col++) {
+        if (cols.contains(col) || d1.contains(linha - col) || d2.contains(linha + col)) {
+            continue;                             // conflita, pula
+        }
+        // aplica escolha
+        rainhas[linha] = col;
+        cols.add(col);
+        d1.add(linha - col);
+        d2.add(linha + col);
+        // desce
+        backtrack(linha + 1, n, rainhas, cols, d1, d2, resultado);
+        // desfaz escolha
+        cols.remove(col);
+        d1.remove(linha - col);
+        d2.remove(linha + col);
+    }
+}
+
+private List<String> montarTabuleiro(int[] rainhas, int n) {
+    List<String> tabuleiro = new ArrayList<>();
+    for (int r = 0; r < n; r++) {
+        char[] linha = new char[n];
+        Arrays.fill(linha, '.');
+        linha[rainhas[r]] = 'Q';
+        tabuleiro.add(new String(linha));
+    }
+    return tabuleiro;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+#include <unordered_set>
+
+void backtrack(int linha, int n, std::vector<int>& rainhas,
+               std::unordered_set<int>& cols,
+               std::unordered_set<int>& d1,
+               std::unordered_set<int>& d2,
+               std::vector<std::vector<std::string>>& resultado) {
+    if (linha == n) {
+        std::vector<std::string> tab(n, std::string(n, '.'));
+        for (int r = 0; r < n; r++) tab[r][rainhas[r]] = 'Q';
+        resultado.push_back(tab);
+        return;
+    }
+    for (int col = 0; col < n; col++) {
+        if (cols.count(col) || d1.count(linha - col) || d2.count(linha + col)) {
+            continue;
+        }
+        rainhas[linha] = col;
+        cols.insert(col);
+        d1.insert(linha - col);
+        d2.insert(linha + col);
+
+        backtrack(linha + 1, n, rainhas, cols, d1, d2, resultado);
+
+        cols.erase(col);
+        d1.erase(linha - col);
+        d2.erase(linha + col);
+    }
+}
+
+std::vector<std::vector<std::string>> solveNQueens(int n) {
+    std::vector<std::vector<std::string>> resultado;
+    std::vector<int> rainhas(n);
+    std::unordered_set<int> cols, d1, d2;
+    backtrack(0, n, rainhas, cols, d1, d2, resultado);
+    return resultado;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(N!) no pior caso. Na prática, a poda mata a maioria dos ramos cedo, e o N-Queens para N=15 roda em segundos numa máquina comum. Pra N=20 começa a doer.
+
+<Insight>
+**Por que diagonais são `r - c` e `r + c`?** Numa mesma diagonal principal (de cima-esquerda pra baixo-direita), a diferença `linha - coluna` é constante. Numa mesma anti-diagonal (de cima-direita pra baixo-esquerda), `linha + coluna` é constante. Truque clássico que aparece em xadrez, máscaras de bitmap, e geração de fractais.
+</Insight>
+
+---
+
+## Problema clássico: Sudoku
+
+Mesma técnica, problema diferente. **Sudoku**: tabuleiro 9×9 já parcialmente preenchido, complete preenchendo cada célula vazia com 1-9 sem repetir em nenhuma linha, coluna ou bloco 3×3.
+
+A estratégia é igualzinha à do N-Queens: pra cada célula vazia, tente cada dígito de 1-9. Se nenhum funciona, volta atrás.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public boolean solveSudoku(char[][] board) {
+    for (int r = 0; r < 9; r++) {
+        for (int c = 0; c < 9; c++) {
+            if (board[r][c] != '.') continue;       // já preenchida
+            for (char digito = '1'; digito <= '9'; digito++) {
+                if (valido(board, r, c, digito)) {
+                    board[r][c] = digito;            // aplica escolha
+                    if (solveSudoku(board)) return true;  // desce
+                    board[r][c] = '.';               // desfaz escolha
+                }
+            }
+            return false;                            // nenhum dígito serviu
+        }
+    }
+    return true;                                     // todas preenchidas
+}
+
+private boolean valido(char[][] b, int r, int c, char d) {
+    for (int i = 0; i < 9; i++) {
+        if (b[r][i] == d) return false;              // linha
+        if (b[i][c] == d) return false;              // coluna
+        if (b[3 * (r / 3) + i / 3][3 * (c / 3) + i % 3] == d) return false;  // bloco
+    }
+    return true;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+bool valido(const std::vector<std::vector<char>>& b, int r, int c, char d) {
+    for (int i = 0; i < 9; i++) {
+        if (b[r][i] == d) return false;
+        if (b[i][c] == d) return false;
+        if (b[3 * (r / 3) + i / 3][3 * (c / 3) + i % 3] == d) return false;
+    }
+    return true;
+}
+
+bool solveSudoku(std::vector<std::vector<char>>& board) {
+    for (int r = 0; r < 9; r++) {
+        for (int c = 0; c < 9; c++) {
+            if (board[r][c] != '.') continue;
+            for (char d = '1'; d <= '9'; d++) {
+                if (valido(board, r, c, d)) {
+                    board[r][c] = d;
+                    if (solveSudoku(board)) return true;
+                    board[r][c] = '.';
+                }
+            }
+            return false;
+        }
+    }
+    return true;
+}
+```
+
+</Code>
+</CodeSwap>
+
+Sudoku 9×9 resolve em milissegundos. Sudoku 16×16 já demora, e o famoso "Sudoku que demorou 17 anos pra resolver" é uma piada interna de competidores — algoritmos otimizados resolvem qualquer sudoku 9×9 numa fração de segundo.
+
+---
+
+## Quando NÃO usar recursão
+
+Pra fechar com honestidade: recursão é elegante, mas não é a resposta certa pra tudo.
+
+**Evite quando:**
+
+1. **Profundidade pode passar de ~10.000.** Java e C++ não têm TCO. Profundidade grande de verdade (percorrer milhões de elementos) precisa ser convertida em iteração com pilha explícita.
+
+2. **A versão iterativa é trivial.** Calcular fatorial ou Fibonacci num loop simples gasta menos memória e é tão claro quanto. Recursão pra esses casos é puramente didática.
+
+3. **Performance crítica.** Cada chamada de função tem overhead (alocar frame, copiar argumentos, ajustar registradores). Em loops apertados, isso conta. JITs ajudam, mas iterativo continua sendo mais rápido na média.
+
+4. **O problema não é naturalmente recursivo.** Forçar recursão num problema que não pede dá código mais difícil de ler, não mais. Recursão deve emergir da estrutura do problema, não ser imposta.
+
+**Adote quando:**
+
+- Estrutura do problema é naturalmente recursiva (árvores, divisão e conquista, exploração combinatória).
+- Backtracking — converter pra iteração explícita exige você simular a pilha à mão, raramente vale a pena.
+- O código fica significativamente mais legível.
+
+---
+
+## Recap
+
+Recursão é uma função que chama a si mesma. Pra funcionar precisa de duas coisas: um caso-base que para a cadeia, e um caso recursivo que delega o trabalho pra uma versão menor do problema.
+
+A pilha de chamadas é onde a recursão mora fisicamente. Cada chamada cria um frame; cada retorno desmonta um. Isso impõe um limite real: 5-10 mil frames de profundidade antes de estourar.
+
+Fibonacci ingênuo mostra que recursão sem cuidado pode ser exponencial. **Memoização** transforma exponencial em linear ao lembrar de respostas já calculadas — e é a base da programação dinâmica.
+
+Backtracking aplica recursão à exploração: tenta uma escolha, desce, desfaz. O padrão é universal — permutações, combinações, N-Queens, Sudoku, todos seguem o mesmo esqueleto.
+
+A técnica de "desfazer a escolha após descer" é o que separa backtracking de busca exaustiva ingênua. Sem o desfazer, você precisaria copiar o estado inteiro a cada nível, gastando memória demais.
+
+Próxima lição: **Ordenação** (Merge Sort, Quick Sort, e por que `Arrays.sort` em Java é um híbrido de três algoritmos). Vamos ver de novo o padrão "divisão e conquista", agora com recursão sobre arrays em vez de geração combinatória.

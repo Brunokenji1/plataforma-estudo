@@ -1,0 +1,563 @@
+---
+titulo: "Elicitação de Requisitos"
+descricao: "Técnicas para descobrir o que o sistema precisa fazer: entrevistas, workshops, observação, contextual inquiry, prototipação, brainstorming, personas, etnografia. Quando usar cada uma e como evitar os erros comuns."
+---
+
+Na Lição 1 vimos que a Engenharia de Requisitos tem cinco atividades. Esta lição cobre a primeira e mais difícil delas: **Elicitação** — a atividade de descobrir o que o sistema precisa fazer.
+
+Existe um detalhe importante de vocabulário: usamos o verbo "elicitar" e não "coletar". A escolha não é decorativa. **Coletar** sugere que os requisitos já existem em algum lugar e basta pegá-los, como quem recolhe folhas no chão. **Elicitar** vem do latim *elicere* (trazer pra fora, fazer brotar) — sugere um trabalho ativo de quem está descobrindo: o requisito precisa ser construído em colaboração com o stakeholder, porque na maior parte dos casos ele não existe pronto. O cliente sabe que tem um problema, sabe que precisa de uma solução, mas raramente sabe articular requisitos verificáveis sem ajuda.
+
+<Insight>
+Pensa numa consulta médica. O paciente chega dizendo "dor de cabeça". O médico não escreve "dor de cabeça" no prontuário e prescreve dipirona. Ele faz perguntas: onde dói exatamente, há quanto tempo, em que momento do dia, o que melhora, o que piora, há outros sintomas, há histórico familiar. Cada resposta abre novas perguntas. O paciente nem sempre sabe o que é relevante — o médico precisa puxar a informação certa. Elicitação de requisitos funciona igual. O stakeholder diz "preciso de um relatório de empréstimos" e o analista precisa fazer perguntas até entender qual o problema real por trás dessa solicitação.
+</Insight>
+
+## Por que Elicitação é difícil
+
+Antes de ver as técnicas, vale entender por que elicitação não é simplesmente "perguntar ao cliente o que ele quer". A literatura identifica vários problemas estruturais que tornam o trabalho difícil.
+
+### Conhecimento tácito
+
+Michael Polanyi, filósofo húngaro, articulou em *The Tacit Dimension* (Routledge, 1966) a distinção entre **conhecimento explícito** (o que sabemos descrever em palavras) e **conhecimento tácito** (o que sabemos mas não conseguimos articular). A frase famosa do livro é *"we can know more than we can tell"* — podemos saber mais do que conseguimos contar.
+
+Um bibliotecário experiente sabe, ao olhar para um usuário entrando, se aquela pessoa vai pedir ajuda ou se sabe o que procura. Ele identifica livros mal devolvidos só pela aparência da capa. Sabe que segunda-feira de manhã tem fila por causa do final de semana. Pergunta a ele "o que você faz no atendimento?" e ele vai descrever as ações conscientes (consultar sistema, registrar empréstimo) — mas vai omitir centenas de micro-decisões que toma sem perceber. Esse conhecimento tácito frequentemente é o que mais importa pro sistema.
+
+### Stakeholders expressam soluções, não problemas
+
+O cliente raramente diz "tenho um problema X". Ele diz "preciso de uma solução Y". A solução proposta esconde o problema real, e frequentemente é a solução errada.
+
+- **O que ele diz**: "Preciso de um botão de exportar pra Excel."
+- **O problema real**: "Preciso enviar dados pra contabilidade no formato que eles usam."
+- **Solução melhor**: integração direta com o sistema contábil, sem botão nenhum.
+
+Habilidade central do analista: chegar do *como* (solução proposta) para o *porquê* (problema real). A técnica dos **"5 porquês"** (originada no Toyota Production System por Taiichi Ohno nos anos 50) funciona bem aqui: pergunte "por que?" cinco vezes até chegar na causa raiz.
+
+### Stakeholders contraditórios
+
+Diferentes stakeholders querem coisas opostas. O **diretor da biblioteca** quer reduzir custos (menos pessoal, mais auto-atendimento). O **bibliotecário** quer aumentar o tempo de contato com os leitores (atendimento de qualidade). O **leitor frequente** quer reservas online ilimitadas. O **leitor ocasional** quer simplicidade. Todos têm razão dentro do seu ponto de vista.
+
+O elicitador não pode resolver essas contradições sozinho — precisa **trazer à tona**, documentar e levar para negociação. Ignorar a contradição na fase de elicitação faz ela explodir na entrega.
+
+### Stakeholders ausentes
+
+Você só sabe perguntar para os stakeholders que você identificou. E a lista inicial está sempre incompleta. Em um sistema de biblioteca, é fácil esquecer:
+
+- O **terceirizado da limpeza** que precisa não tropeçar nos cabos do leitor de código de barras
+- O **deficiente visual** que precisa de leitor de tela compatível
+- O **fornecedor de livros** que precisa receber notificações de baixa de estoque
+- A **auditoria do município** que precisa de relatórios em formato específico
+
+Wiegers & Beatty (2013, cap 6) recomendam um exercício formal: gerar uma lista de stakeholders por categoria (afetados positivamente, afetados negativamente, decisores, influenciadores) e iterar até parar de encontrar novos.
+
+### Auto-relato é frequentemente errado
+
+As pessoas dizem o que **pensam** que fazem, não o que **realmente** fazem. Lucy Suchman demonstrou isso em *Plans and Situated Actions* (Cambridge University Press, 1987): o trabalho real é muito mais improvisado e contextual do que as descrições formais sugerem.
+
+Pergunte ao bibliotecário "como você atende um leitor?" e ele descreve um fluxo limpo. Observe-o por uma hora e você vê dezenas de exceções, atalhos, conversas paralelas, decisões fora do script. Por isso técnicas de **observação** complementam (e às vezes substituem) entrevistas.
+
+## O processo de Elicitação
+
+O BABOK Guide v3 (IIBA, 2015), na Knowledge Area **"Elicitation and Collaboration"**, define cinco tarefas no processo de elicitação. Não são fases lineares — se sobrepõem e iteram:
+
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-eli" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.85" />
+    </marker>
+  </defs>
+
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Tarefas da Elicitação (BABOK v3, cap 4)</text>
+
+  <rect x="40" y="60" width="130" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="105" y="88" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">1. Preparar</text>
+  <text fill="#fff" x="105" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">escolher técnica</text>
+  <text fill="#fff" x="105" y="121" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">identificar fontes</text>
+  <text fill="#fff" x="105" y="134" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">agendar</text>
+
+  <rect x="190" y="60" width="130" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="255" y="88" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">2. Conduzir</text>
+  <text fill="#fff" x="255" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">executar a sessão</text>
+  <text fill="#fff" x="255" y="121" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">tomar notas</text>
+  <text fill="#fff" x="255" y="134" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">explorar tópicos</text>
+
+  <rect x="340" y="60" width="130" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="405" y="84" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">3. Confirmar</text>
+  <text fill="#fff" x="405" y="98" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">resultados</text>
+  <text fill="#fff" x="405" y="118" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">validar com fonte</text>
+  <text fill="#fff" x="405" y="131" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">cruzar fontes</text>
+
+  <rect x="490" y="60" width="130" height="80" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="555" y="84" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">4. Comunicar</text>
+  <text fill="#fff" x="555" y="98" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">informações</text>
+  <text fill="#fff" x="555" y="118" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">compartilhar</text>
+  <text fill="#fff" x="555" y="131" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">com a equipe</text>
+
+  <path d="M 170 100 L 185 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-eli)" />
+  <path d="M 320 100 L 335 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-eli)" />
+  <path d="M 470 100 L 485 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-eli)" />
+
+  <rect x="160" y="180" width="400" height="60" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="205" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">5. Gerenciar Colaboração de Stakeholders</text>
+  <text fill="#fff" x="360" y="225" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">atividade contínua — engajamento, expectativas, conflitos</text>
+
+  <path d="M 105 145 Q 105 175 250 180" stroke="currentColor" strokeWidth="1" fill="none" strokeDasharray="4,3" strokeOpacity="0.4" />
+  <path d="M 555 145 Q 555 175 470 180" stroke="currentColor" strokeWidth="1" fill="none" strokeDasharray="4,3" strokeOpacity="0.4" />
+
+  <text fill="#fff" x="360" y="275" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Resultados que não passam pela confirmação voltam pra conduzir</text>
+  <path d="M 405 145 Q 405 290 255 145" stroke="currentColor" strokeWidth="1.2" fill="none" strokeDasharray="5,3" strokeOpacity="0.5" markerEnd="url(#seta-eli)" />
+</svg>
+
+## Técnicas de Elicitação
+
+Existem muitas técnicas. O BABOK Guide v3 lista 18; Sommerville (2015) cobre cerca de 8; Wiegers & Beatty (2013) detalham mais de 10. Vou apresentar as 11 mais importantes na prática, com a origem histórica de cada uma, quando usar e os pontos de atenção.
+
+### 1. Entrevistas
+
+A técnica mais usada e a primeira que quase todo elicitador aprende. Existem três formatos:
+
+| Formato | Como funciona | Quando usar |
+|---|---|---|
+| **Estruturada** | Roteiro fixo de perguntas, na mesma ordem para todos | Pesquisa comparativa, muitos entrevistados, análise quantitativa |
+| **Não estruturada** | Conversa aberta, sem roteiro, segue o que o entrevistado conta | Exploração inicial, descobrir o desconhecido, contextos sensíveis |
+| **Semi-estruturada** | Roteiro de tópicos + flexibilidade pra aprofundar | Maioria dos casos — combina foco com descoberta |
+
+Na prática, **a semi-estruturada é a mais útil** para elicitação. Você tem uma lista de tópicos a cobrir, mas segue as deixas do entrevistado e aprofunda onde for relevante.
+
+**Tipos de pergunta**:
+
+- **Open-ended (abertas)** — convidam à elaboração: "Me conta como é o dia típico de atendimento?" Resposta gera narrativa rica.
+- **Closed-ended (fechadas)** — pedem resposta específica: "Quantos empréstimos vocês fazem por dia em média?" Resposta gera fato pontual.
+
+Comece com abertas (pra deixar o entrevistado contar a história dele), depois use fechadas pra confirmar detalhes.
+
+**Erros típicos**:
+
+- **Perguntas conduzidas (leading questions)**: "Você concorda que o sistema atual é lento?" → quase ninguém vai discordar do entrevistador. Reformule: "Como você descreveria a velocidade do sistema atual?"
+- **Múltiplas perguntas juntas**: "Quem usa o sistema e com que frequência e quais funcionalidades?" → o entrevistado responde só uma e esquece as outras.
+- **Pular silêncios**: silêncio incomoda, mas é onde o entrevistado pensa. Não preencha com outra pergunta.
+- **Confirmar a própria hipótese**: ouvir só o que confirma o que você já achava (viés de confirmação).
+
+**Quando usar**: stakeholder identificável, conhecimento específico, primeira aproximação ao domínio. Para uma biblioteca: entrevistar o diretor, 2 ou 3 bibliotecários de diferentes turnos, alguns usuários frequentes e ocasionais.
+
+### 2. Workshops e JAD (Joint Application Design)
+
+JAD foi desenvolvido por **Chuck Morris** (IBM Raleigh) e **Tony Crawford** (IBM Toronto) entre 1977 e 1980. A ideia central: em vez de entrevistar stakeholders um a um (lento, com versões inconsistentes), reúna todos numa sala por alguns dias com um facilitador treinado e produza requisitos de forma colaborativa.
+
+**Estrutura típica de um workshop JAD**:
+
+- **Duração**: 1 a 5 dias contínuos (formato original IBM)
+- **Participantes**: 8 a 15 pessoas — sponsor, usuários representativos, especialistas do domínio, analistas, devs sênior
+- **Papéis**:
+  - **Facilitador (leader)**: conduz, gerencia tempo, evita dominância de um participante
+  - **Scribe (registrador)**: documenta tudo em tempo real
+  - **Sponsor executivo**: abre, dá autoridade ao grupo, fecha
+  - **Participantes ativos**: contribuem com conhecimento
+- **Output**: requisitos consolidados, com decisões e acordos documentados
+
+**Vantagens** sobre entrevistas individuais:
+- Decisões tomadas na hora (sem ciclos de "preciso confirmar com fulano")
+- Conflitos aparecem e são resolvidos em conjunto
+- Construção compartilhada gera comprometimento
+- Velocidade — uma semana de JAD substitui meses de entrevistas
+
+**Custos**:
+- Alto investimento de tempo dos stakeholders sêniores
+- Risco de dominância (uma pessoa forte ofusca os outros)
+- Precisa de facilitador experiente
+- Difícil de remarcar se alguém falta
+
+Variantes e técnicas relacionadas: **FAST** (Facilitated Application Specification Techniques, criado por Gary Rush em 1985 como evolução do JAD original). O **RAD** (Rapid Application Development), sistematizado por James Martin no livro homônimo de 1991 (Macmillan), é uma metodologia mais ampla que USA workshops tipo JAD como componente, não uma variante. Hoje, formatos similares de workshop colaborativo aparecem em **Design Sprints** (Jake Knapp, desenvolvido na Google Ventures entre 2010 e 2014, sistematizado no livro *Sprint*, Simon & Schuster, 2016) e em workshops de **Event Storming** (DDD — coberto na Lição 3 desta trilha).
+
+### 3. Observação
+
+Ir até onde o trabalho acontece e observar como é feito de verdade. Existe em dois sabores:
+
+**Observação passiva** ("borboleta na parede"): você fica de lado, observa, anota. Não interfere. Pessoas se acostumam com sua presença depois de alguns minutos. Risco: você vê o quê mas não entende o porquê.
+
+**Observação participante**: você não só observa mas tenta participar, fazer parte do contexto. Quando estendida ao longo de semanas ou meses, com análise sistemática de cultura, significados e práticas do grupo estudado, vira **etnografia** propriamente dita (tradição vinda da antropologia social). No contexto de software, a etnografia foi sistematizada por **Ian Sommerville, John Hughes, Tom Rodden e colegas da Lancaster University** no projeto de controle de tráfego aéreo (paper seminal: "Ethnographically-informed systems design for air traffic control", CSCW'92, Toronto, novembro 1992). Eles mostraram que estudos etnográficos revelavam práticas críticas dos controladores que **nenhuma entrevista revelou** — como o uso das tiras de papel ("flight strips") em padrões espaciais que comunicavam estado entre controladores.
+
+**Quando usar**: trabalho com forte componente tácito, contextos coletivos onde a interação importa, sistemas críticos (saúde, controle de tráfego, operações militares), substituição de sistemas legados onde "o jeito que sempre foi feito" tem razões não documentadas.
+
+**Atenção ética e legal**: observar pessoas exige consentimento explícito. No Brasil, LGPD (Lei 13.709/2018) se aplica se há captura de dados pessoais. Em biblioteca pública, observação geral é tranquila; gravação de áudio/vídeo de bibliotecários e leitores precisa de termo de consentimento.
+
+### 4. Contextual Inquiry
+
+Técnica de pesquisa de campo que combina observação com entrevista no mesmo momento, mais estruturada que observação tradicional. Desenvolvida por **Karen Holtzblatt** e **Hugh Beyer** quando trabalhavam na Digital Equipment Corporation (DEC) nos anos 80, formalizada no livro *Contextual Design: Defining Customer-Centered Systems* (Morgan Kaufmann, 1998, ISBN 978-1558604117). Holtzblatt e Beyer publicaram antes o artigo "Apprenticing with the Customer" em *Communications of the ACM*, volume 38, nº 5, maio de 1995, pp. 45-52, que apresenta o modelo conceitual.
+
+A metáfora central é **master-apprentice** (mestre-aprendiz). O analista vai até o local de trabalho do usuário e age como aprendiz: observa o usuário fazendo seu trabalho real e faz perguntas no momento ("o que você está fazendo agora? Por que dessa forma?"). Não é entrevista pura nem observação passiva — é uma terceira coisa.
+
+**Os 4 princípios do Contextual Inquiry** (Beyer & Holtzblatt 1998):
+
+1. **Contexto** — vá até o local real onde o trabalho acontece. Não traga o usuário pra sua sala.
+2. **Parceria** — você e o usuário descobrem juntos. Você não é especialista — você é aprendiz.
+3. **Interpretação** — durante a observação, articule sua interpretação ("então o que você está fazendo é..."). O usuário corrige na hora.
+4. **Foco** — tenha um objetivo claro de pesquisa, mas siga descobertas inesperadas que aparecem.
+
+**Quando usar**: design de produtos novos, redesign de interfaces, sistemas onde a experiência do usuário é crítica. É mais cara e demorada que entrevista — escolha quando o investimento se justifica.
+
+### 5. Análise de Documentos
+
+Antes de entrevistar pessoas, leia o que já existe. Documentos típicos:
+
+- **Manuais e procedimentos operacionais** — descrevem o trabalho "oficial" (lembre que o trabalho real pode divergir)
+- **Regulamentos internos** — políticas que o sistema precisa respeitar
+- **Legislação aplicável** — LGPD, marcos regulatórios setoriais, normas técnicas
+- **Formulários atuais** — capturam quais dados a organização considera relevantes
+- **Documentação do sistema legado** — diagramas, código antigo, manuais
+- **Relatórios de auditoria** — apontam onde existem problemas conhecidos
+- **Atas de reuniões** — decisões tomadas, conflitos passados
+- **Reclamações de usuários** — fonte rica e subutilizada de requisitos
+
+Para uma biblioteca: regulamento de empréstimo, política de aquisição de acervo, formulário de cadastro de leitor, manuais de catalogação (CDD ou CDU), relatórios anuais.
+
+**Vantagem**: não consome tempo de stakeholder. **Limitação**: documentos descrevem o "deveria ser", não o "é".
+
+### 6. Análise de Sistemas Existentes
+
+Se já existe um sistema fazendo (mal ou bem) o que o novo sistema vai fazer, ele é fonte rica. Vale analisar:
+
+- **Sistema atual da organização (legado)** — o que ele faz, o que falha, por que vai ser substituído
+- **Sistemas similares de concorrentes** — benchmarks
+- **Software comercial pronto** — features padrão da categoria
+
+Para biblioteca: o sistema atual da própria biblioteca (mesmo que seja planilha Excel), sistemas como Pergamum (SIGB — Sistema Integrado de Gerenciamento de Biblioteca — usado em muitas bibliotecas brasileiras), SophiA (outro SIGB comercial brasileiro), Koha (SIGB open source). Catálogos online de referência como o da Biblioteca Nacional dão ideia do que é esperado de um catálogo público. Cada sistema desses revela features padrão da categoria.
+
+**Cuidado**: copiar feature de sistema existente sem entender o porquê é forma sutil de **cargo cult** — você reproduz o ritual sem saber se faz sentido pro seu caso.
+
+### 7. Prototipação
+
+Construir uma representação parcial do sistema futuro e usar essa representação para descobrir requisitos. Funciona porque pessoas são muito melhores em reagir a algo concreto do que em imaginar o abstrato. "Você quer X?" produz resposta vaga; "Olha aqui, é assim que você usaria — funciona pra você?" produz resposta precisa.
+
+**Dois eixos importantes**:
+
+| Eixo | Opção A | Opção B |
+|---|---|---|
+| **Fidelidade** | **Low-fi** (papel, wireframes, sketches no Excalidraw) | **High-fi** (mockups clicáveis em Figma, mockups codados) |
+| **Destino** | **Throwaway** (descartável, só pra elicitar) | **Evolutionary** (vira o sistema final) |
+
+**Low-fi + throwaway** é a combinação mais barata e mais útil pra elicitar: desenhe a tela em papel, mostre pro usuário, pergunte "aqui você clica onde?". O fato de ser obviamente um rascunho convida críticas — usuários têm pudor de criticar mockup polido.
+
+**High-fi + evolutionary** é o oposto: caro, demorado, mas vira o produto. Usado quando os requisitos já estão razoavelmente claros e o protótipo serve mais pra validar do que pra descobrir.
+
+**Quando usar prototipação**: requisitos de interface, fluxos de uso, sistemas onde "como usar" importa tanto quanto "o que faz". Pra uma biblioteca, prototipar a tela de busca no catálogo e a tela de registro de empréstimo costuma render muitos requisitos não óbvios.
+
+### 8. Questionários e Surveys
+
+Quando o público é grande e disperso, entrevistas individuais são inviáveis. Um questionário bem feito atinge muita gente, gera dados quantitativos, permite comparações estatísticas.
+
+**Limitações sérias**:
+- Não captura conhecimento tácito (o respondente só responde o que você pergunta)
+- Taxa de resposta tipicamente baixa (10-30% sem incentivo)
+- Respostas superficiais (pessoas respondem rápido)
+- Viés de auto-seleção (quem responde tende a ter opiniões mais fortes)
+
+**Boas práticas**:
+- Poucas perguntas (ideal: 10 minutos máximo)
+- Mistura de fechadas (analítico) com 1 ou 2 abertas (qualitativo)
+- Pilote com 5 pessoas antes de enviar pra 500 — vai descobrir ambiguidades nas perguntas
+- Sempre ofereça o "outro / comentários" — captura o que você não previu
+
+Para biblioteca: questionário pra leitores cadastrados sobre satisfação com o acervo, preferências de gênero, sugestões de melhoria. Bom pra detectar padrões; ruim pra entender por quê.
+
+### 9. Brainstorming
+
+Técnica de **ideação** (geração de ideias, não validação) inventada pelo publicitário **Alex Osborn** e descrita em seu livro *Applied Imagination* (Charles Scribner's Sons, 1953). As regras originais de Osborn:
+
+1. **Suspender julgamento** — nada de "não vai funcionar" durante a sessão. Avaliação fica pra depois.
+2. **Quantidade gera qualidade** — produza muitas ideias. Ideias ruins ajudam a chegar nas boas.
+3. **Encorajar ideias selvagens** — é mais fácil domesticar uma ideia radical que radicalizar uma tímida.
+4. **Construir sobre ideias dos outros** — "isso me lembra de..." é melhor que "minha ideia é...".
+
+**Variantes úteis**:
+- **Brainwriting** — todos escrevem ideias em silêncio antes de discutir. Evita dominância verbal.
+- **6-3-5** — 6 pessoas, 3 ideias cada, em 5 minutos, depois passa o papel adiante para o próximo construir sobre as ideias.
+- **Reverso (anti-brainstorm)** — em vez de "como melhorar o sistema?", "como destruir o sistema?". Costuma gerar insights melhores porque é mais divertido.
+
+**Quando usar**: gerar opções de funcionalidades, identificar riscos, descobrir stakeholders esquecidos. **Não usar pra**: decidir entre opções (brainstorm não decide, só gera).
+
+### 10. Personas e Cenários
+
+Personas são representações arquetípicas de tipos de usuário. Não são usuários reais — são construções a partir de dados sobre usuários reais. A técnica foi popularizada por **Alan Cooper** no livro *The Inmates Are Running the Asylum: Why High Tech Products Drive Us Crazy and How to Restore the Sanity* (Sams Publishing, 1ª edição em 1999, ISBN 0672326140), no contexto da metodologia Goal-Directed Design.
+
+**Anatomia de uma persona** (para biblioteca):
+
+> **Joana Silva, 67 anos, aposentada**
+>
+> Frequenta a biblioteca duas vezes por semana há 30 anos. Lê 4-5 livros por mês, principalmente romance brasileiro e biografias. Tem dificuldade com tecnologia: usa WhatsApp e ligações no celular, evita aplicativos. Conhece todos os bibliotecários pelo nome. Frustração principal: o sistema atual de reserva online não funciona pra ela — sempre acaba pedindo ajuda no balcão.
+>
+> **Objetivos**: encontrar livros novos do seu gênero preferido, reservar sem depender de filho, manter contato pessoal com os bibliotecários.
+
+**Cenários** são narrativas concretas de como uma persona usa o sistema:
+
+> *Joana chega à biblioteca na quinta de manhã. Quer um romance brasileiro contemporâneo que ela ainda não leu. Aproxima-se de um terminal de auto-atendimento. O sistema...*
+
+A força das personas: **alinham a equipe inteira em torno de usuários específicos** em vez de "o usuário" abstrato. "Será que Joana conseguiria fazer isso?" produz decisões melhores que "será que o usuário conseguiria?".
+
+**Risco**: personas mal feitas, criadas sem dados reais (puro chute), viram caricaturas que confundem. Personas precisam de evidência empírica — vêm DE entrevistas e observação, não substituem essas técnicas.
+
+### 11. Análise Etnográfica e Estudos de Campo
+
+Já mencionei observação participante na técnica 3 e o trabalho de Sommerville et al. sobre controle de tráfego aéreo. Etnografia merece seção própria porque é a forma mais profunda e estendida dessa abordagem — também a mais cara.
+
+Etnografia vem da antropologia: estudar um grupo humano "de dentro", entendendo a cultura, os significados, as práticas. Aplicada a sistemas, descobre coisas que entrevista e observação curta não acessam:
+
+- **Práticas informais** — como as pessoas realmente fazem (não como dizem que fazem)
+- **Conhecimento distribuído** — como o conhecimento se espalha entre as pessoas
+- **Artefatos sociais** — objetos que carregam significado social (post-its na mesa, anotações na margem do livro de protocolo)
+- **Sequências situadas** — Lucy Suchman em *Plans and Situated Actions* (Cambridge University Press, 1987) argumentou que ação humana não segue planos abstratos, mas se adapta continuamente ao contexto
+
+**Quando usar**: sistemas para domínios complexos onde o trabalho tem muito conhecimento tácito, contextos críticos onde erro é caro (saúde, aviação, defesa), substituição de sistemas onde "sempre foi feito assim por uma razão".
+
+**Quando não usar**: projetos pequenos, prazos curtos, domínios bem documentados. Etnografia leva semanas no mínimo, frequentemente meses.
+
+## Comparando as técnicas
+
+Nenhuma técnica é universalmente melhor. Cada uma tem seu lugar. Esta matriz ajuda a escolher:
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Quando usar cada técnica</text>
+
+  <line x1="40" y1="60" x2="680" y2="60" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text fill="#fff" x="40" y="80" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Técnica</text>
+  <text fill="#fff" x="220" y="80" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Melhor para</text>
+  <text fill="#fff" x="490" y="80" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Custo</text>
+  <text fill="#fff" x="590" y="80" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Profundidade</text>
+  <line x1="40" y1="90" x2="680" y2="90" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.5" />
+
+  <text fill="#fff" x="40" y="110" fontFamily="ui-monospace, monospace" fontSize="10">Entrevista (semi)</text>
+  <text fill="#fff" x="220" y="110" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">primeiro contato, stakeholder específico</text>
+  <text fill="#fff" x="490" y="110" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixo</text>
+  <text fill="#fff" x="590" y="110" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">média</text>
+
+  <text fill="#fff" x="40" y="135" fontFamily="ui-monospace, monospace" fontSize="10">Workshop / JAD</text>
+  <text fill="#fff" x="220" y="135" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">decisão rápida, conflitos visíveis</text>
+  <text fill="#fff" x="490" y="135" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">alto</text>
+  <text fill="#fff" x="590" y="135" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">alta</text>
+
+  <text fill="#fff" x="40" y="160" fontFamily="ui-monospace, monospace" fontSize="10">Observação</text>
+  <text fill="#fff" x="220" y="160" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">descobrir trabalho real, tácito</text>
+  <text fill="#fff" x="490" y="160" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">médio</text>
+  <text fill="#fff" x="590" y="160" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">alta</text>
+
+  <text fill="#fff" x="40" y="185" fontFamily="ui-monospace, monospace" fontSize="10">Contextual Inquiry</text>
+  <text fill="#fff" x="220" y="185" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">UX, design de produto novo</text>
+  <text fill="#fff" x="490" y="185" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">médio-alto</text>
+  <text fill="#fff" x="590" y="185" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">muito alta</text>
+
+  <text fill="#fff" x="40" y="210" fontFamily="ui-monospace, monospace" fontSize="10">Análise de documentos</text>
+  <text fill="#fff" x="220" y="210" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">contexto regulatório, processos formais</text>
+  <text fill="#fff" x="490" y="210" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixo</text>
+  <text fill="#fff" x="590" y="210" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixa-média</text>
+
+  <text fill="#fff" x="40" y="235" fontFamily="ui-monospace, monospace" fontSize="10">Análise de sistemas</text>
+  <text fill="#fff" x="220" y="235" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">benchmark, substituição de legado</text>
+  <text fill="#fff" x="490" y="235" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">médio</text>
+  <text fill="#fff" x="590" y="235" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">média</text>
+
+  <text fill="#fff" x="40" y="260" fontFamily="ui-monospace, monospace" fontSize="10">Prototipação</text>
+  <text fill="#fff" x="220" y="260" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">interface, fluxos, validar concretamente</text>
+  <text fill="#fff" x="490" y="260" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixo-médio</text>
+  <text fill="#fff" x="590" y="260" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">média-alta</text>
+
+  <text fill="#fff" x="40" y="285" fontFamily="ui-monospace, monospace" fontSize="10">Questionário</text>
+  <text fill="#fff" x="220" y="285" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">muitos stakeholders, dados quantitativos</text>
+  <text fill="#fff" x="490" y="285" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixo</text>
+  <text fill="#fff" x="590" y="285" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixa</text>
+
+  <text fill="#fff" x="40" y="310" fontFamily="ui-monospace, monospace" fontSize="10">Brainstorming</text>
+  <text fill="#fff" x="220" y="310" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">ideação, opções, riscos</text>
+  <text fill="#fff" x="490" y="310" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixo</text>
+  <text fill="#fff" x="590" y="310" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">baixa</text>
+
+  <text fill="#fff" x="40" y="335" fontFamily="ui-monospace, monospace" fontSize="10">Personas / Cenários</text>
+  <text fill="#fff" x="220" y="335" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">alinhamento, comunicação com não-técnicos</text>
+  <text fill="#fff" x="490" y="335" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">médio</text>
+  <text fill="#fff" x="590" y="335" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">média</text>
+
+  <text fill="#fff" x="40" y="360" fontFamily="ui-monospace, monospace" fontSize="10">Etnografia</text>
+  <text fill="#fff" x="220" y="360" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">domínio complexo, sistemas críticos</text>
+  <text fill="#fff" x="490" y="360" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">muito alto</text>
+  <text fill="#fff" x="590" y="360" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">muito alta</text>
+
+  <line x1="40" y1="380" x2="680" y2="380" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+
+  <text fill="#fff" x="40" y="410" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Triangulação:</text>
+  <text fill="#fff" x="40" y="430" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Use múltiplas técnicas para o mesmo tópico — informação consistente entre fontes</text>
+  <text fill="#fff" x="40" y="445" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">diferentes é mais confiável. Entrevista + observação + documentos é combinação clássica.</text>
+</svg>
+
+## Erros comuns na Elicitação
+
+Vários erros aparecem repetidamente em projetos reais. Vale conhecer pra evitar:
+
+**1. Aceitar a primeira resposta sem perguntar "por quê?"** O stakeholder diz "preciso de relatório semanal de empréstimos". Você anota "RF-12: relatório semanal de empréstimos". Erro. Pergunte: por que semanal? O que faz com esse relatório? Que decisão depende dele? Geralmente descobre que o real é diferente: ele precisa identificar livros com alta rotatividade pra comprar mais exemplares, e isso pode ser uma notificação automática, não relatório semanal.
+
+**2. Falar só com decisores, não com usuários.** O diretor da biblioteca tem uma visão estratégica do sistema — mas não usa diariamente. Quem usa é o bibliotecário de balcão. Falar só com diretor produz sistema bonito que ninguém usa (visto na Lição 1).
+
+**3. Confundir entrevistar muitos com elicitar bem.** Entrevistar 30 pessoas pelas mesmas perguntas é estatística, não elicitação. Melhor 8 pessoas com semi-estruturada profunda do que 30 com survey raso.
+
+**4. Não confirmar o que foi entendido.** Você sai da entrevista com 20 páginas de notas e sua interpretação. Sem confirmar com o entrevistado, sua interpretação pode estar errada e você não vai descobrir até a entrega. **Reenvie o resumo escrito e peça correção.** Custo pequeno, ganho enorme.
+
+**5. Não documentar contradições.** Diretor diz X, bibliotecário diz não-X. A tentação é decidir "X está certo" e seguir. Errado. Documente: "Diretor: X. Bibliotecário: não-X. A definir." Leve pra negociação na fase de análise.
+
+**6. Viés do entrevistador.** Você já tem uma ideia do sistema. Suas perguntas vão filtrar pra confirmar essa ideia, e você vai ouvir o que confirma. **Convide alguém junto** — uma segunda pessoa anotando captura coisas que você descartou inconscientemente.
+
+**7. Misturar elicitação com solução.** O entrevistado pergunta "isso é possível?" e você responde "sim, podemos fazer assim assim". Você acabou de fechar opções de design antes de entender o problema. Anote a pergunta, devolva "vamos descobrir; primeiro me ajuda a entender..."
+
+**8. Ignorar quem fala pouco.** O participante quieto frequentemente tem o insight mais valioso — só não tem o estilo verbal de impor a fala. Em workshops, técnicas como brainwriting ou rodada estruturada de fala dão voz a todos.
+
+<Aviso>
+Elicitação é trabalho com pessoas. Soft skills importam tanto quanto técnica. Escuta ativa, paciência com silêncios, evitar julgamento, saber separar opinião do entrevistador de fato, manter empatia mesmo quando o stakeholder está agressivo ou disperso — tudo isso afeta a qualidade do que você descobre. Os melhores analistas de requisitos não são necessariamente os mais técnicos; frequentemente são os que ouvem melhor.
+</Aviso>
+
+## Documentando o que foi elicitado
+
+Elicitação **não é especificação** — isso é a Lição 5. Mas você precisa documentar o que descobriu pra não perder a informação. Boas práticas:
+
+- **Diário de elicitação** — registro cronológico de quem foi consultado, quando, sobre o quê, o que disse. Inestimável quando aparece a pergunta "de onde veio esse requisito?"
+- **Notas estruturadas** — não transcrições brutas. Organize por tópico. Marque o que é fato confirmado, opinião, hipótese, conflito.
+- **Gravações com permissão** — ajudam revisão, mas precisam consentimento LGPD e dão muito trabalho pra revisitar.
+- **Modelos preliminares** — rich pictures (desenhos de mundo de Peter Checkland, Soft Systems Methodology, 1981), use cases iniciais (cobertos na Lição 5), diagramas de fluxo informal.
+- **Lista de questões em aberto** — coisas que ficaram por confirmar. Mantenha visível pra não esquecer.
+
+A elicitação produz **matéria-prima**. Análise, classificação e especificação (Lições 4 e 5) transformam essa matéria-prima em requisitos verificáveis.
+
+## Aplicação no sistema de biblioteca
+
+Vamos juntar tudo num plano realista de elicitação pra um sistema de biblioteca municipal de médio porte (digamos, 15 mil exemplares, 5 mil leitores cadastrados, 4 bibliotecários):
+
+**Semana 1 — Preparação e análise de documentos**:
+- Conseguir e ler: regulamento de empréstimo, política de aquisição, formulários de cadastro, manuais de catalogação, atas de reuniões dos últimos 6 meses, qualquer documentação de sistema legado.
+- Identificar stakeholders: diretor, 4 bibliotecários, leitores frequentes (pedir indicações ao diretor), leitores ocasionais, segurança, limpeza, Secretaria Municipal de Cultura, fornecedores de livros, ANPD (LGPD).
+- Estudar 2 ou 3 sistemas similares: Pergamum, SophiA, Koha. Anotar features comuns e diferenças.
+
+**Semana 2 — Entrevistas individuais**:
+- Diretor (visão estratégica, restrições orçamentárias, prazos)
+- 2 bibliotecários (dia-a-dia, irritações com sistema atual)
+- 3 leitores frequentes e 2 ocasionais
+- Pessoa responsável pela manutenção/TI
+
+**Semana 3 — Observação no balcão**:
+- 2 manhãs e 1 tarde no balcão de empréstimo
+- Observar especialmente os "casos exceção" (livro não encontrado, leitor com pendência, sistema lento)
+
+**Semana 4 — Workshop colaborativo**:
+- 1 dia inteiro com diretor + bibliotecários + 2 leitores representativos
+- Discutir contradições encontradas, priorizar funcionalidades, criar personas
+
+**Semana 5 — Prototipação e validação**:
+- Mockups em papel das 5 telas principais (busca, empréstimo, devolução, reserva, cadastro de leitor)
+- Sessões de validação individual com 5 usuários (Jakob Nielsen, no artigo "Why You Only Need to Test with 5 Users" de 2000, mostrou que cerca de 5 usuários revelam ~85% dos problemas — vale especificamente pra teste de usabilidade de protótipo, não pra elicitação inicial, que precisa de amostra maior e mais diversa)
+- Iterar mockups
+
+**Semana 6 — Consolidação**:
+- Compilar achados em documento de elicitação (não especificação ainda)
+- Lista de questões em aberto
+- Reunião de fechamento com sponsor pra alinhamento
+
+Esse plano é **proporcional** ao tamanho do sistema. Pra um sistema corporativo grande, multiplicaria por 3 ou 4. Pra um app simples, comprimiria para 1-2 semanas.
+
+## Aplicação no Carbon Credit Compensation Platform
+
+No contexto do seu projeto Fatec, com prazos curtos e stakeholders hipotéticos, uma elicitação realista seria assim:
+
+**Stakeholders simulados** (identificar com o grupo Bruno + Murilo + Fabiano + Pedro Chaves):
+- Sponsor hipotético: empresa fictícia exigida pelo enunciado
+- Operador: persona "João, analista de sustentabilidade"
+- Auditor: persona "Maria, contadora especialista em ESG"
+- Reguladores brasileiros: Ministério do Meio Ambiente e Mudança do Clima (responsável pelo Sistema Brasileiro de Comércio de Emissões — SBCE), IBAMA (fiscalização), CVM (a Lei 15.042/2024 alterou a Lei da CVM para regular ativos de carbono como valores mobiliários). ANPD (LGPD) entra apenas se houver tratamento de dados pessoais — não é regulador específico do mercado de carbono.
+
+**Análise de documentos reais que sustentam o domínio**:
+- **Lei 15.042, de 11 de dezembro de 2024** — marco regulatório principal: institui o Sistema Brasileiro de Comércio de Emissões de Gases de Efeito Estufa (SBCE). Mercado regulado para empresas que emitem mais de 25 mil toneladas de CO₂ equivalente por ano.
+- Decreto 11.075/2022 — antecessor que estabeleceu o sistema nacional de redução de emissões de gases de efeito estufa (substituído em parte pela Lei 15.042/2024).
+- GHG Protocol (versão atual do Corporate Standard)
+- Programa Brasileiro GHG Protocol (FGV)
+- Padrões internacionais: VCS (Verra), Gold Standard
+
+**Entrevistas hipotéticas estruturadas**: cada membro do grupo entrevista os outros assumindo personas diferentes. Não é ideal, mas força o exercício de pensar do ponto de vista do stakeholder.
+
+**Prototipação em baixa fidelidade**: 3 ou 4 telas principais desenhadas no Excalidraw — cadastro de emissão, cadastro de crédito, compensação, dashboard de saldo. Mostrar pra colegas de outras turmas que não conhecem o projeto: o que entendem? Conseguem usar?
+
+**Documentação do que foi elicitado**: planilha simples com fonte, achado, evidência. Vai virar input pra L4 (análise) e L5 (especificação SRS).
+
+A elicitação acadêmica não substitui a real, mas o exercício de **pensar como elicitador** é o que importa. Quando você entrar na empresa, vai aplicar o mesmo raciocínio com stakeholders de verdade.
+
+## Resumo visual
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text fill="#fff" x="360" y="25" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Elicitação de Requisitos — Mapa Mental</text>
+
+  <ellipse cx="360" cy="200" rx="100" ry="40" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="360" y="197" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Elicitação</text>
+  <text fill="#fff" x="360" y="215" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">trazer requisitos à tona</text>
+
+  <rect x="30" y="60" width="170" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="115" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Conversacionais</text>
+  <text fill="#fff" x="115" y="97" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Entrevistas · Workshops</text>
+  <text fill="#fff" x="115" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">JAD · Brainstorming</text>
+
+  <rect x="520" y="60" width="170" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="605" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Observacionais</text>
+  <text fill="#fff" x="605" y="97" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Observação · Etnografia</text>
+  <text fill="#fff" x="605" y="108" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Contextual Inquiry</text>
+
+  <rect x="30" y="290" width="170" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="115" y="310" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Analíticas</text>
+  <text fill="#fff" x="115" y="327" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Análise de docs</text>
+  <text fill="#fff" x="115" y="338" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Sistemas existentes</text>
+
+  <rect x="520" y="290" width="170" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="605" y="310" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Sintetizadoras</text>
+  <text fill="#fff" x="605" y="327" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Prototipação</text>
+  <text fill="#fff" x="605" y="338" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Personas · Cenários</text>
+
+  <line x1="200" y1="90" x2="265" y2="180" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="520" y1="90" x2="455" y2="180" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="200" y1="315" x2="265" y2="225" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="520" y1="315" x2="455" y2="225" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+
+  <rect x="240" y="370" width="240" height="40" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="388" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Triangulação</text>
+  <text fill="#fff" x="360" y="402" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">combinar técnicas para validação cruzada</text>
+
+  <line x1="360" y1="240" x2="360" y2="365" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="4,3" strokeOpacity="0.5" />
+</svg>
+
+## Próximos passos
+
+Esta lição cobriu o **como** descobrir requisitos. A próxima vai aprofundar uma vertical específica e crítica:
+
+| Lição | Tema |
+|---|---|
+| L1 | Introdução à Engenharia de Requisitos |
+| **L2 (esta)** | Elicitação de Requisitos |
+| **L3 (próxima)** | Levantamento de Requisitos de Domínio — DDD Knowledge Crunching (Eric Evans), Event Storming (Alberto Brandolini), Domain Storytelling (Hofer & Schwentner). Foco em descobrir o **modelo de domínio**, não apenas funcionalidades. |
+| L4 | Análise e Classificação (FURPS+, MoSCoW, ISO 25010) |
+| L5 | Especificação e Documentação (SRS, IEEE 29148, Volere) |
+| L6 | Validação, Verificação e Gestão |
+| L7 | Requisitos Ágeis |
+
+A Lição 3 vai conectar elicitação com modelagem de domínio — preparando o terreno pra Trilha B (UML 2.0).
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- IIBA — International Institute of Business Analysis. *BABOK Guide v3* (2015). Knowledge Area "Elicitation and Collaboration" (cap 4), com 5 tarefas: Prepare for Elicitation, Conduct Elicitation, Confirm Elicitation Results, Communicate Business Analysis Information, Manage Stakeholder Collaboration.
+- Sommerville, Ian. *Software Engineering*, 10ª edição. Pearson, 2015, ISBN 978-0133943030. Capítulo 4 cobre técnicas de elicitação.
+- Wiegers, Karl E.; Beatty, Joy. *Software Requirements*, 3ª edição. Microsoft Press, agosto de 2013, ISBN 978-0735679665. Capítulos 7 a 9 cobrem elicitação em profundidade.
+- Robertson, Suzanne; Robertson, James. *Mastering the Requirements Process*, 3ª edição, Addison-Wesley, 2012, ISBN 0-321-81574-2. Quarta edição com Adrian Reed publicada em setembro de 2024. Origem do Volere Template.
+- Polanyi, Michael. *The Tacit Dimension*. Routledge & Kegan Paul, 1966. Origem do conceito de conhecimento tácito.
+- Suchman, Lucy. *Plans and Situated Actions: The Problem of Human-Machine Communication*. Cambridge University Press, 1987. Trabalho seminal sobre ação situada vs planos abstratos.
+- Sommerville, Ian; Bentley, Richard; Rodden, Tom; Sawyer, Pete; Hughes, John; Shapiro, Dan; Randall, Dave. "Ethnographically-informed systems design for air traffic control". Proceedings of CSCW'92 — Computer Supported Cooperative Work Conference, Toronto, novembro de 1992, ACM Press. Trabalho seminal sobre etnografia em RE.
+- Beyer, Hugh; Holtzblatt, Karen. *Contextual Design: Defining Customer-Centered Systems*. Morgan Kaufmann, 1998, ISBN 978-1558604117. Livro de referência para Contextual Inquiry.
+- Beyer, Hugh R.; Holtzblatt, Karen. "Apprenticing with the Customer". *Communications of the ACM*, vol. 38, nº 5, maio de 1995, pp. 45-52. Artigo seminal sobre o modelo mestre-aprendiz em pesquisa de campo.
+- Cooper, Alan. *The Inmates Are Running the Asylum: Why High Tech Products Drive Us Crazy and How to Restore the Sanity*. Sams Publishing, 1ª edição, 1999. Introdução pública do conceito de personas.
+- Osborn, Alex F. *Applied Imagination: Principles and Procedures of Creative Thinking*. Charles Scribner's Sons, 1953. Origem das regras do brainstorming.
+- Morris, Chuck; Crawford, Tony. Joint Application Design (JAD), desenvolvido na IBM (Raleigh e Toronto) entre 1977 e 1980. Sistematizado posteriormente em Wood, Jane; Silver, Denise. *Joint Application Development*, John Wiley & Sons, 1989.
+- Checkland, Peter. *Systems Thinking, Systems Practice*. John Wiley & Sons, 1981. Origem da Soft Systems Methodology e técnica de Rich Pictures.
+
+**Observações sobre fontes**:
+
+- A história precisa do JAD tem variações entre fontes. O crédito mais consensual é a Chuck Morris e Tony Crawford da IBM, no período 1977-1980, embora alguns trabalhos (Arnie Lind, IBM Canada, 1974) sejam precursores. O termo "Joint Application Development" (com D de Development) é usado intercambiavelmente com "Joint Application Design".
+- BABOK v3 está vigente desde abril de 2015. IIBA anunciou intenção de v4 em 2023, mas a v4 ainda não foi publicada. Consulte iiba.org para a versão atual.
+- A IREB (International Requirements Engineering Board, fundada em 2006 na Alemanha) mantém a certificação CPRE; após a fusão com REQB em 18 de janeiro de 2017, a CPRE é a certificação canônica internacional para Engenharia de Requisitos.

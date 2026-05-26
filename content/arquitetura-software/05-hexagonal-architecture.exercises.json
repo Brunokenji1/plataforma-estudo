@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a motivação original que Alistair Cockburn deu pra Hexagonal Architecture no paper de 2005?",
+      "opcoes": [
+        "Permitir que microservices se comuniquem via REST sem acoplamento",
+        "Permitir que a aplicação seja dirigida igualmente por usuários, programas, testes automatizados ou batch, e desenvolvida e testada em isolamento dos dispositivos e bancos de produção",
+        "Substituir layered architecture por uma estrutura mais visual",
+        "Forçar separação entre frontend, backend e banco de dados em camadas distintas"
+      ],
+      "correta": 1,
+      "explicacao": "Citação literal do abstract de Cockburn em 'Hexagonal Architecture' (HaT Technical Report 2005.02, 4 de setembro de 2005, alistair.cockburn.us/hexagonal-architecture): 'Allow an application to equally be driven by users, programs, automated test or batch scripts, and to be developed and tested in isolation from its eventual run-time devices and databases.' Dois pontos cruciais: (1) o 'equally' (igualmente) — todas as formas de dirigir a aplicação são cidadãos de mesmo status, sem hierarquia entre 'principal' e 'auxiliar'; (2) o 'isolation' (isolamento) — você consegue rodar testes do domínio inteiro sem subir banco, framework ou UI. As outras opções confundem com motivações modernas (microservices é dos anos 2010) ou descrições genéricas de layered architecture."
+    },
+    {
+      "id": "ex2",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Alistair Cockburn renomeou Hexagonal Architecture para 'Ports and Adapters' em 2005, porque o número seis de lados era arbitrário e gerava confusão.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Em 2005, Cockburn renomeou o padrão para 'Ports and Adapters' justamente porque o nome 'Hexagonal' fazia pessoas perguntarem 'por que seis lados?' — e a resposta é puramente histórica/estética: o desenho fica simétrico na lousa, mas não há nada de especial em ser seis. Cockburn mesmo deixa isso claro no paper. O nome 'Hexagonal' pegou na comunidade e ainda é mais usado, mas o nome técnico oficial é 'Ports and Adapters'. Confirmado pela Wikipedia, AWS Prescriptive Guidance e múltiplas fontes de documentação."
+    },
+    {
+      "id": "ex3",
+      "tipo": "multipla-escolha",
+      "pergunta": "Em Hexagonal Architecture, onde os Ports (interfaces) devem ser definidos?",
+      "opcoes": [
+        "Na camada de infraestrutura, ao lado das implementações",
+        "No domínio — é o domínio quem decide o que ele precisa do mundo externo",
+        "Numa biblioteca separada compartilhada entre múltiplos microservices",
+        "Na camada de application services, junto com os casos de uso"
+      ],
+      "correta": 1,
+      "explicacao": "Ports SÃO definidos pelo domínio. Essa é a aplicação direta do princípio de Inversão de Dependência (o 'D' do SOLID) como princípio arquitetural: o domínio diz 'preciso de algo que faça X' através de uma interface; a infraestrutura adapta sua implementação ao contrato do domínio, não o contrário. Se a sua interface RepositorioCompensacoes mora num pacote 'infrastructure/', você está com a hierarquia invertida — a infraestrutura passa a ditar o que o domínio pode pedir. Steven Stuart cita isso como o anti-pattern do 'falso hexágono': usar dependency injection com interfaces de repository na infra e achar que isso é Hexagonal. Não é."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre Driving Adapters (Primary) e Driven Adapters (Secondary)?",
+      "opcoes": [
+        "Driving são síncronos e Driven são assíncronos",
+        "Driving são pra produção e Driven são pra testes",
+        "Driving chamam o domínio através dos ports (fluxo entra); Driven são chamados pelo domínio através dos ports (fluxo sai)",
+        "Driving usam REST e Driven usam JDBC"
+      ],
+      "correta": 2,
+      "explicacao": "A distinção está em quem inicia a conversa, não em tecnologia. Driving adapters (primary, esquerda do hexágono): mundo externo → adapter → port → domínio. Exemplos: REST controller, CLI, test driver, consumer Kafka. Driven adapters (secondary, direita): domínio → port → adapter → mundo externo. Exemplos: implementação JPA do repository, producer Kafka, cliente HTTP de API externa, repositório in-memory pra testes. Cockburn (2005) relaciona isso aos conceitos de 'primary actors' e 'secondary actors' dos Use Cases: primary actor é quem dirige a aplicação, secondary actor é quem é dirigido por ela. Em ambos os casos, a DEPENDÊNCIA DE CÓDIGO aponta pra dentro: o adapter depende do port; o port é definido pelo domínio."
+    },
+    {
+      "id": "ex5",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Em Hexagonal Architecture aplicada com Spring Boot, o domínio (entidades, use cases, ports) deve ser livre de anotações Spring como @Entity, @Service e @Repository.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Spring Boot não é o centro da arquitetura — Spring Boot é uma plataforma de adapters. Anotar agregados de domínio com @Entity (do JPA) acopla seu domínio a uma especificação de persistência, quebrando o isolamento que Hexagonal busca. O padrão correto: domínio puro em pacote `dominio/` (sem Spring no classpath, idealmente), adapters com Spring em `adapter/driving/` (REST controllers com @RestController) e `adapter/driven/` (JPA repositories com @Repository implementando os ports do domínio), e wiring em `config/`. Você consegue rodar testes do domínio inteiro sem subir ApplicationContext. Anti-pattern comum em projetos Java: misturar @Entity JPA com modelagem DDD pura — o resultado é um domínio refém do framework."
+    },
+    {
+      "id": "ex6",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a relação histórica e conceitual entre Hexagonal Architecture, Onion Architecture e Clean Architecture?",
+      "opcoes": [
+        "Clean Architecture (2012) substituiu Hexagonal (2005) e Onion (2008), tornando-as obsoletas",
+        "São três arquiteturas completamente independentes, sem relação histórica",
+        "Hexagonal (Cockburn 2005), Onion (Palermo 2008) e Clean (Martin 2012) são três formulações da mesma ideia central: domínio no centro, infraestrutura na borda, dependências apontando pra dentro",
+        "Hexagonal é pra microservices, Onion é pra monólitos, Clean é pra serverless"
+      ],
+      "correta": 2,
+      "explicacao": "Cronologia confirmada: Cockburn publicou Hexagonal em 4 de setembro de 2005; Jeffrey Palermo publicou Onion Architecture em 2008 (jeffreypalermo.com); Robert C. Martin (Uncle Bob) publicou 'The Clean Architecture' em 13 de agosto de 2012 no blog 8thlight (hoje em blog.cleancoder.com). Uncle Bob explicitamente cita Hexagonal e Onion como influências no seu post original — Clean Architecture é uma síntese consolidada dessas ideias com a 'Dependency Rule' formalizada. As três convergem em quatro princípios: (1) domínio no centro, (2) dependências apontam pra dentro, (3) Inversão de Dependência para isolar o domínio, (4) UI/banco/mensageria são detalhes. As diferenças entre elas são mais didáticas do que técnicas."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a 'pergunta-teste' útil pra saber se um sistema realmente é hexagonal, ou só usa dependency injection genérico?",
+      "opcoes": [
+        "Tenho mais de 10 interfaces no projeto?",
+        "Uso Spring Boot com @Autowired em todos os componentes?",
+        "Consigo rodar o domínio inteiro sem Spring no classpath e sem nenhum mock de framework?",
+        "Tenho uma pasta chamada 'hexagonal' no projeto?"
+      ],
+      "correta": 2,
+      "explicacao": "Hexagonal Architecture exige isolamento real do domínio em relação a frameworks e infraestrutura. A pergunta-teste prática: 'consigo compilar e rodar testes da pasta dominio/ sem nenhuma dependência de Spring, JDBC, Kafka ou qualquer infraestrutura?' Se sim, é hexagonal. Se não — se você precisa subir ApplicationContext, mockear @Entity, ou importar artefatos de framework pra rodar testes do domínio — é layered architecture com aparência hexagonal. Cockburn (2005) é explícito sobre 'isolation' como meta. Steven Stuart e Herberto Graça discutem esse anti-pattern: muitos times usam DI e interfaces de repository e chamam de Hexagonal, mas mantêm acoplamento com framework no domínio."
+    },
+    {
+      "id": "ex8",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Os Repositories que Eric Evans descreve no DDD são tecnicamente um tipo de Secondary Port em Hexagonal Architecture.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Um Repository DDD é exatamente uma interface definida no domínio que abstrai persistência, com implementação na infraestrutura — essa é a definição precisa de Secondary Port (Driven Port) em Hexagonal. Vaughn Vernon, em 'Implementing Domain-Driven Design' (2013, capítulo de arquitetura), discute Hexagonal aplicada a DDD mostrando que Aggregates, Domain Services e Repositories DDD se encaixam naturalmente como cidadãos do hexágono: agregados ficam no centro, repositories são secondary ports, application services com use cases são primary ports. Por isso DDD e Hexagonal combinam tão bem — eles foram desenhados independentemente em 2003 e 2005, mas convergem em princípios. A linguagem é diferente (DDD fala 'Repository', Hexagonal fala 'Secondary Port'), o conceito é o mesmo."
+    },
+    {
+      "id": "ex9",
+      "tipo": "multipla-escolha",
+      "pergunta": "No Carbon Credit Platform, o time decide que o adapter de persistência será in-memory durante o desenvolvimento e JPA/Postgres em produção. Como Hexagonal facilita essa transição?",
+      "opcoes": [
+        "Não facilita — é preciso reescrever o domínio para suportar ambas as opções",
+        "Você troca apenas a implementação do RepositorioCompensacoes (driven adapter) no wiring (BeansConfig); o domínio inteiro fica intacto",
+        "É preciso adicionar uma camada extra de abstração entre o domínio e cada repository",
+        "Spring Boot resolve isso automaticamente sem necessidade de Hexagonal"
+      ],
+      "correta": 1,
+      "explicacao": "Essa é a vantagem prática mais palpável de Hexagonal: a tecnologia de persistência é detalhe, e detalhes ficam na borda. Como o RepositorioCompensacoes é um secondary port definido no domínio (interface), as implementações concretas (RepositorioCompensacoesEmMemoria, RepositorioCompensacoesJPA) são intercambiáveis. No Spring, basta usar @Profile diferenciado no @Bean da config: @Profile('dev') retorna a in-memory, @Profile('prod') retorna a JPA. O domínio nunca é tocado — não há nem recompilação necessária da pasta dominio/. A opção C confunde com over-engineering; a D ignora que Spring por si só não força a separação, é a estrutura arquitetural que faz."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Steven Stuart descreve um anti-pattern comum em projetos Java que dizem usar Hexagonal. Qual?",
+      "opcoes": [
+        "Não usar Spring Boot, optando por frameworks mais leves",
+        "Ter repository interfaces e dependency injection, mas tratar UI como 'principal' e banco como 'auxiliar' — mantendo a mentalidade de layered architecture",
+        "Usar pacotes Java em vez de módulos Maven separados",
+        "Escrever testes integrados em vez de testes unitários"
+      ],
+      "correta": 1,
+      "explicacao": "Steven Stuart (dev.to/stevenstuartm) descreve esse anti-pattern: times que têm repository interfaces e dependency injection acham que estão usando Hexagonal, mas quando você examina a estrutura, a UI é tratada como 'principal' (ponto de entrada privilegiado) e banco/mensageria como 'auxiliares'. Isso é apenas layered architecture moderna com DI — não é Hexagonal. Hexagonal exige tratamento SIMÉTRICO: REST endpoint, CLI tool, teste automatizado e batch script são todos formas legítimas de dirigir a aplicação, em pé de igualdade. Se você não consegue substituir o REST controller por um JUnit test driver sem alterar nada além de wiring, ainda não é hexagonal. As outras opções confundem com decisões técnicas que são ortogonais ao padrão arquitetural."
+    }
+  ]
+}

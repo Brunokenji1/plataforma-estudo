@@ -1,0 +1,523 @@
+---
+titulo: "Índices: Como Bancos Encontram Linhas em Milissegundos"
+trilha: "banco-de-dados"
+duracaoMin: 75
+dificuldade: "intermediario"
+referencias:
+  - "Rudolf Bayer, Edward M. McCreight (1970), 'Organization and Maintenance of Large Ordered Indices', SIGFIDET '70 — paper fundador do B-tree, escrito no Boeing Scientific Research Laboratories"
+  - "Bayer & McCreight (1972), publicação na Acta Informatica Vol 1, pp 173-189"
+  - "John Hopcroft (1970) — 2-3 tree, predecessor conceitual do B-tree"
+  - "Douglas Comer (1979), 'The Ubiquitous B-Tree', ACM Computing Surveys 11(2), pp 121-137 — survey clássico"
+  - "Patricia Selinger et al. (1979), 'Access Path Selection in a Relational Database Management System', SIGMOD — primeiro otimizador baseado em custo"
+  - "Hellerstein, Naughton, Pfeffer (1995), 'Generalized Search Trees for Database Systems', VLDB — paper fundador do GiST"
+  - "PostgreSQL Documentation — Indexes: https://www.postgresql.org/docs/current/indexes.html"
+  - "MySQL 8.0 Reference Manual — Optimization and Indexes"
+  - "Markus Winand, 'Use the Index, Luke!' — https://use-the-index-luke.com (livro online completo)"
+  - "Stanford CS 245 — Index lectures"
+---
+
+## Por que aprender índices muda sua produtividade
+
+Você tem uma tabela `Pedido` com **10 milhões de linhas**. Quer encontrar o pedido com `id = 7891234`.
+
+**Sem índice**: o banco lê a tabela **linha por linha**, do começo ao fim, comparando cada `id` até achar (ou esgotar). Em média, 5 milhões de comparações. Numa tabela razoável, isso pode demorar **vários segundos** — eternidade pra um endpoint REST.
+
+**Com índice em `id`**: o banco vai direto pra posição da linha em **3 a 4 acessos**. Tempo total: **menos de 1 milissegundo**.
+
+**Diferença**: 5 milhões de operações vs 4. Ordens de magnitude. Em sistemas reais, é **a diferença entre um endpoint que responde em 50ms e outro que dá timeout**.
+
+Essa lição cobre:
+
+1. **Como o banco busca sem índice** — table scan
+2. **B-tree** — o índice default, como funciona e quando usar
+3. **Hash index** — caso específico
+4. **BRIN, GIN, GiST** — índices especializados do PostgreSQL
+5. **EXPLAIN ANALYZE** — vendo o que o otimizador faz de verdade
+6. **Índices compostos** — ordem das colunas importa MUITO
+7. **Quando NÃO criar índice** — trade-offs reais
+8. **Covering index e index-only scan**
+9. **Partial index** — indexar só parte da tabela
+
+No fim, você consegue **debugar uma query lenta** olhando o `EXPLAIN ANALYZE`, e sabe quando criar índice vs quando isso só piora as coisas.
+
+---
+
+## A história: como B-trees salvaram os bancos de dados
+
+Em **julho de 1970**, dois pesquisadores no **Boeing Scientific Research Laboratories** publicaram o paper **"Organization and Maintenance of Large Ordered Indices"** no workshop SIGFIDET. Eram **Rudolf Bayer** (alemão, matemático que veio pros EUA) e **Edward M. McCreight**. O paper foi republicado em **Acta Informatica** em 1972 (Vol. 1, pp. 173-189) e virou a base de **todo índice de banco de dados moderno**.
+
+A estrutura proposta — o **B-tree** — resolve um problema concreto da época: indexar dados que **não cabem na memória** e precisam ficar em disco (na época, drums e discos magnéticos lentos). Eles assumiram desde o início que **só pedaços pequenos do índice cabem em RAM**, e otimizaram pra **minimizar leituras de disco** — exatamente o problema central que ainda existe hoje.
+
+Curiosidades:
+
+- **O que significa o "B" em B-tree?** Bayer e McCreight **nunca revelaram explicitamente**. Sugestões: Boeing (onde trabalhavam), Balanced, Bayer (sobrenome), Broad, Between, Bushy. Quando perguntado anos depois, McCreight respondeu: "Bayer e eu estávamos no almoço pensando num nome. Trabalhávamos pra Boeing na época, não podíamos usar o nome sem falar com advogados. Então tem um B."
+- **B-tree gerealiza o 2-3 tree** de **John Hopcroft (1970)** — Hopcroft veio antes
+- **McCreight também co-criou o Xerox Alto** (PARC) e a estrutura **suffix tree**
+- **Douglas Comer** publicou em 1979 o survey "The Ubiquitous B-Tree" — confirmando que **virtualmente todo SGBD usa B-trees** pra índices primários
+
+Hoje, **B+tree** (variante do B-tree onde dados só ficam nas folhas) é o padrão em PostgreSQL, MySQL/InnoDB, Oracle, SQL Server. **Todo `CREATE INDEX` sem especificar tipo cria um B-tree**.
+
+---
+
+## Como o banco busca SEM índice: Sequential Scan
+
+Antes de entender índices, entenda o que eles **substituem**.
+
+**Sequential Scan** (também chamado **table scan** ou **full scan**): o banco lê **todas as páginas de disco da tabela**, do início ao fim, aplicando o filtro a cada linha.
+
+Custo: **proporcional ao tamanho da tabela**, O(N).
+
+Pra tabelas pequenas (< 1000 linhas), sequential scan é **mais rápido** que usar índice (overhead de ler páginas do índice + páginas da tabela não compensa). Por isso, **o otimizador às vezes ignora seu índice de propósito** em tabelas pequenas — é a decisão correta.
+
+Pra tabelas grandes, sequential scan é desastroso. **10 milhões de linhas? Vários segundos.** É aí que índices entram.
+
+---
+
+## B-tree: a árvore que governa o mundo
+
+**B-tree** = árvore balanceada onde cada nó pode ter **muitos filhos** (não só 2 como em árvore binária). A "ordem" do B-tree (tipicamente 100-200 em SGBDs reais) define o **fator de ramificação**.
+
+<svg width="100%" viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Estrutura conceitual de um B-tree</title>
+<desc>Árvore com nó raiz contendo 3 chaves separadoras e 4 nós filhos. Cada folha contém múltiplas chaves ordenadas. Ilustra como o B-tree desce de root até folha em poucos acessos.</desc>
+
+<rect x="280" y="30" width="200" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="305" y="60" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold">25</text>
+<text x="355" y="60" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold">50</text>
+<text x="405" y="60" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold">75</text>
+<text x="455" y="60" fontFamily="monospace" fontSize="11" fill="#888888">raiz</text>
+
+<line x1="320" y1="80" x2="100" y2="170" stroke="#7F77DD" strokeWidth="1.5"/>
+<line x1="360" y1="80" x2="290" y2="170" stroke="#7F77DD" strokeWidth="1.5"/>
+<line x1="400" y1="80" x2="480" y2="170" stroke="#7F77DD" strokeWidth="1.5"/>
+<line x1="440" y1="80" x2="660" y2="170" stroke="#7F77DD" strokeWidth="1.5"/>
+
+<rect x="40" y="170" width="160" height="50" fill="#222222" stroke="#7F77DD" strokeWidth="2"/>
+<text x="55" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">5</text>
+<text x="85" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">10</text>
+<text x="120" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">15</text>
+<text x="160" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">20</text>
+
+<rect x="220" y="170" width="160" height="50" fill="#222222" stroke="#7F77DD" strokeWidth="2"/>
+<text x="235" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">28</text>
+<text x="265" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">33</text>
+<text x="300" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">40</text>
+<text x="340" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">47</text>
+
+<rect x="400" y="170" width="160" height="50" fill="#222222" stroke="#7F77DD" strokeWidth="2"/>
+<text x="415" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">53</text>
+<text x="445" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">61</text>
+<text x="480" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">68</text>
+<text x="520" y="200" fontFamily="monospace" fontSize="13" fill="#cccccc">72</text>
+
+<rect x="580" y="170" width="160" height="50" fill="#FF8C42" fillOpacity="0.4" stroke="#FF8C42" strokeWidth="2"/>
+<text x="595" y="200" fontFamily="monospace" fontSize="13" fill="#ffffff">78</text>
+<text x="625" y="200" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold">85</text>
+<text x="660" y="200" fontFamily="monospace" fontSize="13" fill="#ffffff">90</text>
+<text x="700" y="200" fontFamily="monospace" fontSize="13" fill="#ffffff">98</text>
+
+<text x="455" y="262" fontFamily="sans-serif" fontSize="12" fill="#888888">↓ ponteiros para páginas de dados da tabela</text>
+
+<line x1="625" y1="220" x2="625" y2="280" stroke="#FF8C42" strokeWidth="2" markerEnd="url(#arr)"/>
+
+<rect x="555" y="290" width="140" height="40" fill="#1a1a1a" stroke="#FF8C42" strokeWidth="1.5"/>
+<text x="625" y="315" fontFamily="monospace" fontSize="12" fill="#FF8C42" textAnchor="middle">Linha id=85</text>
+
+<defs>
+<marker id="arr" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto">
+<path d="M0,0 L0,6 L9,3 z" fill="#FF8C42"/>
+</marker>
+</defs>
+
+<text x="40" y="30" fontFamily="sans-serif" fontSize="14" fill="#cccccc" fontWeight="bold">Busca por id = 85</text>
+
+<text x="40" y="345" fontFamily="sans-serif" fontSize="11" fill="#888888">Passo 1: raiz → "85 > 75, vai pro 4º filho"</text>
+<text x="305" y="345" fontFamily="sans-serif" fontSize="11" fill="#888888">Passo 2: folha → encontra 85</text>
+<text x="540" y="345" fontFamily="sans-serif" fontSize="11" fill="#888888">Passo 3: ponteiro → linha real</text>
+</svg>
+
+### Como a busca funciona
+
+Procurando `id = 85` no diagrama acima:
+
+1. **Acessa a raiz**. Compara 85 com 25, 50, 75. Como 85 > 75, desce pra **4º filho**.
+2. **Acessa o nó folha** [78, 85, 90, 98]. Encontra **85**.
+3. **Segue o ponteiro** pra página real da tabela. Carrega a linha completa.
+
+**Total: 3 acessos**, mesmo que a tabela tenha **milhões de linhas**.
+
+Generalizando: pra **N linhas** e fator de ramificação **k**, a altura do B-tree é **log_k(N)**. Com k=100 e N=10⁶, altura ≈ 3. Com N=10⁹, altura ≈ 4-5. **Praticamente constante** mesmo pra bancos gigantes.
+
+### B-tree vs B+tree
+
+O que SGBDs reais usam é **B+tree** — variante onde **dados (ou ponteiros pra dados) ficam APENAS nas folhas**, e as folhas formam uma **lista ligada**. Vantagens:
+
+1. **Range queries eficientes** — pode varrer folhas em ordem sem voltar pra raiz
+2. **Mais entradas por página interna** (não precisa armazenar valores, só chaves separadoras)
+3. **Altura menor** → menos I/O
+
+PostgreSQL, MySQL/InnoDB, Oracle e SQL Server **todos usam B+tree** internamente (mesmo que o nome do tipo no SQL seja "B-tree").
+
+### Quando o B-tree é usado
+
+PostgreSQL usa B-tree pra qualquer query com estes operadores:
+
+- `=`, `<`, `<=`, `>`, `>=`, `<>`
+- `BETWEEN`, `IN`
+- `IS NULL`, `IS NOT NULL`
+- `LIKE 'prefixo%'` (apenas se NÃO começar com curinga)
+
+**Não usa B-tree pra**:
+
+- `LIKE '%fim'` ou `LIKE '%meio%'` (curinga no início bloqueia)
+- Função sobre a coluna: `WHERE UPPER(nome) = 'BRUNO'` (a menos que tenha **functional index** específico)
+- Cast implícito que mude o tipo
+
+### Criando B-tree na prática
+
+```sql
+-- Sintaxe básica (B-tree é default)
+CREATE INDEX idx_aluno_email ON Aluno (email);
+
+-- Explícito
+CREATE INDEX idx_aluno_curso ON Aluno USING BTREE (curso);
+
+-- Único — impede duplicatas
+CREATE UNIQUE INDEX idx_aluno_cpf ON Aluno (cpf);
+
+-- Ordem específica (default ASC)
+CREATE INDEX idx_pedido_data ON Pedido (data_pedido DESC);
+
+-- Multi-coluna (índice composto, importante!)
+CREATE INDEX idx_aluno_curso_semestre ON Aluno (curso, semestre);
+
+-- Em expressão (functional index)
+CREATE INDEX idx_aluno_email_lower ON Aluno (LOWER(email));
+-- Agora 'WHERE LOWER(email) = ...' usa esse índice
+
+-- Removendo
+DROP INDEX idx_aluno_email;
+```
+
+---
+
+## Índices compostos: ordem importa MUITO
+
+Quando o índice tem múltiplas colunas, a **ordem que você declara** afeta drasticamente quais queries vão usá-lo.
+
+```sql
+CREATE INDEX idx_curso_semestre ON Aluno (curso, semestre);
+```
+
+Esse índice serve pra queries em:
+
+| Query | Usa o índice? |
+|---|---|
+| `WHERE curso = 'ADS'` | **Sim** (prefixo) |
+| `WHERE curso = 'ADS' AND semestre = 4` | **Sim** (cobertura total) |
+| `WHERE semestre = 4` | **Não** (semestre sozinho, não é prefixo) |
+| `WHERE curso = 'ADS' AND nome = 'Bruno'` | **Sim**, mas só pra `curso` (filtra resto na tabela) |
+
+**Regra**: índice composto serve pra queries que filtram pelas **colunas mais à esquerda** primeiro. Pensa como uma "lista telefônica": ordenada por sobrenome, depois nome. Pra achar "Silva, Bruno" é rápido. Pra achar "Bruno, qualquer sobrenome" você teria que varrer tudo.
+
+### Como ordenar as colunas
+
+Heurísticas:
+
+1. **Igualdade primeiro, range depois**: `WHERE curso = 'ADS' AND semestre > 4` → criar `(curso, semestre)`. O igual filtra mais rápido
+2. **Maior seletividade primeiro**: coluna que reduz mais linhas no filtro vai antes. Ex: `cpf` (único) reduz a 1 linha, melhor que `cidade` (milhares)
+3. **Combinar com `ORDER BY`**: se a query é `WHERE x = ? ORDER BY y`, criar `(x, y)` permite o banco usar o índice pra ordenação também
+
+---
+
+## Hash Index: simples mas limitado
+
+**Hash index**: aplica função hash na coluna, armazena `(hash, ponteiro_da_linha)` numa estrutura de dicionário.
+
+**Vantagem**: lookup `=` é O(1).
+
+**Desvantagens**:
+- **Só funciona pra igualdade** (`=`). Não serve pra `<`, `>`, range, `LIKE`, `ORDER BY`
+- **Não suporta índice composto** em PostgreSQL
+- **Antes de PG 10, não era WAL-logged** — não sobrevivia a crash, não replicava. Hoje OK
+
+**Conclusão**: na prática, **use B-tree por padrão**. Hash só vale em cenários muito específicos onde você tem certeza que **apenas equality queries** vão rodar e a coluna tem valores grandes (strings longas, UUIDs). Em PostgreSQL atual, B-tree em coluna pequena costuma ser tão rápido quanto hash, com mais flexibilidade.
+
+```sql
+CREATE INDEX idx_aluno_email_hash ON Aluno USING HASH (email);
+```
+
+---
+
+## GIN: o índice pra arrays, JSON e full-text
+
+**GIN** = **Generalized Inverted Index**. Pensa nele como o índice de um livro: pra cada **valor**, mantém uma lista de **linhas onde aparece**.
+
+Usado pra colunas que contêm **múltiplos valores**:
+
+- **Arrays**: `WHERE tags @> ARRAY['java']`
+- **JSONB**: `WHERE prefs @> '{"tema": "dark"}'`
+- **Full-text search**: `WHERE tsv @@ to_tsquery('relacional')`
+
+```sql
+-- Indexar coluna JSONB inteira (suporta @>, ?, ?|, ?&)
+CREATE INDEX idx_config_prefs ON Configuracao USING GIN (prefs);
+
+-- Indexar arrays
+CREATE INDEX idx_produto_tags ON Produto USING GIN (tags);
+
+-- Full-text search (com coluna tsvector)
+CREATE INDEX idx_artigo_busca ON Artigo USING GIN (to_tsvector('portuguese', titulo || ' ' || corpo));
+```
+
+**Trade-off**: GIN é **maior** e **mais lento pra escrever** que B-tree, mas **muito mais rápido** pra esse tipo específico de query. Se a coluna não vai ser filtrada por `@>`, `?` ou similar, não vale.
+
+---
+
+## GiST: a base de PostGIS e tipos customizados
+
+**GiST** = **Generalized Search Tree**. Estrutura **extensível** — você pode definir índice pra **qualquer tipo de dado** desde que defina certas operações. Paper fundador: **Hellerstein, Naughton, Pfeffer (1995)**, VLDB.
+
+Usado principalmente pra:
+
+- **Dados geométricos** (`point`, `box`, `polygon`) — base do **PostGIS** (extensão de geo)
+- **Range types** (`int4range`, `tstzrange`) — intervalos de números, datas, timestamps
+- **Full-text search** (alternativa ao GIN, com trade-offs diferentes)
+
+```sql
+-- Indexar localização de lojas (extensão PostGIS)
+CREATE INDEX idx_loja_localizacao ON Loja USING GIST (localizacao);
+-- Agora dá pra fazer "lojas dentro de 5km de um ponto" rápido
+
+-- Indexar disponibilidade de aluguel (range)
+CREATE INDEX idx_aluguel_periodo ON Aluguel USING GIST (periodo_disponivel);
+-- Agora 'WHERE periodo && tstzrange(...)' é rápido
+```
+
+GiST é **menor que GIN** e geralmente **mais rápido pra escrever**, mas **mais lento em lookup**. Pra full-text com atualizações frequentes, GiST é melhor; pra full-text mais estático, GIN.
+
+---
+
+## BRIN: pra tabelas enormes naturalmente ordenadas
+
+**BRIN** = **Block Range INdex**. Em vez de indexar cada linha, indexa **blocos físicos** da tabela, armazenando o **mínimo e máximo** de cada bloco.
+
+Caso ideal: **time-series** ou **logs** — dados inseridos em ordem cronológica que crescem indefinidamente.
+
+```sql
+-- Tabela de logs com 100 milhões de linhas, inseridas em ordem cronológica
+CREATE INDEX idx_log_data ON Log USING BRIN (criado_em);
+```
+
+**Vantagens**:
+- **Índice minúsculo** — pode ser 1000x menor que B-tree equivalente
+- **Inserção quase grátis** — só atualiza mínimos/máximos do bloco atual
+- **Manutenção barata**
+
+**Desvantagem**:
+- **Só funciona se os dados estão fisicamente ordenados** pela coluna indexada (ou quase). Se você inserir aleatoriamente, BRIN fica inútil
+- **Não tão rápido quanto B-tree** pra queries específicas — devolve "candidatos" que precisam ser refilters
+
+Pra um log de 100GB indexado por timestamp, BRIN cabe em **alguns MB**, enquanto B-tree teria **vários GB** e custaria caro pra manter.
+
+---
+
+## Trade-off central: índices têm CUSTO
+
+O hype do "criou índice = ficou rápido" esconde o trade-off real:
+
+| Operação | Sem índice | Com índice |
+|---|---|---|
+| **SELECT** (filtrado) | Lento (table scan) | **Rápido** (index seek) |
+| **INSERT** | Rápido | **Mais lento** (atualiza o índice) |
+| **UPDATE** (em coluna indexada) | Rápido | **Mais lento** (atualiza o índice) |
+| **DELETE** | Rápido | **Mais lento** (atualiza o índice) |
+| **Disco usado** | Só a tabela | Tabela + cada índice |
+
+Cada índice é uma **estrutura adicional** que o banco mantém. Em tabelas com muita escrita, **índices demais matam performance de INSERT/UPDATE**.
+
+**Regra prática** pra decidir se cria índice:
+
+1. **A query é frequente**? (sai em todo endpoint, dashboard, batch)
+2. **A query roda em volume grande de dados**? (filtra entre milhares/milhões de linhas)
+3. **A query é lenta sem índice**? (medido com `EXPLAIN ANALYZE`)
+4. **A coluna tem boa seletividade**? (muitos valores distintos. Indexar `genero` com 2 valores quase nunca ajuda)
+5. **A tabela tem muito mais leitura que escrita**? (caso típico de aplicação corporativa)
+
+Se a resposta é sim pra todas, cria índice. Se é não pra alguma, pensa duas vezes.
+
+<Insight>
+**Sintoma clássico**: aplicação Spring Boot rodando perfeito em dev (1000 linhas), em produção (10 milhões) endpoint demora 30 segundos. **Provavelmente é falta de índice**. Solução: `EXPLAIN ANALYZE` na query problemática, identifica o `Seq Scan`, cria o índice apropriado. **Resolveu 80% dos problemas de performance que vi em empresas**. O outro 20% são N+1 queries do Hibernate (próxima lição).
+</Insight>
+
+---
+
+## EXPLAIN ANALYZE: vendo o plano de execução
+
+`EXPLAIN ANALYZE` é a ferramenta **mais importante** pra otimização. Mostra **o plano real** que o banco usa pra executar a query, incluindo tempo de cada etapa.
+
+### Sintaxe básica
+
+```sql
+EXPLAIN ANALYZE
+SELECT * FROM Aluno WHERE email = 'bruno@email.com';
+```
+
+### Saída típica (PostgreSQL)
+
+```
+Seq Scan on Aluno  (cost=0.00..1845.00 rows=1 width=78)
+                    (actual time=12.456..89.123 rows=1 loops=1)
+  Filter: (email = 'bruno@email.com'::text)
+  Rows Removed by Filter: 99999
+Planning Time: 0.123 ms
+Execution Time: 89.250 ms
+```
+
+Lendo:
+
+- **`Seq Scan on Aluno`** — sequential scan, leu a tabela inteira. **Sinal de alerta** em tabelas grandes
+- **`cost=0.00..1845.00`** — estimativa de custo (escala arbitrária do otimizador)
+- **`rows=1`** — estimativa de linhas; **`actual time=12.456..89.123`** — tempo real (start..end)
+- **`Rows Removed by Filter: 99999`** — leu 100k linhas pra retornar 1. Provavelmente devia ter índice
+- **`Execution Time: 89.250 ms`** — total
+
+Depois de criar índice em `email`:
+
+```sql
+CREATE INDEX idx_aluno_email ON Aluno (email);
+EXPLAIN ANALYZE SELECT * FROM Aluno WHERE email = 'bruno@email.com';
+```
+
+Saída:
+
+```
+Index Scan using idx_aluno_email on Aluno  (cost=0.42..8.44 rows=1 width=78)
+                                            (actual time=0.045..0.046 rows=1 loops=1)
+  Index Cond: (email = 'bruno@email.com'::text)
+Planning Time: 0.187 ms
+Execution Time: 0.078 ms
+```
+
+- **`Index Scan`** — usou o índice ✓
+- **`Execution Time: 0.078 ms`** — **1000x mais rápido**
+
+### Tipos de Scan em PostgreSQL
+
+| Tipo | Significa |
+|---|---|
+| **Seq Scan** | Lê toda a tabela. Sem índice ou tabela pequena |
+| **Index Scan** | Usa índice + acessa tabela pra cada match (pega outras colunas) |
+| **Index Only Scan** | Tudo que a query precisa está NO índice — não toca na tabela. **Mais rápido** |
+| **Bitmap Index Scan + Bitmap Heap Scan** | Pra muitas linhas; constrói bitmap, depois lê páginas em ordem |
+| **Nested Loop** | Junção: pra cada linha de A, busca em B |
+| **Hash Join** | Junção: monta hash table de uma tabela, varre a outra |
+| **Merge Join** | Junção: ambas ordenadas, varre as duas em paralelo |
+
+### Lendo planos complexos
+
+Plano é uma **árvore lida de baixo pra cima** — as folhas executam primeiro, sobem. Tempo de cada nó inclui filhos.
+
+```
+Nested Loop  (actual time=0.123..15.456 rows=42)
+  ->  Index Scan using idx_aluno_id  (actual time=0.045..0.123 rows=1)
+        Index Cond: (id = 5)
+  ->  Index Scan using idx_matricula_aluno_id  (actual time=0.034..0.234 rows=42)
+        Index Cond: (aluno_id = 5)
+```
+
+Lê: "executa o Index Scan no Aluno (1 linha), pra cada linha resultante, executa Index Scan na Matricula (42 linhas), junta no Nested Loop".
+
+---
+
+## Covering Index e Index-Only Scan
+
+**Index-only scan** é o tipo mais rápido — o banco **não precisa nem tocar na tabela**, todos os dados que a query precisa estão no índice.
+
+Pra acontecer, o índice tem que **cobrir** todas as colunas do `SELECT`. Pode-se forçar com `INCLUDE`:
+
+```sql
+-- Sem INCLUDE: índice só indexa, query precisa ler tabela pra pegar 'nome'
+CREATE INDEX idx_aluno_curso ON Aluno (curso);
+SELECT nome FROM Aluno WHERE curso = 'ADS';   -- Index Scan + acesso à tabela
+
+-- Com INCLUDE: nome vira "payload" do índice (PostgreSQL 11+, SQL Server)
+CREATE INDEX idx_aluno_curso_inc ON Aluno (curso) INCLUDE (nome);
+SELECT nome FROM Aluno WHERE curso = 'ADS';   -- Index Only Scan, sem tocar na tabela
+```
+
+`INCLUDE` adiciona colunas ao índice **sem** torná-las parte da chave de busca (mais leve que adicionar como coluna do índice composto).
+
+Quando vale a pena: queries muito frequentes em endpoints críticos, com poucas colunas no SELECT. Para `SELECT *`, geralmente não vale (índice ficaria gigante).
+
+---
+
+## Partial Index: indexar só parte da tabela
+
+**Partial index**: índice com cláusula `WHERE` — indexa apenas linhas que satisfazem a condição.
+
+```sql
+-- Indexar só pedidos não-pagos (geralmente uma minoria, mas consultada muito)
+CREATE INDEX idx_pedido_pendente
+ON Pedido (data_criacao)
+WHERE status = 'PENDENTE';
+
+-- Indexar só usuários ativos
+CREATE INDEX idx_usuario_ativo_email
+ON Usuario (email)
+WHERE deletado_em IS NULL;
+```
+
+**Vantagens**:
+- **Menor que índice completo** (menos linhas indexadas)
+- **Mais rápido de manter** (não atualiza pra linhas excluídas)
+- **Mais rápido pra usar** (menor profundidade)
+
+**Cuidado**: a query precisa **incluir o mesmo WHERE** do índice pra que o otimizador o use:
+
+```sql
+-- USA o partial index
+SELECT * FROM Pedido WHERE status = 'PENDENTE' AND data_criacao > '2026-01-01';
+
+-- NÃO USA (sem a condição status)
+SELECT * FROM Pedido WHERE data_criacao > '2026-01-01';
+```
+
+Caso clássico: em uma tabela de 100M de pedidos onde 99% já foram pagos, o índice completo sobre `data_criacao` filtraria pouco. O **partial index** apenas dos pendentes pode ter só **centenas de milhares** de entradas — ordens de magnitude mais rápido pra a query típica.
+
+---
+
+## Recap
+
+**B-tree** é o índice default em todo SGBD relacional moderno — PostgreSQL, MySQL/InnoDB, Oracle, SQL Server. Inventado por **Rudolf Bayer** e **Edward M. McCreight** em **1970** no **Boeing Scientific Research Laboratories**, paper *"Organization and Maintenance of Large Ordered Indices"*. Significado do "B" deixado deliberadamente ambíguo. Hoje, todos usam variante **B+tree** (dados só nas folhas, folhas em lista ligada). Altura praticamente constante mesmo pra bancos enormes (log_k(N)). Cobre queries com `=`, `<`, `<=`, `>`, `>=`, `BETWEEN`, `IN`, `IS NULL`, e `LIKE 'prefixo%'`.
+
+**Sequential Scan** é o que o banco faz **sem índice** — lê tabela inteira. Aceitável em tabelas pequenas (otimizador às vezes escolhe propositalmente), desastroso em grandes.
+
+**Tipos de índice em PostgreSQL**:
+- **B-tree** — default, equality + range
+- **Hash** — só `=`, raramente vale a pena
+- **GIN** — arrays, JSONB, full-text (`@>`, `?`, `@@`)
+- **GiST** — extensível, dados geométricos, range types, PostGIS
+- **BRIN** — tabelas enormes naturalmente ordenadas (time-series, logs). Índice minúsculo
+- **SP-GiST** — particionamento espacial específico (IP addresses, quadtrees)
+
+**Índice composto**: ordem das colunas é **decisiva**. Serve queries que filtram pelas colunas **mais à esquerda primeiro**. Heurística: **igualdade antes de range**, **maior seletividade primeiro**.
+
+**Trade-off central**: índice acelera SELECT, **desacelera INSERT/UPDATE/DELETE** e consome disco. Vale a pena quando: query é frequente, tabela é grande, coluna tem boa seletividade, leitura >> escrita.
+
+**`EXPLAIN ANALYZE`** é a ferramenta mais importante de otimização. Mostra o plano real com tempo. **Seq Scan em tabela grande = alerta**. **Index Only Scan = ideal**. Plano lê de baixo pra cima.
+
+**Covering Index** (`INCLUDE`): adicionar colunas ao índice pra permitir **Index-Only Scan** sem tocar na tabela. Útil em queries muito frequentes com poucas colunas no SELECT.
+
+**Partial Index** (`WHERE`): indexar só parte da tabela. Útil quando uma fração pequena é consultada com frequência (pedidos pendentes, usuários ativos). Query precisa incluir o mesmo `WHERE` do índice pra usá-lo.
+
+**Em Spring Boot**: definir índice via JPA com `@Index(name = "...", columnList = "...")` em `@Table(indexes = {...})`. Mas pra índices complexos (composto, partial, GIN), prefira criar via migration manual (Flyway, Liquibase) — JPA não cobre todos os casos.
+
+Próximas lições da trilha:
+
+- **Transações e ACID** — isolation levels, MVCC (PostgreSQL), locking, deadlock detection
+- **Modelagem prática** — modelar do zero um sistema usando brModelo/dbdiagram.io
+- **JPA/Hibernate** — `@Entity`, `@OneToMany`, lazy/eager, N+1 problem
+- **Performance avançada** — query rewriting, particionamento, replicação
+
+Manda qual quer.

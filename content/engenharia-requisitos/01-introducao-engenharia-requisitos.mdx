@@ -1,0 +1,506 @@
+---
+titulo: "Introdução à Engenharia de Requisitos"
+descricao: "O que é Engenharia de Requisitos, por que ela existe, quem participa, como o processo funciona. Bases conceituais sólidas antes de entrar nas técnicas específicas das lições seguintes."
+---
+
+Engenharia de Requisitos (RE — *Requirements Engineering*) é a disciplina que se ocupa de **descobrir, documentar, validar e gerenciar o que um sistema de software precisa fazer**. É a primeira fase de qualquer projeto de software bem feito, e estudos independentes apontam requisitos mal levantados como uma das principais causas raiz de retrabalho e falha de projetos — não por falta de capacidade técnica, mas por **construir a coisa errada**.
+
+Essa é a observação central da disciplina: construir software certo é difícil; construir o software **certo** (o que o cliente realmente precisa) é mais difícil ainda. Engenharia de Requisitos existe pra resolver essa segunda parte.
+
+<Insight>
+Pensa numa obra. Antes de levantar paredes, alguém faz a planta da casa. A planta não é a casa — é uma especificação que o engenheiro civil, o pedreiro e o futuro morador conseguem ler e validar. Se a planta tem uma escada que não chega ao segundo andar, descobrir e corrigir no papel custa um lápis e uma borracha. Descobrir depois que a casa está construída custa demolir e refazer. Engenharia de Requisitos é o equivalente da planta — só que para software.
+</Insight>
+
+## O que é um Requisito
+
+Antes de definir Engenharia de Requisitos, precisamos definir requisito. A norma internacional **ISO/IEC/IEEE 29148:2018** (Systems and software engineering — Life cycle processes — Requirements engineering), cláusula 3.1.19, define um requisito como uma declaração que traduz ou expressa uma necessidade e suas restrições e condições associadas. A norma acrescenta em nota: requisitos existem em diferentes níveis na estrutura do sistema, sempre se relacionam a um sistema, software, serviço ou item de interesse, e são expressos de forma específica, precisa e verificável.
+
+Em linguagem mais simples, um requisito é uma **afirmação verificável sobre o que o sistema deve fazer ou como ele deve ser**. Exemplos para um sistema de biblioteca:
+
+- "O sistema deve permitir que o bibliotecário cadastre um livro informando título, autor, ISBN, ano de publicação e editora."
+- "O tempo de resposta da busca no catálogo de livros não deve ultrapassar 2 segundos para 95% das requisições, considerando carga de até 100 usuários simultâneos."
+- "O sistema deve estar disponível 24 horas por dia, 7 dias por semana, com tempo total de indisponibilidade não superior a 8 horas/ano."
+
+Repara que cada requisito é **verificável**: você consegue construir um teste pra confirmar se ele foi atendido ou não. Esse é o critério mais importante. Frases como "o sistema deve ser fácil de usar" ou "o sistema deve ser rápido" **não atendem ao critério de um bom requisito** — são desejos vagos. Você precisa traduzir desejo em requisito verificável: "fácil de usar" pode virar "um bibliotecário sem treinamento prévio deve conseguir registrar um empréstimo em menos de 1 minuto em 90% das tentativas".
+
+### Necessidade, Funcionalidade e Requisito
+
+Três termos que parecem sinônimos mas têm significados distintos. Imagine que você está conversando com a diretora da biblioteca municipal:
+
+- **Necessidade (need)** — o problema do stakeholder, sem solução proposta. "Preciso saber quais livros estão atrasados pra cobrar os usuários e recuperar o acervo."
+- **Funcionalidade (feature)** — uma capacidade do sistema que atende uma necessidade. "Relatório de empréstimos em atraso."
+- **Requisito (requirement)** — declaração específica e verificável sobre o que o sistema deve fazer ou ser. "O sistema deve gerar um relatório listando todos os empréstimos com data de devolução vencida há mais de 1 dia, mostrando livro, usuário, telefone de contato, dias de atraso e multa calculada, com filtros por período."
+
+Engenharia de Requisitos faz a tradução: descobre necessidades, propõe funcionalidades, e converte em requisitos. Esse trabalho é menos óbvio do que parece — o stakeholder geralmente expressa a solução ("preciso de um relatório") em vez do problema ("preciso recuperar livros atrasados"), e isso esconde possíveis soluções melhores. No caso da biblioteca, o real problema talvez fosse melhor resolvido por um sistema de notificações automáticas que avisa o usuário antes do vencimento — eliminando a necessidade do relatório.
+
+## Por que Engenharia de Requisitos importa
+
+Vou apresentar dois conceitos que são **frequentemente citados** na área, mas com a honestidade necessária sobre suas limitações.
+
+### O custo de mudança (Boehm, 1981)
+
+Barry Boehm publicou no livro *Software Engineering Economics* (Prentice Hall, 1981) uma análise de dados coletados em projetos waterfall na TRW e IBM nos anos 70. Os dados (originalmente apresentados em artigo IEEE de 1976) mostraram que **o custo de corrigir um defeito de requisito cresce drasticamente conforme você avança nas fases do projeto**.
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-curva" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.85" />
+    </marker>
+  </defs>
+
+  <line x1="80" y1="320" x2="680" y2="320" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.6" markerEnd="url(#seta-curva)" />
+  <line x1="80" y1="320" x2="80" y2="40" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.6" markerEnd="url(#seta-curva)" />
+
+  <text fill="#fff" x="700" y="325" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85">fase</text>
+  <text fill="#fff" x="40" y="40" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85">custo</text>
+
+  <path d="M 130 300 Q 250 295 320 280 Q 400 250 480 190 Q 560 120 640 60" stroke="currentColor" strokeWidth="2.5" fill="none" />
+
+  <circle cx="130" cy="300" r="5" fill="currentColor" />
+  <text fill="#fff" x="130" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Requisitos</text>
+  <text fill="#fff" x="130" y="290" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">1x</text>
+
+  <circle cx="240" cy="288" r="5" fill="currentColor" />
+  <text fill="#fff" x="240" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Design</text>
+  <text fill="#fff" x="240" y="278" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">~3-5x</text>
+
+  <circle cx="350" cy="260" r="5" fill="currentColor" />
+  <text fill="#fff" x="350" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Codificação</text>
+  <text fill="#fff" x="350" y="250" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">~10x</text>
+
+  <circle cx="460" cy="210" r="5" fill="currentColor" />
+  <text fill="#fff" x="460" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Testes</text>
+  <text fill="#fff" x="460" y="200" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">~15-40x</text>
+
+  <circle cx="580" cy="120" r="5" fill="currentColor" />
+  <text fill="#fff" x="580" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Aceite</text>
+  <text fill="#fff" x="580" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">~30-70x</text>
+
+  <circle cx="640" cy="60" r="6" fill="currentColor" />
+  <text fill="#fff" x="650" y="345" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Produção</text>
+  <text fill="#fff" x="640" y="50" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600">~50-150x</text>
+
+  <text fill="#fff" x="380" y="20" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Curva de Custo de Mudança (Boehm, 1981)</text>
+</svg>
+
+Em **grandes projetos waterfall mal gerenciados** (que era o contexto dos dados originais — sistemas corporativos e governamentais dos anos 70, incluindo TRW, IBM, GTE e o programa Bell Labs Safeguard), corrigir um defeito de requisito em produção custava até 100 vezes mais do que corrigir na fase de levantamento. Em projetos pequenos, a relação é mais perto de 4:1.
+
+**Honestidade epistêmica importante**: essa curva é frequentemente citada de forma absoluta, como se "1x→10x→100x" fosse lei universal. Não é. O próprio Boehm, em correspondência posterior com Jim Highsmith, esclareceu que em projetos bem geridos com gestão de risco e atenção à arquitetura, o crescimento fica entre 20:1 e 40:1, e em projetos ágeis pequenos modernos é muito menor. Kent Beck argumentou no XP (Extreme Programming) que a curva poderia ser **achatada** com práticas ágeis adequadas, e há evidências de que isso é possível.
+
+O que **continua válido**: encontrar problemas cedo é sempre mais barato do que encontrar tarde. Os números exatos variam — mas o princípio é robusto.
+
+### Estatísticas de falha de projeto
+
+Outra referência famosa é o **CHAOS Report** do Standish Group, publicado pela primeira vez em 1994. A edição original reportou que apenas 16,2% dos projetos de software foram concluídos com sucesso (dentro do prazo, dentro do orçamento, com todas as funcionalidades), enquanto 31,1% foram cancelados e 52,7% foram "challenged" (entregues com problemas de prazo, custo ou escopo).
+
+**Atenção crítica**: o CHAOS Report é amplamente contestado academicamente. Robert Glass publicou crítica detalhada em *Communications of the ACM* em agosto de 2006, e Magne Jørgensen e Kjetil Moløkken-Østvold publicaram artigo em 2006 questionando a validade científica dos dados. Os principais problemas:
+
+- Metodologia da pesquisa nunca foi totalmente divulgada
+- Standish Group nunca respondeu publicamente às críticas
+- Khaled El Emam e A. Günes Koru, em "A Replicated Survey of IT Software Project Failures" (*IEEE Software*, vol. 25, nº 5, set/out 2008, pp. 84-90), conduziram surveys globais em 2005 e 2007 e encontraram que a taxa combinada de projetos cancelados + entregues com problemas ficou **entre 26% e 34%** — alta, mas substancialmente menor do que os ~84% sugeridos pelo CHAOS. Os autores concluíram que, embora a taxa total de falha permaneça preocupante para uma disciplina aplicada, a noção de "crise do software" estaria exagerada.
+
+O Standish Group descontinuou o CHAOS Report em 2020 — a edição de 2020 foi a última. Hoje, os números frequentemente citados ("maioria dos projetos falha") são considerados exagerados pela academia.
+
+**O que ainda vale**: independente de números exatos, é fato observado e medido por estudos independentes que **requisitos mal levantados são a principal causa raiz** de retrabalho e falha de projeto. O CHAOS Report identificou três fatores principais de sucesso (envolvimento do usuário, apoio executivo, requisitos claros) e três de falha (requisitos incompletos, falta de envolvimento do usuário, mudança constante de requisitos) — esses padrões são consistentes em todas as pesquisas, mesmo com metodologias diferentes.
+
+## O que Engenharia de Requisitos faz
+
+A norma ISO/IEC/IEEE 29148:2018 e o capítulo 4 do *Software Engineering* de Ian Sommerville (10ª edição, Pearson, 2015) descrevem Engenharia de Requisitos como um processo com cinco atividades principais. Não são fases rígidas — elas se sobrepõem e iteram. Mas são as atividades distintas que precisam acontecer pra ter um produto de requisitos confiável:
+
+<svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-re" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.85" />
+    </marker>
+  </defs>
+
+  <circle cx="120" cy="100" r="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="120" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Elicitação</text>
+  <text fill="#fff" x="120" y="113" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">descobrir</text>
+
+  <circle cx="295" cy="100" r="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="295" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Análise</text>
+  <text fill="#fff" x="295" y="113" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">entender</text>
+
+  <circle cx="470" cy="100" r="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="470" y="92" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Especificação</text>
+  <text fill="#fff" x="470" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">documentar</text>
+
+  <circle cx="645" cy="100" r="55" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="645" y="92" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Validação</text>
+  <text fill="#fff" x="645" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">verificar</text>
+
+  <path d="M 175 100 L 240 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-re)" />
+  <path d="M 350 100 L 415 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-re)" />
+  <path d="M 525 100 L 590 100" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-re)" />
+
+  <path d="M 645 155 Q 645 220 380 220 Q 120 220 120 155" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="6,4" strokeOpacity="0.6" markerEnd="url(#seta-re)" />
+  <text fill="#fff" x="380" y="240" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">iteração contínua — descobertas em qualquer fase voltam à elicitação</text>
+
+  <rect x="60" y="270" width="600" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <text fill="#fff" x="80" y="293" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Gestão de Requisitos</text>
+  <text fill="#fff" x="80" y="311" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">atravessa todo o processo — rastreabilidade, mudança, versionamento, baseline</text>
+
+  <text fill="#fff" x="380" y="30" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Processo de Engenharia de Requisitos</text>
+</svg>
+
+**1. Elicitação** — Descobrir os requisitos. Conversar com stakeholders, observar o trabalho que o sistema vai substituir/automatizar, estudar sistemas similares, fazer workshops. É a primeira atividade e a mais trabalhosa. Vai ser coberta em detalhe na Lição 2.
+
+**2. Análise** — Entender e classificar os requisitos descobertos. Separar o que é necessidade do que é "feature wishlist". Detectar contradições (Stakeholder A quer X, B quer não-X), redundâncias, ambiguidades. Negociar prioridades. Coberta na Lição 4 desta trilha.
+
+**3. Especificação** — Documentar formalmente os requisitos pra que se torne contrato entre cliente e equipe. Documento de Especificação de Requisitos (SRS — Software Requirements Specification, conforme ISO/IEC/IEEE 29148:2018), modelos visuais, casos de uso, user stories. Coberta na Lição 5.
+
+**4. Validação** — Confirmar com os stakeholders que o documento captura o que eles realmente querem. Diferente de Verificação (que é confirmar que o documento está internamente correto — sem contradições, sem ambiguidades, etc). Coberta na Lição 6.
+
+**5. Gestão de Requisitos** — Não é uma fase, é uma atividade contínua. Inclui: rastreabilidade (de onde veio cada requisito, em que código foi implementado, qual teste valida), gestão de mudança (requisitos mudam — como controlar), baseline (versão "congelada" para um dado momento), priorização. Coberta na Lição 6.
+
+## Tipos de Requisitos (visão panorâmica)
+
+Esta é uma introdução breve. A Lição 4 desta trilha vai detalhar classificações e técnicas. Por enquanto, é importante saber que requisitos se dividem em duas grandes categorias:
+
+### Requisitos Funcionais (FR — Functional Requirements)
+
+Descrevem **o que o sistema faz** — funcionalidades, comportamentos, regras de negócio. Exemplos para um sistema de biblioteca:
+
+- "O sistema deve permitir ao bibliotecário cadastrar um livro informando título, autor, ISBN, ano de publicação, editora e quantidade de exemplares."
+- "O sistema deve calcular automaticamente a multa por atraso na devolução, aplicando R$ 0,50 por dia útil de atraso até o limite de R$ 30,00 por empréstimo."
+- "O sistema deve enviar email ao usuário 3 dias antes da data prevista de devolução, lembrando do prazo."
+- "O sistema deve impedir novo empréstimo a usuários com pendências (multas em aberto ou livros atrasados)."
+
+### Requisitos Não Funcionais (NFR — Non-Functional Requirements)
+
+Descrevem **como o sistema deve ser**, suas qualidades. Também chamados de *atributos de qualidade* (quality attributes). Exemplos:
+
+- **Performance**: "O sistema deve responder a 95% das requisições de consulta em menos de 1 segundo, com carga de até 200 usuários simultâneos."
+- **Segurança**: "Senhas devem ser armazenadas com hash bcrypt com fator de custo mínimo 12."
+- **Disponibilidade**: "O sistema deve ter disponibilidade mínima de 99,5% mensal (downtime máximo de 3,6 horas/mês)."
+- **Usabilidade**: "Um bibliotecário sem treinamento prévio deve completar o registro de um empréstimo em menos de 1 minuto em 90% das tentativas."
+- **Manutenibilidade**: "O código deve seguir as convenções de Clean Architecture e ter cobertura de testes unitários mínima de 70%."
+
+Existe também uma categoria de **restrições (constraints)** — limitações impostas que não derivam diretamente de necessidade do usuário:
+
+- "O sistema deve ser desenvolvido em Java 17+."
+- "A interface web deve funcionar em navegadores modernos (Chrome 100+, Firefox 100+, Safari 15+)."
+- "O sistema deve estar em conformidade com a LGPD (Lei 13.709/2018)."
+
+A distinção entre NFR e Constraint é sutil e os termos são usados de forma intercambiável em alguns livros. O importante é capturar todos eles — esquecer requisitos não funcionais é fonte comum de retrabalho.
+
+## Stakeholders
+
+Stakeholder é qualquer pessoa, grupo ou organização **afetada pelo sistema ou que tem influência sobre ele**. Sommerville (cap 4, 2015) descreve stakeholders como pessoas afetadas direta ou indiretamente pelo sistema, e que portanto se beneficiam ou são impactadas pelos seus resultados.
+
+Pra um sistema simples, pode parecer trivial — "o stakeholder é o cliente". Mas em qualquer sistema real, são vários:
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <circle cx="360" cy="210" r="65" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2.5" />
+  <text fill="#fff" x="360" y="207" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">Sistema</text>
+  <text fill="#fff" x="360" y="225" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">de Software</text>
+
+  <rect x="50" y="60" width="140" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="120" y="82" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Sponsor</text>
+  <text fill="#fff" x="120" y="98" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">paga o projeto</text>
+  <text fill="#fff" x="120" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">define objetivo</text>
+
+  <rect x="280" y="30" width="160" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="52" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Cliente</text>
+  <text fill="#fff" x="360" y="68" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">contrata</text>
+  <text fill="#fff" x="360" y="80" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">aceita entregas</text>
+
+  <rect x="530" y="60" width="140" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="600" y="82" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Usuário</text>
+  <text fill="#fff" x="600" y="98" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">usa no dia-a-dia</text>
+  <text fill="#fff" x="600" y="110" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">conhece o trabalho</text>
+
+  <rect x="40" y="190" width="160" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="120" y="212" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Domain Expert</text>
+  <text fill="#fff" x="120" y="228" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">conhece o negócio</text>
+  <text fill="#fff" x="120" y="240" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">regras de negócio</text>
+
+  <rect x="520" y="190" width="160" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="600" y="212" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Equipe Dev</text>
+  <text fill="#fff" x="600" y="228" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">implementa</text>
+  <text fill="#fff" x="600" y="240" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">e mantém</text>
+
+  <rect x="50" y="320" width="140" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="120" y="342" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">BA / Analista</text>
+  <text fill="#fff" x="120" y="358" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">ponte entre</text>
+  <text fill="#fff" x="120" y="370" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">negócio e técnica</text>
+
+  <rect x="280" y="350" width="160" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="372" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">QA / Testes</text>
+  <text fill="#fff" x="360" y="388" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">valida e</text>
+  <text fill="#fff" x="360" y="400" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">verifica qualidade</text>
+
+  <rect x="530" y="320" width="140" height="55" rx="6" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="600" y="342" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Operação</text>
+  <text fill="#fff" x="600" y="358" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">hospeda e</text>
+  <text fill="#fff" x="600" y="370" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">monitora em prod</text>
+
+  <line x1="190" y1="100" x2="305" y2="170" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="360" y1="85" x2="360" y2="145" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="530" y1="100" x2="415" y2="170" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="200" y1="217" x2="295" y2="210" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="520" y1="217" x2="425" y2="210" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="190" y1="335" x2="305" y2="250" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="360" y1="350" x2="360" y2="275" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="530" y1="335" x2="415" y2="250" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+</svg>
+
+Quando você ouve "cliente" e pensa em uma única pessoa, está provavelmente subestimando o problema. Em um sistema empresarial típico:
+
+- **Sponsor** — quem paga e define o objetivo estratégico (numa biblioteca municipal: "queremos digitalizar o acervo e o controle de empréstimos pra reduzir filas em 60%"). Geralmente um executivo de alto escalão (chamado de "C-level" no jargão corporativo — CEO, CFO, CTO, diretores). No setor público, equivale a um Secretário ou Diretor.
+- **Cliente** — quem contrata e aceita a entrega. Pode ser o sponsor ou alguém da gerência do projeto.
+- **Usuário** — quem usa o sistema no dia-a-dia. Conhece o trabalho real. **Quase nunca é o cliente.** O sponsor pensa em ROI; o usuário pensa em "como fazer minha tarefa de hoje". Frequentemente discordam.
+- **Domain Expert** — especialista no domínio do negócio. Em uma biblioteca: bibliotecário sênior que conhece a política de classificação CDD/CDU, regras de empréstimo e renovação, comportamento típico dos usuários, edge cases que aparecem na prática (livros raros, doações, descarte). Não necessariamente usuário final.
+- **Equipe de desenvolvimento** — implementa. Tem preferências técnicas e restrições.
+- **Business Analyst (BA) ou Analista de Requisitos** — faz a ponte entre negócio e técnica. Falaremos mais abaixo.
+- **QA / Testes** — valida que o sistema atende os requisitos. Influencia formato dos requisitos (testabilidade).
+- **Operação** — equipe responsável por hospedar, monitorar e manter o sistema em produção. Pode ser chamada de SRE (Site Reliability Engineering — termo cunhado pelo Google) ou DevOps (cultura/prática que une desenvolvimento e operações). Tem requisitos de observabilidade, escalabilidade, deploy.
+
+**Stakeholders externos** também contam: órgãos reguladores (no caso de sistemas que tratam dados pessoais, a ANPD — Autoridade Nacional de Proteção de Dados — pela LGPD; em sistemas ambientais, IBAMA federal e CETESB estadual em SP), auditores externos, parceiros comerciais que vão integrar com o sistema, clientes finais. No caso de uma biblioteca pública municipal, podem incluir a Secretaria Municipal de Educação ou Cultura, fornecedores de livros, e os próprios leitores como usuários finais.
+
+Karl Wiegers e Joy Beatty, no livro *Software Requirements* (3ª edição, Microsoft Press, agosto 2013, ISBN 978-0735679665), apresentam uma **hierarquia de requisitos em três níveis** que organiza como as necessidades dos diferentes tipos de stakeholders se conectam:
+
+- **Requisitos de Negócio (Business Requirements)** — por que o sistema existe, qual problema do negócio ele resolve. Vêm do sponsor e da liderança. "Reduzir em 50% o tempo gasto pelos bibliotecários em tarefas administrativas de empréstimo e devolução."
+- **Requisitos de Usuário (User Requirements)** — o que cada tipo de usuário precisa fazer com o sistema. Vêm dos usuários reais. "O bibliotecário deve conseguir registrar um empréstimo em menos de 1 minuto, mesmo durante horários de pico."
+- **Requisitos Funcionais (Functional Requirements)** — detalhamento técnico do que o sistema faz pra atender os anteriores. Vêm da equipe técnica trabalhando junto com usuários e BAs. "POST /api/emprestimos deve aceitar livro_id e usuario_id, validar disponibilidade do exemplar e ausência de pendências do usuário, e criar registro com data de devolução = data atual + 14 dias úteis."
+
+Essa hierarquia é importante: requisitos funcionais existem pra **atender** requisitos de usuário, que existem pra **atender** requisitos de negócio. Quando essa cadeia se rompe (você implementa funcionalidade que nenhum usuário pediu, que não conecta com nenhum objetivo de negócio), você tem **gold plating** — adicionar coisas só porque "seria legal", desperdiçando esforço.
+
+## Características de um bom requisito
+
+A norma ISO/IEC/IEEE 29148:2018 cap 5 define características que um requisito individual deve ter. Cada uma é critério verificável — não é "estilo bonito de escrever", é **qualidade técnica**:
+
+| Característica | O que significa | Exemplo violando | Exemplo correto |
+|---|---|---|---|
+| **Necessário** | Sem ele, o sistema não atende sua finalidade | "O sistema deve ter um easter egg de Natal" | "O sistema deve validar CPF do usuário com algoritmo módulo 11" |
+| **Apropriado** | Detalhe adequado ao nível do projeto | "O programa deve usar Quicksort" (impõe implementação) | "Operações de busca não podem exceder 200ms" |
+| **Sem ambiguidade** | Uma única interpretação possível | "O sistema deve ser rápido" | "O tempo de resposta deve ser ≤ 2s em 95% das requisições" |
+| **Completo** | Toda a informação necessária está presente | "Sistema deve aceitar pagamento" | "Sistema deve aceitar pagamento via cartão de crédito (Visa, Master, Amex) e Pix" |
+| **Único** | Não duplica outro requisito | RF-04 e RF-15 dizem a mesma coisa | Cada regra aparece em apenas um requisito |
+| **Viável** | Possível dentro das restrições | "Resposta em 1 nanossegundo" | "Resposta em ≤ 2s" |
+| **Verificável** | Existe forma objetiva de testar | "Interface deve ser bonita" | "Aprovação ≥ 80% em pesquisa SUS com ≥ 30 usuários" |
+| **Correto** | Captura a real necessidade | Stakeholder queria X, requisito diz Y | Requisito reflete o que foi acordado |
+| **Conforme** | Aderente a padrões aplicáveis | Viola LGPD ao armazenar dado sensível | Atende regulamentações relevantes |
+
+Wiegers e Beatty (2013, cap 11) listam características parecidas, com pequenas variações na terminologia. As mais importantes na prática são: **sem ambiguidade**, **verificável**, e **completo**. As outras são consequência dessas três.
+
+**Exemplo de requisito ruim** (todo dia em projetos reais):
+
+> "O sistema deve permitir empréstimos de livros de forma eficiente e segura, com boa interface para o bibliotecário."
+
+Análise:
+- "Eficiente" — ambíguo (eficiente em quê? Tempo? CPU? Custo?)
+- "Segura" — ambíguo (segurança de dados? Controle de acesso? Auditoria?)
+- "Boa interface" — não verificável
+- "Permitir empréstimos" — incompleto (quem? Quando? Com quais restrições?)
+
+**Mesma intenção, escrita corretamente**:
+
+> RF-07: O sistema deve permitir ao bibliotecário autenticado registrar um empréstimo informando o livro (ISBN ou código interno) e o usuário (CPF ou número da carteirinha). O empréstimo deve ter prazo padrão de 14 dias úteis a partir da data atual, com possibilidade de até 2 renovações se não houver reserva pendente. A operação deve completar em até 2 segundos para 95% dos casos. Todos os dados pessoais coletados devem ser armazenados em conformidade com a LGPD (Lei 13.709/2018). A interface deve seguir o design system aprovado pela equipe de UX, validado em teste com pelo menos 5 bibliotecários reais.
+
+A diferença é gritante. O segundo é **trabalhável**: o dev sabe o que implementar, o QA sabe o que testar, o cliente consegue revisar se é realmente o que queria.
+
+## Abordagem Tradicional vs Ágil
+
+Os termos "tradicional" e "ágil" descrevem duas grandes famílias de processos. Não são opostos exclusivos — projetos modernos misturam ambos. Mas vale entender a distinção:
+
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <rect x="40" y="40" width="320" height="250" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="200" y="70" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Tradicional (Plan-Driven)</text>
+  <text fill="#fff" x="200" y="88" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Waterfall, RUP, V-Model</text>
+
+  <text fill="#fff" x="60" y="115" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="600">Características:</text>
+  <text fill="#fff" x="60" y="135" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Requisitos levantados antecipadamente</text>
+  <text fill="#fff" x="60" y="152" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Documento SRS extenso</text>
+  <text fill="#fff" x="60" y="169" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Aprovação formal antes do dev</text>
+  <text fill="#fff" x="60" y="186" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Mudança via processo controlado</text>
+  <text fill="#fff" x="60" y="203" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Baseline congelada</text>
+
+  <text fill="#fff" x="60" y="232" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="600">Bom para:</text>
+  <text fill="#fff" x="60" y="250" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Domínios regulados (saúde, banco)</text>
+  <text fill="#fff" x="60" y="267" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Contratos fixos (governo)</text>
+  <text fill="#fff" x="60" y="284" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Sistemas críticos (aeronáutica)</text>
+
+  <rect x="380" y="40" width="320" height="250" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="540" y="70" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Ágil (Iterativo e Incremental)</text>
+  <text fill="#fff" x="540" y="88" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Scrum, XP, Kanban</text>
+
+  <text fill="#fff" x="400" y="115" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="600">Características:</text>
+  <text fill="#fff" x="400" y="135" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Requisitos emergem por iteração</text>
+  <text fill="#fff" x="400" y="152" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• User stories curtas</text>
+  <text fill="#fff" x="400" y="169" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Backlog priorizado e mutável</text>
+  <text fill="#fff" x="400" y="186" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Mudança é esperada e bem-vinda</text>
+  <text fill="#fff" x="400" y="203" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Validação a cada sprint</text>
+
+  <text fill="#fff" x="400" y="232" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="600">Bom para:</text>
+  <text fill="#fff" x="400" y="250" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Produtos (startups, SaaS)</text>
+  <text fill="#fff" x="400" y="267" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Domínios em evolução</text>
+  <text fill="#fff" x="400" y="284" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.8">• Times pequenos co-localizados</text>
+</svg>
+
+A discussão **tradicional vs ágil** é menos importante do que parece. No mundo real, a maioria dos times usa **híbrido**:
+
+- Levantamento inicial razoável (entender domínio, stakeholders, restrições críticas) — atividade tradicional
+- Backlog de user stories — abordagem ágil
+- Documentação leve mas estável (decisões arquiteturais, requisitos não funcionais) — tradicional
+- Iterações curtas com validação contínua — ágil
+
+A Lição 7 desta trilha vai cobrir requisitos ágeis em profundidade (User Stories, INVEST, 3Cs, Story Mapping, Acceptance Criteria com Gherkin).
+
+## Business Analyst (BA) e a profissão
+
+Em muitos projetos profissionais existe uma função específica chamada **Business Analyst** ou **Analista de Negócios** (Analista de Requisitos no Brasil). O BA é o profissional dedicado a fazer a ponte entre **necessidades do negócio** e **soluções técnicas**.
+
+O **IIBA — International Institute of Business Analysis** mantém o corpo de conhecimento canônico da área: **BABOK Guide — A Guide to the Business Analysis Body of Knowledge**, atualmente na versão 3 (2015). O BABOK cobre 6 áreas de conhecimento:
+
+1. **Business Analysis Planning and Monitoring** — planejamento da análise
+2. **Elicitation and Collaboration** — elicitação e colaboração com stakeholders
+3. **Requirements Life Cycle Management** — gestão do ciclo de vida dos requisitos
+4. **Strategy Analysis** — análise de estratégia
+5. **Requirements Analysis and Design Definition** — análise e design
+6. **Solution Evaluation** — avaliação da solução
+
+Engenharia de Requisitos e Business Analysis têm forte sobreposição. A diferença prática:
+
+- **Engenharia de Requisitos** — mais associada à academia e à comunidade de engenharia de software. Foco em técnica, processo, normas (ISO, IEEE)
+- **Business Analysis** — mais associada à indústria e consultorias. Foco em entrega de valor para o negócio
+
+Na prática, o trabalho é o mesmo. Um Analista de Requisitos Sênior e um Business Analyst Sênior fazem atividades muito similares. Há certificações em ambas as direções: o IIBA oferece CBAP/CCBA/ECBA (foco em Business Analysis), enquanto o **IREB — International Requirements Engineering Board** (fundado em 2006 na Alemanha) oferece a CPRE (Certified Professional for Requirements Engineering), específica para Engenharia de Requisitos. Vale notar que o antigo REQB se fundiu com o IREB em 18 de janeiro de 2017 — hoje a certificação canônica internacional de RE é a IREB CPRE.
+
+## Erros comuns em Engenharia de Requisitos
+
+Vale conhecer pra evitar — esses são erros documentados em livros e que aparecem repetidamente em projetos reais:
+
+**1. Falar com a pessoa errada.** Você entrevista o gerente quando quem realmente usa o sistema é a equipe operacional. O gerente descreve o trabalho como deveria ser, não como é. Resultado: sistema bonito que ninguém usa.
+
+**2. Confundir solução com problema.** Stakeholder diz "preciso de um botão que exporte pra Excel". Você implementa o botão. Tempo depois descobre que o real problema é que ele precisava enviar dados pra fornecedor — e poderia ter sido uma integração automática sem botão nenhum.
+
+**3. Scope creep (crescimento de escopo).** Cada conversa adiciona uma "pequena" funcionalidade. No fim, o projeto tem o triplo do tamanho original sem prazo ou orçamento ajustados.
+
+**4. Gold plating (banho de ouro).** Equipe adiciona funcionalidade que ninguém pediu porque "seria legal" ou "todo sistema moderno tem". Desperdiça esforço e adiciona complexidade.
+
+**5. Requisitos ambíguos.** "Rápido", "fácil", "intuitivo", "robusto" — palavras sem critério verificável. Cada pessoa interpreta diferente. Briga garantida no aceite.
+
+**6. Esquecer requisitos não funcionais.** Foco total em "o que o sistema faz" sem definir quão rápido, quão disponível, quão seguro. Descoberta na pior hora possível (carga real em produção).
+
+**7. Não envolver QA cedo.** Quem testa precisa entender os requisitos pra desenhar casos de teste. Envolver QA só depois que tudo foi codificado leva a retrabalho.
+
+**8. Documentar demais ou de menos.** O extremo de documento de 200 páginas que ninguém lê é tão ruim quanto zero documentação onde todo conhecimento está na cabeça de 2 pessoas que podem sair amanhã.
+
+<Aviso>
+Existe um erro especificamente fatal em projetos acadêmicos: tratar requisitos como "etapa que precisa ser documentada pra o professor". O resultado é um documento formal mas vazio — você escreve requisitos genéricos que poderiam servir pra qualquer sistema. Engenharia de Requisitos só agrega valor se você está realmente entendendo um sistema específico, mesmo que ele seja simples. Pra Carbon Credit do Fatec, isso significa: discutir com o grupo (Bruno, Murilo, Fabiano, Pedro Chaves) quais perfis de usuário o sistema simularia (operador, auditor, gestor de sustentabilidade), quais necessidades específicas de empresas que precisam compensar carbono no contexto brasileiro, qual o cenário regulatório aplicável. Não inventar requisitos genéricos.
+</Aviso>
+
+## Aplicação no Carbon Credit Compensation Platform
+
+Aplicando os conceitos da lição ao seu projeto da Fatec:
+
+**Stakeholders identificáveis (mesmo em projeto educacional):**
+
+- **Sponsor hipotético**: a empresa fictícia que comissionou o sistema (poderia ser uma carbon registry brasileira)
+- **Cliente**: gerente de sustentabilidade da empresa
+- **Usuário primário**: operador que cadastra compensações no dia-a-dia
+- **Usuário secundário**: auditor que revisa as compensações
+- **Domain Expert**: especialista em GHG Protocol e metodologias de compensação
+- **Equipe Dev**: vocês quatro
+- **QA**: vocês mesmos (no projeto Fatec, dev faz também o QA)
+- **Operação**: hipotética (o sistema é in-memory, sem deploy real)
+
+**Requisitos de negócio (BR — Business Requirements):**
+- BR-01: A plataforma deve permitir que empresas registrem e compensem suas emissões de carbono de forma rastreável e auditável.
+- BR-02: Compensações efetivadas devem ser auditáveis por terceiros externos, atendendo a exigências regulatórias e de transparência corporativa.
+
+**Exemplos de requisitos funcionais (FR — Functional Requirements):**
+- FR-01: O sistema deve permitir o cadastro de emissores (empresas) com CNPJ, razão social e setor industrial.
+- FR-02: O sistema deve permitir o cadastro de créditos de carbono disponíveis, com origem (projeto verificado), quantidade em toneladas e metodologia (VCS, Gold Standard).
+- FR-03: O sistema deve permitir que um operador inicie uma compensação para um emissor cadastrado.
+- FR-04: O sistema deve permitir que o operador adicione créditos a uma compensação iniciada (rascunho).
+- FR-05: O sistema deve permitir efetivar a compensação, reservando os créditos.
+- FR-06: O sistema deve registrar evento de auditoria a cada compensação efetivada.
+
+**Exemplos de requisitos não funcionais (NFR):**
+- NFR-01: A operação de efetivar compensação deve completar em menos de 1 segundo para 95% das execuções, em ambiente de testes.
+- NFR-02: O sistema deve manter consistência ACID nas operações que envolvem múltiplos agregados.
+- NFR-03: O código deve seguir Clean Architecture com cobertura mínima de testes unitários de 70%.
+
+**Restrições (Constraints):**
+- C-01: Sistema desenvolvido em Java 17+ com Spring Boot 3.
+- C-02: Persistência in-memory (decisão documentada em ADR-0005 da trilha de Arquitetura).
+- C-03: Disciplina ESIII — Avaliação 2 da Fatec Cruzeiro, com prazo de 60 dias.
+- C-04: A documentação arquitetural deve usar C4 Model + ADRs (conforme Lição 9 da trilha de Arquitetura).
+
+Esses são exemplos. A Lição 5 desta trilha vai cobrir como **documentar formalmente** todos esses requisitos no formato ISO/IEC/IEEE 29148 ou Volere.
+
+## Resumo visual
+
+Pra fixar os conceitos principais da lição:
+
+<svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <rect x="40" y="30" width="640" height="60" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="2" />
+  <text fill="#fff" x="360" y="55" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Engenharia de Requisitos</text>
+  <text fill="#fff" x="360" y="75" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">descobrir + documentar + validar + gerenciar o que o sistema deve fazer e ser</text>
+
+  <rect x="40" y="110" width="200" height="100" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="140" y="135" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Requisitos Funcionais</text>
+  <text fill="#fff" x="140" y="155" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">o que o sistema FAZ</text>
+  <text fill="#fff" x="140" y="175" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"cadastrar livro"</text>
+  <text fill="#fff" x="140" y="190" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"calcular multa por atraso"</text>
+
+  <rect x="260" y="110" width="200" height="100" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="135" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Não Funcionais</text>
+  <text fill="#fff" x="360" y="155" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">como o sistema É</text>
+  <text fill="#fff" x="360" y="175" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"95% requests &lt; 2s"</text>
+  <text fill="#fff" x="360" y="190" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"99,5% disponibilidade"</text>
+
+  <rect x="480" y="110" width="200" height="100" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="580" y="135" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Restrições</text>
+  <text fill="#fff" x="580" y="155" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">limitações impostas</text>
+  <text fill="#fff" x="580" y="175" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Java 17+, Spring Boot 3"</text>
+  <text fill="#fff" x="580" y="190" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"conformidade LGPD"</text>
+
+  <rect x="40" y="240" width="640" height="60" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="265" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Características de um bom requisito (ISO/IEC/IEEE 29148:2018)</text>
+  <text fill="#fff" x="360" y="285" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Sem ambiguidade · Verificável · Completo · Necessário · Viável · Único · Correto · Conforme</text>
+
+  <rect x="40" y="320" width="640" height="65" rx="8" fill="currentColor" fillOpacity="0.85" stroke="currentColor" strokeWidth="1.5" />
+  <text fill="#fff" x="360" y="345" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Processo de Engenharia de Requisitos</text>
+  <text fill="#fff" x="360" y="365" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Elicitação → Análise → Especificação → Validação</text>
+  <text fill="#fff" x="360" y="378" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(Gestão de Requisitos atravessa todo o processo)</text>
+</svg>
+
+## Próximos passos da trilha
+
+Esta foi a Lição 1 — visão panorâmica da disciplina. As próximas lições aprofundam cada parte:
+
+| Lição | Tema | Foco |
+|---|---|---|
+| **L1 (esta)** | Introdução à Engenharia de Requisitos | Conceitos, processo, stakeholders, tipos |
+| L2 | Elicitação de Requisitos | Técnicas: entrevistas, workshops, observação, prototipação, etnografia |
+| L3 | Levantamento de Requisitos de Domínio | DDD, Knowledge Crunching, Event Storming, Domain Storytelling |
+| L4 | Análise e Classificação | FURPS+, MoSCoW, priorização, modelos de qualidade ISO 25010 |
+| L5 | Especificação e Documentação | SRS (IEEE 29148), Volere, casos de uso textuais |
+| L6 | Validação, Verificação e Gestão | Inspeção, prototipação, rastreabilidade, baseline |
+| L7 | Requisitos Ágeis | User Stories, INVEST, 3Cs, Story Mapping, Acceptance Criteria com Gherkin |
+
+Depois desta trilha, vem a **Trilha B — UML 2.0** (15 lições, uma por diagrama), que dá as ferramentas pra **modelar** os requisitos levantados aqui.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- ISO/IEC/IEEE 29148:2018 — *Systems and software engineering — Life cycle processes — Requirements engineering*. Segunda edição, novembro de 2018, publicada por ISO/IEC e IEEE. Substitui IEEE 830-1998. Documento normativo internacional. Disponível em iso.org/standard/72089.html.
+- Sommerville, Ian. *Software Engineering*, 10ª edição. Pearson, 03 de abril de 2015, ISBN 978-0133943030, 816 páginas. Capítulo 4 ("Requirements engineering", p. 87) e Capítulo 5 ("System modeling", p. 124).
+- Wiegers, Karl E.; Beatty, Joy. *Software Requirements*, 3ª edição. Microsoft Press, agosto de 2013, ISBN 978-0735679665, 672 páginas. Referência canônica sobre características de bons requisitos (capítulo 11) e tipos de stakeholders.
+- Robertson, Suzanne; Robertson, James. *Mastering the Requirements Process*, 3ª edição, Addison-Wesley, 2012, ISBN 0-321-81574-2. Quarta edição lançada em setembro de 2024 com Adrian Reed. Origem do Volere Template (disponível em volere.org, edição atual versão 20).
+- IIBA — International Institute of Business Analysis. *BABOK Guide — A Guide to the Business Analysis Body of Knowledge*, versão 3, 2015. Corpo de conhecimento canônico de Business Analysis.
+- IREB — International Requirements Engineering Board. Certificação CPRE (Certified Professional for Requirements Engineering). Fundado em 2006 na Alemanha; incorporou o REQB em 18 de janeiro de 2017. ireb.org.
+- Boehm, Barry W. *Software Engineering Economics*. Prentice Hall, 1981. Origem da curva de custo de mudança. Os números absolutos da curva são contextuais; o princípio fundamental (custo cresce com a fase) permanece válido.
+- El Emam, Khaled; Koru, A. Günes. "A Replicated Survey of IT Software Project Failures". *IEEE Software*, vol. 25, nº 5, setembro/outubro de 2008, pp. 84-90. Survey global em departamentos de TI conduzido em 2005 e 2007.
+- Glass, Robert L. "The Standish report: Does it really describe a software crisis?". *Communications of the ACM*, agosto de 2006. Crítica acadêmica fundamental ao CHAOS Report do Standish Group.
+- Jørgensen, Magne; Moløkken-Østvold, Kjetil. "How large are software cost overruns? A review of the 1994 CHAOS report". *Information and Software Technology*, 2006. Análise crítica detalhada das deficiências metodológicas do CHAOS Report original.
+
+**Observações sobre fontes contestadas:**
+
+- O **CHAOS Report do Standish Group** é mencionado por contexto histórico. Os números amplamente citados (16,2% sucesso etc) são contestados academicamente. Standish Group descontinuou o relatório em 2020. Não use esses números como verdade absoluta em apresentações acadêmicas — cite com a ressalva crítica.
+- A **curva de custo de Boehm** segue válida no princípio, mas os valores absolutos (1x→100x) variam drasticamente por contexto. Boehm em correspondência posterior reconheceu que em projetos modernos bem geridos a curva é muito mais plana.

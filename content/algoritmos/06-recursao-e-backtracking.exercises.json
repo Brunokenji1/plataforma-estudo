@@ -1,0 +1,112 @@
+[
+  {
+    "id": "rec-01",
+    "enunciado": "Quais são os DOIS componentes obrigatórios de qualquer função recursiva?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Loop infinito e condição de parada",
+      "Caso-base e caso recursivo",
+      "Inicialização e finalização",
+      "Try e catch"
+    ],
+    "resposta": 1,
+    "explicacao": "Toda função recursiva precisa de um caso-base (condição em que a função retorna uma resposta direta sem chamar a si mesma) e um caso recursivo (onde a função chama uma versão menor de si mesma). Sem caso-base a recursão nunca para e estoura a stack. Sem caso recursivo não há recursão de fato. A ordem importa: o caso-base deve ser verificado ANTES da chamada recursiva, senão nunca dispara."
+  },
+  {
+    "id": "rec-02",
+    "enunciado": "Qual a complexidade de tempo do Fibonacci recursivo INGÊNUO (sem memoização)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(n)",
+      "O(n log n)",
+      "O(n²)",
+      "O(2ⁿ)"
+    ],
+    "resposta": 3,
+    "explicacao": "O(2ⁿ) — exponencial. Cada chamada faz DUAS chamadas recursivas, e a árvore de chamadas dobra de tamanho a cada nível. Pra fib(50), são ~10¹⁵ chamadas — inviável. O problema é que a mesma subárvore é recalculada várias vezes. Memoização (lembrar respostas já calculadas) reduz pra O(n) tempo e O(n) espaço. A versão iterativa com 2 variáveis é O(n) tempo e O(1) espaço — definitiva pra Fibonacci puro."
+  },
+  {
+    "id": "rec-03",
+    "enunciado": "O que é stack overflow em recursão?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando o resultado da função excede o tamanho de int",
+      "Quando a pilha de chamadas (stack frames) excede o limite de memória reservado",
+      "Quando duas threads tentam chamar a mesma função recursiva",
+      "Um erro do compilador ao detectar recursão"
+    ],
+    "resposta": 1,
+    "explicacao": "Cada chamada de função aloca um stack frame (argumentos, variáveis locais, endereço de retorno). Em recursão profunda, esses frames se acumulam. A JVM por padrão reserva ~512 KB de stack por thread; com frames de ~50-100 bytes, isso permite entre 5.000 e 10.000 chamadas aninhadas. Passou disso, lança StackOverflowError. Em Java e C++ não tem Tail Call Optimization, então recursão profunda exige conversão pra iteração ou aumento manual da stack (Thread.setStackSize)."
+  },
+  {
+    "id": "rec-04",
+    "enunciado": "Verdadeiro ou falso: memoização troca tempo por memória.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Memoização gasta espaço extra (O(n) no map ou tabela) pra evitar recalcular respostas que já foram calculadas. Em troca, o tempo despenca — no caso do Fibonacci, de O(2ⁿ) pra O(n). Esse trade-off é a essência da programação dinâmica top-down. Em ambientes com memória restrita (microcontroladores, jogos com budget apertado), você pode precisar abrir mão da memoização ou usar versões iterativas com bottom-up que economizam memória."
+  },
+  {
+    "id": "rec-05",
+    "enunciado": "No padrão geral do backtracking, qual é o passo ESSENCIAL após a chamada recursiva?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Imprimir o estado atual",
+      "Desfazer a escolha feita (restaurar o estado anterior)",
+      "Liberar memória manualmente",
+      "Validar o resultado"
+    ],
+    "resposta": 1,
+    "explicacao": "Desfazer a escolha (também chamado de 'undo' ou 'rollback') é o que diferencia backtracking de busca exaustiva ingênua. O padrão é: aplica a escolha → desce na recursão → DESFAZ a escolha. O desfazer permite que a próxima iteração do loop teste outra escolha a partir do mesmo estado, sem contaminação. Sem isso, você precisaria copiar o estado inteiro a cada nível, gastando memória O(n × profundidade) em vez de O(profundidade)."
+  },
+  {
+    "id": "rec-06",
+    "enunciado": "Quantas soluções tem o problema das 8 rainhas (8-Queens)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["8", "64", "92", "100"],
+    "resposta": 2,
+    "explicacao": "92 soluções distintas (incluindo reflexões e rotações; se considerar simetrias, são 12 'fundamentais'). O problema foi proposto em 1848 por Max Bezzel no jornal Schachzeitung. A primeira solução foi publicada em 1850 por Franz Nauck, que também generalizou para N rainhas. Curiosamente, Carl Friedrich Gauss tentou resolver mas sua análise foi incompleta — provavelmente por subestimar o problema. Não existe fórmula fechada para contar soluções de N-Queens; só dá enumerando."
+  },
+  {
+    "id": "rec-07",
+    "enunciado": "No N-Queens, como você verifica em O(1) se duas posições estão na mesma diagonal?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Comparando se row == col",
+      "Calculando a distância euclidiana entre os pontos",
+      "Verificando se (linha - coluna) é igual nas duas posições (diagonal principal) ou (linha + coluna) é igual (anti-diagonal)",
+      "Iterando por todas as posições intermediárias"
+    ],
+    "resposta": 2,
+    "explicacao": "Numa mesma diagonal principal (cima-esquerda → baixo-direita), a diferença `linha - coluna` é constante. Numa mesma anti-diagonal (cima-direita → baixo-esquerda), `linha + coluna` é constante. Usando 2 sets (um para cada diferença/soma), a checagem de conflito vira O(1). Esse truque algébrico aparece em xadrez, em máscaras de bitmap, e em geração de fractais — sempre que você precisa identificar diagonais rapidamente."
+  },
+  {
+    "id": "rec-08",
+    "enunciado": "Verdadeiro ou falso: em Java e C++, recursão de cauda (tail recursion) é otimizada pelo compilador, reutilizando o stack frame atual.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso para Java e C++. Linguagens funcionais (Scheme, Haskell, OCaml) fazem Tail Call Optimization (TCO): se a última coisa que a função faz é chamar a si mesma, o compilador reaproveita o frame em vez de criar um novo, permitindo recursão de profundidade arbitrária. Java NÃO tem TCO (Brian Goetz já disse publicamente que seria caro de implementar na JVM). C++ tem alguns compiladores que fazem otimizações similares em níveis altos de otimização, mas não é garantido pelo padrão. Por isso, em Java e C++, recursão profunda precisa ser convertida em iteração ou aumentar a stack size manualmente."
+  },
+  {
+    "id": "rec-09",
+    "enunciado": "Quantas permutações existem para um array de n elementos distintos?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["n", "n²", "2ⁿ", "n!"],
+    "resposta": 3,
+    "explicacao": "n! (fatorial de n). Para o primeiro slot há n escolhas, para o segundo n-1 (já usou um), para o terceiro n-2, e assim por diante: n × (n-1) × (n-2) × ... × 1 = n!. Pra n=10 são 3.628.800 permutações. Pra n=15 já são 1.3 trilhões. Isso significa que algoritmos que enumeram todas as permutações ficam inviáveis muito rápido — n=12 ou 13 costuma ser o limite prático. Pra problemas maiores, técnicas de poda (backtracking inteligente) ou DP em subsets são necessárias."
+  },
+  {
+    "id": "rec-10",
+    "enunciado": "Em qual destes problemas o backtracking é a técnica NATURAL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Calcular a soma de um array",
+      "Encontrar o maior elemento de uma lista",
+      "Encontrar todas as combinações de soldados que podem cobrir um castelo em um jogo de estratégia",
+      "Ordenar um array de inteiros"
+    ],
+    "resposta": 2,
+    "explicacao": "Backtracking brilha em problemas de EXPLORAÇÃO COMBINATÓRIA com restrições. Encontrar todas as combinações válidas envolve tentar uma escolha, ver se respeita as regras, e voltar atrás se não levar a solução. Soma de array, maior elemento e ordenação têm algoritmos iterativos diretos e mais eficientes. A pergunta-chave para identificar problemas de backtracking: 'preciso explorar todas as possibilidades respeitando restrições, voltando atrás quando bater em um beco?'. Exemplos clássicos: N-Queens, Sudoku, geração de subsets/permutações, caminhos em labirintos, palavras cruzadas."
+  }
+]

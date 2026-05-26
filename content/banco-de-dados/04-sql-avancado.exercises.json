@@ -1,0 +1,132 @@
+[
+  {
+    "id": "sqladv-01",
+    "enunciado": "O que é uma CTE (Common Table Expression) e em qual versão do padrão SQL ela foi introduzida?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Função agregada introduzida em SQL-86",
+      "Subquery nomeada definida com a cláusula WITH antes da query principal. Introduzida no SQL:1999. Permite organizar queries complexas em pipeline de etapas nomeadas, em vez de subqueries aninhadas. Suporta também recursão (WITH RECURSIVE)",
+      "Tipo de chave estrangeira",
+      "Versão otimizada de JOIN"
+    ],
+    "resposta": 1,
+    "explicacao": "CTE = Common Table Expression = subquery nomeada definida com a cláusula WITH antes da query principal. Sintaxe: 'WITH nome AS (SELECT ...) SELECT * FROM nome'. Introduzida no padrão SQL:1999 junto com queries recursivas. Implementações começaram a aparecer em 2007 (Oracle 9i tinha precoce; SQL Server 2005; PostgreSQL 8.4 em 2009; MySQL só na versão 8.0 em 2018). VANTAGENS sobre subqueries aninhadas: (1) LEGIBILIDADE — query lida de cima pra baixo como pipeline; (2) REUSO — uma CTE pode ser referenciada várias vezes na query principal; (3) RECURSÃO — WITH RECURSIVE permite queries hierárquicas e travessia de grafos; (4) DEBUGGING — você pode comentar a query principal e SELECT * FROM cte_intermediaria pra ver resultado parcial. CTEs também funcionam em INSERT/UPDATE/DELETE/MERGE. PostgreSQL 12+ permite hint MATERIALIZED ou NOT MATERIALIZED pra controlar comportamento do otimizador."
+  },
+  {
+    "id": "sqladv-02",
+    "enunciado": "Qual a DIFERENÇA fundamental entre GROUP BY e Window Functions?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Window functions são mais lentas",
+      "GROUP BY COLAPSA linhas (reduz N linhas a 1 por grupo), perdendo o detalhe. Window functions PRESERVAM todas as linhas e adicionam coluna com o cálculo. Window function é 'agregação inline' sem perder o detalhe — ideal pra mostrar o valor de cada linha JUNTO com agregação do grupo (ex: nota do aluno + média do curso ao lado)",
+      "São sinônimos",
+      "Window functions só funcionam com inteiros"
+    ],
+    "resposta": 1,
+    "explicacao": "GROUP BY COLAPSA: reduz N linhas a 1 por grupo. Útil quando você só quer o agregado (total, média). Resultado tem MENOS linhas que o input. WINDOW FUNCTIONS PRESERVAM: mantêm todas as N linhas e adicionam coluna com o cálculo. Resultado tem o MESMO NÚMERO de linhas que o input. EXEMPLO: dado 5 matrículas em 2 cursos. GROUP BY curso retorna 2 linhas (curso + média). Window function 'AVG(nota) OVER (PARTITION BY curso)' retorna as 5 linhas originais, cada uma com a média do seu curso na coluna nova. USO PRÁTICO: muito código Java/Spring Boot busca tudo do banco, processa em loop pra calcular médias por categoria, depois junta. Window function faz a mesma coisa em UMA query — 10x a 1000x mais rápido, e código muito mais limpo. Window functions foram padronizadas no SQL:2003. Suportadas hoje em PostgreSQL, MySQL 8.0+, SQL Server, Oracle, SQLite 3.25+."
+  },
+  {
+    "id": "sqladv-03",
+    "enunciado": "Qual a diferença entre ROW_NUMBER(), RANK() e DENSE_RANK()?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São equivalentes",
+      "ROW_NUMBER: sempre sequencial sem empate (1, 2, 3, 4). RANK: empate compartilha rank, PRÓXIMO PULA (1, 2, 2, 4). DENSE_RANK: empate compartilha, próximo NÃO pula (1, 2, 2, 3). Escolha conforme o caso: ROW_NUMBER pra paginação/top-N; RANK pra ranking 'tipo bolsa' onde pular é OK; DENSE_RANK pra rankings sem buracos",
+      "ROW_NUMBER é mais rápido que os outros",
+      "Apenas RANK funciona com ORDER BY"
+    ],
+    "resposta": 1,
+    "explicacao": "Os três funcionam dentro de OVER (PARTITION BY ... ORDER BY ...) e ranqueiam linhas, mas DIFEREM no tratamento de EMPATES. Suponha 4 linhas com notas 9.0, 8.5, 8.5, 7.0: (a) ROW_NUMBER atribui 1, 2, 3, 4 — sempre único, escolhe alguém aleatoriamente entre empatados; (b) RANK atribui 1, 2, 2, 4 — empatados recebem o mesmo, PRÓXIMO PULA (não tem 3, pula direto pra 4); (c) DENSE_RANK atribui 1, 2, 2, 3 — empatados recebem o mesmo, próximo NÃO pula. CASOS DE USO: ROW_NUMBER — paginação ('linha 20 a 40'), 'primeiros N de cada grupo' (top N por grupo). RANK — rankings tipo bolsa de valores ('5 ações empataram em 2º lugar, próxima é 7ª'). DENSE_RANK — rankings sem buracos, 'níveis de qualificação' (bronze, prata, ouro, sem pulos). ERRO comum: esquecer ORDER BY dentro do OVER — sem ordem definida, ranking fica indeterminado (cada execução pode dar valores diferentes)."
+  },
+  {
+    "id": "sqladv-04",
+    "enunciado": "O que LAG() e LEAD() fazem em window functions?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São aliases para SUM e AVG",
+      "LAG(coluna, offset) retorna o valor da coluna 'offset' linhas ATRÁS dentro da janela. LEAD(coluna, offset) faz o oposto — retorna 'offset' linhas À FRENTE. Útil para comparar com período anterior, calcular variações, detectar gaps em sequências. Retorna NULL quando não há linha correspondente (primeira ou última linha)",
+      "Funções de hash criptográfico",
+      "Operadores de comparação"
+    ],
+    "resposta": 1,
+    "explicacao": "LAG(coluna, offset) acessa valor de OFFSET linhas atrás (default offset=1, ou seja, linha anterior). LEAD(coluna, offset) acessa OFFSET linhas à frente. Retornam NULL quando não existe a linha correspondente (LAG na primeira linha, LEAD na última). Sintaxe: 'LAG(nota, 1) OVER (PARTITION BY aluno_id ORDER BY data_matricula)' — pra cada matrícula, pega a nota da matrícula imediatamente anterior do mesmo aluno. USOS PRÁTICOS: (1) Calcular variação % entre períodos (preço hoje vs preço ontem); (2) Detectar gaps em sequências (gap detection — linha 5 seguida de linha 7, sumiu a 6); (3) Comparar versões de registros (status atual vs status anterior); (4) Calcular tempo entre eventos (LAG na coluna timestamp dá o intervalo entre eventos consecutivos). Em dashboards corporativos: 'variação MoM' (month over month), 'variação YoY' (year over year) — case clássico de LAG. Existem ainda FIRST_VALUE() e LAST_VALUE() — pegam primeira/última linha da janela."
+  },
+  {
+    "id": "sqladv-05",
+    "enunciado": "Como você resolve eficientemente o problema 'top 3 alunos de cada curso por nota média'?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Subquery correlacionada para cada curso",
+      "Pattern clássico: CTE com window function ROW_NUMBER OVER (PARTITION BY curso ORDER BY media DESC) + WHERE rn <= 3. Resolve em uma query, escalável, performance excelente. É a solução padrão pra 'top-N por grupo' — problema MUITO comum em SQL real",
+      "Loop no Java buscando aluno por aluno",
+      "Stored procedure recursiva"
+    ],
+    "resposta": 1,
+    "explicacao": "Pattern essencial: window function + CTE + filtro. Solução: 'WITH MediasPorAluno AS (SELECT a.id, a.nome, a.curso, AVG(m.nota) AS media, ROW_NUMBER() OVER (PARTITION BY a.curso ORDER BY AVG(m.nota) DESC) AS rn FROM Aluno a JOIN Matricula m ON a.id = m.aluno_id GROUP BY a.id, a.nome, a.curso) SELECT id, nome, curso, media FROM MediasPorAluno WHERE rn <= 3'. EXPLICAÇÃO: (1) CTE calcula média por aluno; (2) ROW_NUMBER atribui posição dentro do curso (PARTITION BY curso), ordenado por média decrescente; (3) filtro rn <= 3 mantém só os 3 melhores. EFICIÊNCIA: uma única passada pelos dados, sem subquery correlacionada (que executaria N vezes). Esse pattern resolve família inteira de problemas: top-N por categoria, primeiro pedido de cada cliente, último log de cada usuário, etc. CUIDADO: use ROW_NUMBER se quer EXATAMENTE 3 (mesmo com empate); use RANK ou DENSE_RANK se 'top 3' significa 'todos empatados no 3º lugar entram'. Sem window function, esse problema é brutal em SQL — várias linhas de subquery correlacionada com performance ruim. Comum em entrevistas técnicas."
+  },
+  {
+    "id": "sqladv-06",
+    "enunciado": "O que torna o SQL TURING-COMPLETO?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Suporte a JOIN com várias tabelas",
+      "Recursive CTEs (WITH RECURSIVE), introduzidas no SQL:1999. Permitem que uma CTE se referencie, expressando computação iterativa e travessia de estruturas hierárquicas ou grafos. Em princípio, qualquer algoritmo pode ser expresso — pessoas implementaram até fractal de Mandelbrot em recursive CTE como joke",
+      "Stored procedures",
+      "Suporte a transações ACID"
+    ],
+    "resposta": 1,
+    "explicacao": "Recursive CTEs (WITH RECURSIVE) tornam SQL Turing-completo. Foram introduzidas no padrão SQL:1999. Estrutura: 'WITH RECURSIVE nome AS (anchor UNION ALL recursive_referencing_nome) SELECT * FROM nome'. Execução: (1) executa anchor → R0; (2) aplica recursive sobre R0 → R1; (3) aplica sobre R1 → R2; ... até retornar vazio; (4) resultado = UNION de todos os Rs. SIGNIFICADO TURING-COMPLETO: em princípio, qualquer computação expressável em qualquer linguagem de programação pode ser expressa em SQL com recursive CTE (dado tempo e memória suficientes). Pessoas implementaram Game of Life, calculadora, até FRACTAL DE MANDELBROT em recursive CTE como demonstração (e joke). PRÁTICA: use pra hierarquias (organogramas, categorias de produto, comentários nested) e travessia de grafos (cidades conectadas, dependências de pacote). NÃO use pra cálculos complexos — performance ruim e código ilegível. SQL é poderoso, mas Turing-completude não é convite pra usar SQL como linguagem geral. Recursive CTE é hoje suportada em PostgreSQL, SQL Server, Oracle, MySQL 8+, SQLite 3.8+, DuckDB."
+  },
+  {
+    "id": "sqladv-07",
+    "enunciado": "Em uma recursive CTE percorrendo um GRAFO com ciclos, por que você deve usar UNION (sem ALL) em vez de UNION ALL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "UNION é mais rápido",
+      "UNION REMOVE DUPLICATAS automaticamente, evitando que o algoritmo entre em loop infinito quando visita o mesmo nó múltiplas vezes através de caminhos circulares. UNION ALL preserva duplicatas — em grafo com ciclo, a recursão NUNCA TERMINA",
+      "UNION ALL não é suportado em recursive CTE",
+      "UNION é o padrão para CTEs"
+    ],
+    "resposta": 1,
+    "explicacao": "Em grafos cíclicos: UNION (sem ALL) DEDUPLICA e termina; UNION ALL preserva duplicatas e LOOPA INFINITAMENTE. Exemplo: grafo Cruzeiro→Lorena→Cruzeiro. Recursive CTE com UNION ALL: anchor = {Cruzeiro}; iteração 1 = {Cruzeiro, Lorena}; iteração 2 = {Cruzeiro, Lorena, Cruzeiro, Lorena}; iteração 3 cresce mais e mais — nunca termina, eventualmente trava por out-of-memory ou hit no limite de recursão. Com UNION: anchor = {Cruzeiro}; iteração 1 = {Cruzeiro, Lorena}; iteração 2 = {Cruzeiro, Lorena} — IGUAL ao anterior, termina. UNION ALL é apropriado pra ÁRVORES (sem ciclos) onde duplicatas são impossíveis E você quer MELHOR PERFORMANCE (UNION exige checar duplicatas, custa hash/sort extra). UNION ALL TAMBÉM é apropriado se você QUER os caminhos (não só nós visitados) — cada caminho é único mesmo passando pelo mesmo nó. REGRA: árvore com nós únicos → UNION ALL (mais rápido); grafo com ciclos possíveis → UNION (segurança). Sempre tenha condição de parada explícita ou limite de iteração mesmo com UNION."
+  },
+  {
+    "id": "sqladv-08",
+    "enunciado": "Quais são os operadores JSON mais úteis em PostgreSQL para acessar campos em colunas JSONB?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas o operador =",
+      "-> retorna campo como JSONB (preserva tipo); ->> retorna campo como TEXT (mais útil para filtros e comparações). @> verifica se JSONB contém outro (pra arrays). ? verifica se chave existe no objeto. jsonb_set() atualiza campo. Indexação com GIN acelera @> e ?",
+      "Os operadores são iguais aos do MongoDB",
+      "JSON não tem operadores em SQL"
+    ],
+    "resposta": 1,
+    "explicacao": "Operadores principais JSONB em PostgreSQL: (1) ARROW (->) retorna campo como JSONB, preserva tipo — 'prefs -> tema' retorna \"dark\" com aspas, ainda JSONB; (2) ARROW2 (->>) retorna campo como TEXT, melhor para filtros — 'prefs ->> tema' retorna dark sem aspas, comparável diretamente: 'WHERE prefs ->> tema = dark'; (3) CONTAINS (@>) verifica se JSONB esquerdo CONTÉM o direito — 'prefs -> linguagens @> Java' (verifica se array contém valor); (4) HAS_KEY (?) verifica se chave existe — 'prefs ? idioma' (TRUE se objeto tem essa chave); (5) jsonb_set(jsonb, path, value) atualiza campo aninhado mantendo o resto; (6) jsonb_build_object e jsonb_agg constroem JSON na query (útil pra APIs). PERFORMANCE: índice GIN em coluna JSONB acelera @> e ? — 'CREATE INDEX idx_prefs ON Configuracao USING GIN (prefs)'. Pra um campo específico que você consulta sempre: índice B-tree em expressão — 'CREATE INDEX idx_tema ON Configuracao ((prefs ->> tema))'. JSON pra dados realmente semi-estruturados (configs, metadata, raw API response). NÃO use pra relacionamentos (use FK) nem pra dados frequentemente filtrados (use colunas)."
+  },
+  {
+    "id": "sqladv-09",
+    "enunciado": "Como você usa CASE em SQL para criar 'pivoteamento básico' (transformar valores em colunas)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "CASE não pode ser usado para pivoteamento",
+      "Combinando CASE com função agregada dentro de GROUP BY: COUNT(CASE WHEN nota >= 9 THEN 1 END) AS conceito_a, COUNT(CASE WHEN nota BETWEEN 7 AND 8.99 THEN 1 END) AS conceito_b. Cada CASE retorna 1 quando condição é verdadeira, NULL caso contrário; COUNT ignora NULL. Resultado: várias colunas resumindo categorias diferentes",
+      "Pivoteamento só funciona em SQL Server com PIVOT",
+      "Só com stored procedures"
+    ],
+    "resposta": 1,
+    "explicacao": "Pivoteamento básico via CASE + agregação: 'SELECT curso, COUNT(CASE WHEN nota >= 9 THEN 1 END) AS conceito_a, COUNT(CASE WHEN nota BETWEEN 7 AND 8.99 THEN 1 END) AS conceito_b, COUNT(CASE WHEN nota < 7 THEN 1 END) AS reprovados FROM Aluno a JOIN Matricula m ON a.id = m.aluno_id GROUP BY a.curso'. MECÂNICA: dentro de COUNT, o CASE retorna 1 quando condição verdadeira, NULL quando falsa (sem ELSE = ELSE NULL implícito). COUNT ignora NULLs — então conta só os 1s. Equivalente a SUM(CASE WHEN cond THEN 1 ELSE 0 END), mas com COUNT é mais idiomático. SINTAXES ALTERNATIVAS: SQL Server tem operador PIVOT específico (mais verboso); PostgreSQL tem 'crosstab' no módulo tablefunc (mais complexo); MySQL não tem nativo. CASE + agregação resolve a maioria dos casos práticos de pivoteamento simples. Pra pivoteamento DINÂMICO (colunas variam conforme dados), precisa montar SQL na aplicação ou usar dynamic SQL. CASE também é fundamental em ORDER BY ('ORDER BY CASE WHEN ... THEN 1 ELSE 2 END'), GROUP BY (agrupamento condicional), e UPDATE ('SET status = CASE WHEN nota >= 7 THEN aprovado ELSE reprovado END')."
+  },
+  {
+    "id": "sqladv-10",
+    "enunciado": "Em Spring Boot retornando uma API REST, qual a vantagem prática de usar jsonb_agg() no PostgreSQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Não tem vantagem, é só funcionalidade extra",
+      "Permite gerar JSON ANINHADO direto na query — em vez de buscar aluno + executar uma query separada por matrícula (N+1 problem), uma única query devolve a estrutura completa (aluno com array de matrículas aninhadas) pronta para serializar como JSON da API. Pode ser ordens de magnitude mais rápido em endpoints com muitas relações",
+      "Funciona apenas em testes unitários",
+      "É equivalente a usar @OneToMany no Hibernate"
+    ],
+    "resposta": 1,
+    "explicacao": "jsonb_agg() (PostgreSQL) e funções similares (MySQL JSON_ARRAYAGG, SQL Server FOR JSON PATH) permitem CONSTRUIR JSON ANINHADO direto na query. Exemplo: 'SELECT a.id, a.nome, jsonb_agg(jsonb_build_object(disciplina_id, m.disciplina_id, nota, m.nota)) AS matriculas FROM Aluno a LEFT JOIN Matricula m ON a.id = m.aluno_id GROUP BY a.id, a.nome'. RESULTADO: cada aluno vira UMA linha com array JSON de matrículas aninhadas. PROBLEMA QUE RESOLVE — N+1 QUERIES: no Spring Boot/JPA com @OneToMany lazy, ao serializar lista de N alunos com matrículas, o Hibernate executa 1 query pra Aluno + N queries pra Matricula = N+1 queries. Em 1000 alunos = 1001 queries, latência de banco multiplicada. SOLUÇÕES: (a) JPA com @EntityGraph ou FETCH JOIN — funciona mas com cuidado (produto cartesiano em múltiplos OneToMany); (b) JPA Projection com @Query nativa usando jsonb_agg — UMA query, JSON pronto, mais rápido; (c) escrever query nativa direto e mapear pra DTO via @SqlResultSetMapping. Em endpoints de read-only com muitas relações (dashboard, listagem com nested), abordagem JSON pode ser 10x-100x mais rápida que JPA padrão. Trade-off: perde abstração ORM, fica vinculado ao dialeto PostgreSQL."
+  }
+]

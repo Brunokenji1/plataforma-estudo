@@ -1,0 +1,390 @@
+---
+titulo: "O Modelo Relacional: Como Codd Mudou a Computação em 1970"
+trilha: "banco-de-dados"
+duracaoMin: 60
+dificuldade: "iniciante"
+referencias:
+  - "Edgar F. Codd (1970), 'A Relational Model of Data for Large Shared Data Banks', Communications of the ACM 13(6), pp. 377-387 — paper fundador do modelo relacional"
+  - "Edgar F. Codd (1971), 'A Data Base Sublanguage Founded on the Relational Calculus', SIGFIDET '71 — ALPHA, predecessor do SQL"
+  - "Edgar F. Codd (1971), 'Further Normalization of the Data Base Relational Model' — introduz as 3 primeiras formas normais"
+  - "Peter P. Chen (1976), 'The Entity-Relationship Model—Toward a Unified View of Data', ACM Transactions on Database Systems Vol. 1 No. 1, pp. 9-36 — modelo ER"
+  - "IBM System R project (1974-1979) — primeira implementação experimental do modelo relacional, base do DB2"
+  - "Donald D. Chamberlin, Raymond F. Boyce (1974), 'SEQUEL: A Structured English Query Language' — predecessor direto do SQL"
+  - "C. J. Date, 'An Introduction to Database Systems', 8ª ed., Addison-Wesley 2003 — texto clássico"
+  - "Elmasri & Navathe, 'Fundamentals of Database Systems', 7ª ed., Pearson 2015"
+  - "Stanford CS 245 — Principles of Data-Intensive Systems"
+  - "MIT OCW 6.830 — Database Systems"
+---
+
+## Como toda transação bancária do seu dia depende de 1970
+
+Cada vez que você usa o app do seu banco, faz Pix, cadastra um aluguel no QuintoAndar, dá `git push`, posta no Instagram, ou pede um Uber — em algum momento da operação, **dados estão sendo lidos ou gravados num banco de dados relacional**. PostgreSQL, MySQL, Oracle, SQL Server, SQLite, MariaDB — todos derivam da mesma ideia fundamental publicada em **junho de 1970** por um matemático britânico chamado **Edgar Frank "Ted" Codd**.
+
+Codd era ex-piloto da **Royal Air Force** na Segunda Guerra Mundial, fez matemática em **Oxford**, depois doutorado em ciência da computação em Michigan, e em **1968 ingressou no IBM San Jose Research Lab**. Em 1970, Codd publicou o paper:
+
+> **"A Relational Model of Data for Large Shared Data Banks"** — *Communications of the ACM* 13(6), pp. 377-387
+
+O paper tem **17 páginas**. Não é apresentado como uma revolução. No abstract, Codd modesta mente diz que vai usar "a noção matemática de relação" para resolver problemas que os modelos existentes (hierárquico e em rede) não resolviam bem. Hoje sabemos: foi **um dos papers mais influentes da história da ciência da computação**. A Forbes em 2002 listou o modelo relacional como **uma das maiores inovações dos 85 anos anteriores**.
+
+Codd recebeu o **Turing Award em 1981** — o "Nobel da computação". Continuou trabalhando em variantes e refinamentos até morrer em 2003.
+
+Esta lição cobre:
+
+1. **O problema que existia em 1970** — modelos hierárquico e em rede, suas limitações
+2. **A ideia central de Codd** — independência entre dados e armazenamento
+3. **Conceitos fundamentais** — relação, tupla, atributo, chave primária, chave estrangeira
+4. **Modelo Entidade-Relacionamento (ER)** de Peter Chen (1976)
+5. **A história até o SQL** — de System R ao padrão ANSI
+
+No fim, você vai entender **por que o modelo relacional dominou 55 anos** e ainda domina (apesar do hype de NoSQL nos anos 2010), e ter a base conceitual sólida pra resto da trilha.
+
+---
+
+## O problema que existia em 1970
+
+Antes de Codd, dois modelos competiam:
+
+**Modelo hierárquico** (IBM IMS, 1966): dados organizados como **árvores**. Pai-filho-filho-filho. Bom pra dados naturalmente hierárquicos (organogramas, BOM em manufatura). Problema: **caminhos rígidos**. Pra trocar um produto entre categorias, refatora o banco inteiro. Pra consultar "todos os produtos sob R$100 independente da categoria", percorre a árvore inteira.
+
+**Modelo em rede** (CODASYL DBTG, 1969): generaliza o hierárquico — cada nó pode ter múltiplos pais. Mais flexível, mas **caminhos ainda explícitos**. O programador precisa saber **fisicamente onde** o dado está. Mudar o esquema requer recompilar todas as aplicações que usavam o banco.
+
+O problema central de ambos: **dependência de aplicação com armazenamento físico**. Mudou onde o dado está? Quebrou a aplicação. Adicionou um campo novo? Quebrou. Reorganizou índices pra ganhar performance? Quebrou.
+
+Codd, no parágrafo de abertura do paper, é direto:
+
+> *"Future users of large data banks must be protected from having to know how the data is organized in the machine (the internal representation)."*
+> 
+> Tradução: usuários futuros de grandes bancos de dados precisam ser protegidos de ter que saber como os dados estão organizados na máquina.
+
+A palavra-chave é **"independência de dados"** (data independence) — o conceito que Codd promoveu como objetivo central. **Separe o que está armazenado de como é armazenado.** O programador deve declarar o que quer saber, não como buscar.
+
+<Insight>
+Codd não estava inventando do nada. Ele aplicou a **teoria matemática das relações** — que existe há mais de um século — à modelagem de dados. A genialidade não foi a matemática (já existia), nem a ideia de tabela (também já existia em forma rudimentar), mas combinar tudo num **modelo formal** com operações bem definidas, garantias matemáticas, e independência total do armazenamento. **Engenharia teórica aplicada virando engenharia prática.**
+</Insight>
+
+---
+
+## A ideia central: relação como tabela
+
+Em matemática, uma **relação** sobre conjuntos `D₁, D₂, ..., Dₙ` é simplesmente um **subconjunto do produto cartesiano** `D₁ × D₂ × ... × Dₙ`. Cada elemento da relação é uma **tupla** ordenada `(a₁, a₂, ..., aₙ)` onde cada `aᵢ ∈ Dᵢ`.
+
+Codd percebeu que isso é **exatamente uma tabela**:
+
+- Os conjuntos `Dᵢ` são os **domínios** dos atributos (tipos de dados: inteiros, strings, datas)
+- A relação é a **tabela**
+- Cada tupla é uma **linha**
+- Cada `aᵢ` é o **valor da coluna `i`** naquela linha
+
+Visualizando:
+
+<svg width="100%" viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Estrutura de uma tabela relacional</title>
+<desc>Tabela Aluno com 4 colunas (id, nome, curso, semestre) e 4 linhas de dados, com anotações apontando para os conceitos de relação, atributo, tupla e domínio</desc>
+
+<rect x="40" y="50" width="500" height="180" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+
+<rect x="40" y="50" width="500" height="35" fill="#1d4d3f"/>
+<text x="80" y="73" fontFamily="monospace" fontSize="15" fill="#ffffff" fontWeight="bold">id</text>
+<text x="180" y="73" fontFamily="monospace" fontSize="15" fill="#ffffff" fontWeight="bold">nome</text>
+<text x="330" y="73" fontFamily="monospace" fontSize="15" fill="#ffffff" fontWeight="bold">curso</text>
+<text x="460" y="73" fontFamily="monospace" fontSize="15" fill="#ffffff" fontWeight="bold">semestre</text>
+
+<rect x="40" y="85" width="500" height="35" fill="#222222"/>
+<text x="80" y="108" fontFamily="monospace" fontSize="14" fill="#cccccc">1</text>
+<text x="180" y="108" fontFamily="monospace" fontSize="14" fill="#cccccc">Bruno Kenji</text>
+<text x="330" y="108" fontFamily="monospace" fontSize="14" fill="#cccccc">ADS</text>
+<text x="460" y="108" fontFamily="monospace" fontSize="14" fill="#cccccc">4</text>
+
+<rect x="40" y="120" width="500" height="35" fill="#2a2a2a"/>
+<text x="80" y="143" fontFamily="monospace" fontSize="14" fill="#cccccc">2</text>
+<text x="180" y="143" fontFamily="monospace" fontSize="14" fill="#cccccc">Murilo Silva</text>
+<text x="330" y="143" fontFamily="monospace" fontSize="14" fill="#cccccc">ADS</text>
+<text x="460" y="143" fontFamily="monospace" fontSize="14" fill="#cccccc">4</text>
+
+<rect x="40" y="155" width="500" height="35" fill="#222222"/>
+<text x="80" y="178" fontFamily="monospace" fontSize="14" fill="#cccccc">3</text>
+<text x="180" y="178" fontFamily="monospace" fontSize="14" fill="#cccccc">Erika Costa</text>
+<text x="330" y="178" fontFamily="monospace" fontSize="14" fill="#cccccc">Direito</text>
+<text x="460" y="178" fontFamily="monospace" fontSize="14" fill="#cccccc">7</text>
+
+<rect x="40" y="190" width="500" height="35" fill="#2a2a2a"/>
+<text x="80" y="213" fontFamily="monospace" fontSize="14" fill="#cccccc">4</text>
+<text x="180" y="213" fontFamily="monospace" fontSize="14" fill="#cccccc">Pedro Chaves</text>
+<text x="330" y="213" fontFamily="monospace" fontSize="14" fill="#cccccc">ADS</text>
+<text x="460" y="213" fontFamily="monospace" fontSize="14" fill="#cccccc">3</text>
+
+<line x1="105" y1="50" x2="105" y2="230" stroke="#7F77DD" strokeWidth="1"/>
+<line x1="305" y1="50" x2="305" y2="230" stroke="#7F77DD" strokeWidth="1"/>
+<line x1="430" y1="50" x2="430" y2="230" stroke="#7F77DD" strokeWidth="1"/>
+
+<text x="540" y="20" fontFamily="sans-serif" fontSize="13" fill="#7F77DD" fontWeight="bold">RELAÇÃO Aluno</text>
+<line x1="595" y1="30" x2="450" y2="55" stroke="#7F77DD" strokeWidth="1"/>
+
+<text x="80" y="265" fontFamily="sans-serif" fontSize="12" fill="#888888">tupla (linha)</text>
+<line x1="105" y1="255" x2="105" y2="225" stroke="#888888" strokeWidth="1"/>
+
+<text x="280" y="265" fontFamily="sans-serif" fontSize="12" fill="#888888">atributos (colunas)</text>
+<line x1="330" y1="255" x2="330" y2="90" stroke="#888888" strokeWidth="1" strokeDasharray="3,3"/>
+
+<text x="555" y="120" fontFamily="sans-serif" fontSize="12" fill="#888888">cada valor</text>
+<text x="555" y="138" fontFamily="sans-serif" fontSize="12" fill="#888888">pertence a um</text>
+<text x="555" y="156" fontFamily="sans-serif" fontSize="12" fill="#888888">DOMÍNIO</text>
+<line x1="545" y1="135" x2="490" y2="108" stroke="#888888" strokeWidth="1"/>
+</svg>
+
+Vocabulário oficial vs informal:
+
+| Termo formal (Codd) | Termo informal (SQL) |
+|---|---|
+| relação | tabela |
+| tupla | linha (row) |
+| atributo | coluna (column) |
+| cardinalidade | quantidade de linhas |
+| grau | quantidade de colunas |
+| domínio | tipo de dado |
+
+Na prática, ninguém em produção fala "relação" ou "tupla" — fala tabela e linha. Mas saber o vocabulário formal ajuda a entender papers acadêmicos e a documentação histórica.
+
+### Propriedades das relações (que diferem de tabelas casuais)
+
+Uma relação formal tem propriedades estritas que **vão além** de uma planilha qualquer:
+
+1. **Sem linhas duplicadas**: cada tupla é única (matematicamente, conjunto não tem repetidos)
+2. **Ordem das linhas não importa**: relação é um conjunto, não uma lista
+3. **Ordem das colunas não importa**: na teoria formal — embora em SQL, sim importa
+4. **Cada valor é atômico** (não estruturado): nada de listas, JSON aninhado, ou subtabelas dentro de uma célula. Isso é a **primeira forma normal (1NF)**, regra fundamental do modelo
+
+Na prática, SQL relaxa essas propriedades em vários pontos — permite linhas duplicadas (sem chave primária), ordem das colunas conta nos `INSERT` e `SELECT *`, alguns SGBDs aceitam tipos compostos (PostgreSQL com JSON, arrays). Mas o modelo teórico permanece como **norte conceitual**.
+
+---
+
+## Chaves: como tuplas se identificam
+
+Se cada tupla precisa ser única, **o que torna uma única?** Codd respondeu com o conceito de **chave**.
+
+### Chave primária (Primary Key, PK)
+
+Um **conjunto mínimo de atributos** cujo valor identifica unicamente cada tupla da relação.
+
+Exemplos:
+- Na tabela `Aluno`, `id` é PK (cada aluno tem id único)
+- Em `Pedido`, `numero_pedido` é PK
+- Em `Matricula`, a PK pode ser composta: `(aluno_id, disciplina_id)`
+
+Propriedades:
+- **Único**: dois alunos diferentes nunca têm mesmo `id`
+- **Não-nulo**: PK nunca aceita `NULL`
+- **Imutável**: idealmente, PK não muda ao longo do tempo
+
+> **Surrogate key vs natural key**: surrogate é uma PK artificial (auto-incremento, UUID). Natural é uma PK que existe no mundo real (CPF, email, ISBN). Em Spring Boot/JPA, a convenção é usar surrogate (`@Id @GeneratedValue Long id`) — mais simples, performance melhor em joins, evita problemas se a "natural" mudar (alguém troca o email, por exemplo).
+
+### Chave estrangeira (Foreign Key, FK)
+
+Atributo (ou conjunto) numa tabela que **referencia a chave primária de outra** (ou da mesma) tabela. É como o modelo relacional **representa relacionamentos** entre tabelas.
+
+Exemplo: na tabela `Matricula(aluno_id, disciplina_id, nota)`, tanto `aluno_id` quanto `disciplina_id` são FKs — referenciam `Aluno.id` e `Disciplina.id` respectivamente.
+
+**Garantias** da FK (integridade referencial):
+- Toda FK válida aponta pra uma PK existente, ou é `NULL`
+- Não dá pra deletar uma tupla cuja PK é referenciada por FKs em outras tabelas (a menos que o ON DELETE seja CASCADE ou SET NULL)
+
+Esse mecanismo é o que torna o modelo relacional **seguro** — você não fica com "matrículas órfãs" apontando pra alunos que não existem mais.
+
+<svg width="100%" viewBox="0 0 680 240" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Relacionamento via chave estrangeira</title>
+<desc>Duas tabelas Aluno e Matricula conectadas por uma seta de chave estrangeira</desc>
+
+<rect x="40" y="40" width="220" height="150" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="40" y="40" width="220" height="30" fill="#1d4d3f"/>
+<text x="150" y="60" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">Aluno</text>
+
+<rect x="40" y="70" width="220" height="25" fill="#2a2a2a"/>
+<text x="60" y="87" fontFamily="monospace" fontSize="13" fill="#FFD700" fontWeight="bold">PK</text>
+<text x="100" y="87" fontFamily="monospace" fontSize="13" fill="#cccccc">id        BIGINT</text>
+
+<rect x="40" y="95" width="220" height="25" fill="#222222"/>
+<text x="100" y="112" fontFamily="monospace" fontSize="13" fill="#cccccc">nome      VARCHAR</text>
+
+<rect x="40" y="120" width="220" height="25" fill="#2a2a2a"/>
+<text x="100" y="137" fontFamily="monospace" fontSize="13" fill="#cccccc">curso     VARCHAR</text>
+
+<rect x="40" y="145" width="220" height="25" fill="#222222"/>
+<text x="100" y="162" fontFamily="monospace" fontSize="13" fill="#cccccc">semestre  INT</text>
+
+<rect x="420" y="40" width="220" height="150" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="420" y="40" width="220" height="30" fill="#1d4d3f"/>
+<text x="530" y="60" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">Matricula</text>
+
+<rect x="420" y="70" width="220" height="25" fill="#2a2a2a"/>
+<text x="440" y="87" fontFamily="monospace" fontSize="13" fill="#FFD700" fontWeight="bold">PK</text>
+<text x="475" y="87" fontFamily="monospace" fontSize="13" fill="#FF8C42" fontWeight="bold">FK</text>
+<text x="510" y="87" fontFamily="monospace" fontSize="12" fill="#cccccc">aluno_id    BIGINT</text>
+
+<rect x="420" y="95" width="220" height="25" fill="#222222"/>
+<text x="440" y="112" fontFamily="monospace" fontSize="13" fill="#FFD700" fontWeight="bold">PK</text>
+<text x="475" y="112" fontFamily="monospace" fontSize="13" fill="#FF8C42" fontWeight="bold">FK</text>
+<text x="510" y="112" fontFamily="monospace" fontSize="12" fill="#cccccc">disciplina_id BIGINT</text>
+
+<rect x="420" y="120" width="220" height="25" fill="#2a2a2a"/>
+<text x="510" y="137" fontFamily="monospace" fontSize="12" fill="#cccccc">nota     DECIMAL</text>
+
+<rect x="420" y="145" width="220" height="25" fill="#222222"/>
+<text x="510" y="162" fontFamily="monospace" fontSize="12" fill="#cccccc">data     DATE</text>
+
+<line x1="260" y1="82" x2="520" y2="82" stroke="#FF8C42" strokeWidth="2" markerEnd="url(#seta)"/>
+
+<defs>
+<marker id="seta" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto">
+<path d="M0,0 L0,6 L9,3 z" fill="#FF8C42"/>
+</marker>
+</defs>
+
+<text x="340" y="76" fontFamily="sans-serif" fontSize="11" fill="#FF8C42" textAnchor="middle">FK aponta pra PK</text>
+
+<rect x="40" y="210" width="15" height="15" fill="#FFD700"/>
+<text x="65" y="222" fontFamily="sans-serif" fontSize="12" fill="#cccccc">PK = Primary Key</text>
+
+<rect x="200" y="210" width="15" height="15" fill="#FF8C42"/>
+<text x="225" y="222" fontFamily="sans-serif" fontSize="12" fill="#cccccc">FK = Foreign Key</text>
+</svg>
+
+### Tipos de relacionamentos via FKs
+
+- **1:1** (one-to-one) — uma `Pessoa` tem um `CPF`. FK em qualquer lado (com `UNIQUE`)
+- **1:N** (one-to-many) — um `Aluno` tem várias `Matricula`s. FK do lado N (`Matricula.aluno_id`)
+- **N:N** (many-to-many) — vários `Aluno`s cursam várias `Disciplina`s. **Precisa de tabela intermediária** (`Matricula`)
+
+O modelo relacional **não tem N:N nativo** — sempre se resolve com tabela de junção. Isso é uma das primeiras coisas a entender quando vai modelar um sistema.
+
+---
+
+## Modelo Entidade-Relacionamento (Chen, 1976)
+
+Codd deu o **modelo formal**. Mas pra **projetar** um banco a partir de requisitos de negócio, você precisa de uma **representação visual intuitiva**.
+
+Em **1976**, **Peter Chen** — taiwanês-americano, então professor no MIT — publicou no primeiro volume do ACM Transactions on Database Systems (TODS Vol. 1, No. 1) o paper **"The Entity-Relationship Model—Toward a Unified View of Data"**. Continua sendo **um dos papers mais citados em ciência da computação**.
+
+A ideia de Chen: pra projetar um banco relacional, primeiro modele o **mundo real** em termos de:
+
+- **Entidades** — "coisas" do mundo (Aluno, Disciplina, Pedido)
+- **Atributos** — propriedades das entidades (Aluno.nome, Pedido.valor)
+- **Relacionamentos** — ligações entre entidades (Aluno *cursa* Disciplina)
+
+Depois, **converte** o modelo ER pro modelo relacional (tabelas).
+
+Notação Chen original:
+
+- Entidades = **retângulos**
+- Relacionamentos = **losangos**
+- Atributos = **elipses**
+
+Hoje a notação mais usada é **IE (Information Engineering)** ou **Crow's Foot**, e ferramentas modernas (brModelo, dbdiagram.io, drawSQL) usam variantes. Mas a essência é a de Chen.
+
+### Cardinalidade
+
+Cada relacionamento tem uma **cardinalidade** que indica quantas instâncias de cada lado podem participar:
+
+- `1:1` — exatamente uma de cada
+- `1:N` — uma do lado A, várias do lado B
+- `N:M` — várias dos dois lados (precisa tabela intermediária no modelo relacional)
+
+**Participação** também é importante:
+
+- **Total** — toda instância da entidade deve participar (ex.: todo pedido tem que ter um cliente)
+- **Parcial** — pode existir sem participar (ex.: nem todo cliente tem pedido)
+
+### Conversão ER → relacional
+
+A regra prática:
+
+1. **Cada entidade vira uma tabela**, com PK
+2. **Cada atributo simples vira uma coluna**
+3. **Relacionamento 1:N** — FK no lado N
+4. **Relacionamento N:M** — cria tabela intermediária com FKs pros dois lados
+5. **Relacionamento 1:1** — FK em qualquer lado (escolha por bom senso)
+6. **Atributos multivalorados** (ex.: telefones de um aluno) — viram tabela separada
+
+Esse processo é mecânico, mas exige bom julgamento — modelar bem é a parte difícil. Vamos cobrir em profundidade na lição sobre normalização.
+
+---
+
+## A história até o SQL
+
+Codd publicou em 1970. Mas **a primeira implementação comercial chegou só em 1979**. Por quê?
+
+### IBM e o System R (1974-1979)
+
+A IBM **inicialmente resistiu** à proposta de Codd — afinal, ela vendia o IMS (modelo hierárquico) e não queria canibalizar o próprio produto. Codd teve que convencer a empresa internamente por anos.
+
+Em **1974**, a IBM iniciou no laboratório de San Jose o projeto **System R** — primeira implementação experimental de um SGBD relacional. Liderado por **Donald D. Chamberlin** e **Raymond F. Boyce**, o projeto incluiu o desenvolvimento de uma linguagem de consulta chamada **SEQUEL** (Structured English Query Language), depois renomeada para **SQL** por questões de marca registrada.
+
+O paper de 1974 *"SEQUEL: A Structured English Query Language"* (Chamberlin & Boyce) define a sintaxe que ainda usamos hoje — `SELECT ... FROM ... WHERE ...`. Curiosidade: **Boyce morreu em 1974 aos 26 anos** de aneurisma, antes de ver o impacto do que tinha criado. A normalização BCNF (Boyce-Codd Normal Form) leva o nome dele.
+
+### Oracle entra primeiro (1977-1979)
+
+Em **1977**, **Larry Ellison**, **Bob Miner** e **Ed Oates** fundam a **Software Development Laboratories** na Califórnia. Eles **lêem o paper do Codd**, **lêem os papers do System R** (a IBM publicava os resultados acadêmicos!), e decidem implementar primeiro.
+
+Em **1979**, lançam o **Oracle V2** — primeiro RDBMS comercial. Foram **2 anos antes** do IBM SQL/DS (1981) e do DB2 (1983).
+
+Larry Ellison virou um dos homens mais ricos do mundo essencialmente por **ler papers acadêmicos e executar mais rápido**. Lição pra qualquer programador.
+
+### SQL como padrão
+
+Os principais marcos:
+
+- **1986**: ANSI adota SQL como **padrão americano**
+- **1987**: ISO adota como **padrão internacional**
+- **1992**: SQL-92 — versão amplamente implementada, base do que a maioria dos cursos ensina
+- **1999, 2003, 2008, 2011, 2016**: revisões com JSON, window functions, recursive CTEs, etc.
+
+Hoje, **todo SGBD relacional implementa um dialeto de SQL** — PostgreSQL, MySQL, Oracle, SQL Server, SQLite, MariaDB. Os dialetos diferem em detalhes (sintaxe específica, funções), mas o core (SELECT, JOIN, GROUP BY) é universal.
+
+---
+
+## Por que o modelo relacional dominou 55 anos
+
+Apesar do hype de NoSQL nos anos 2010 ("o relacional morreu, é tudo MongoDB agora"), o modelo relacional **continua dominando** em 2025. PostgreSQL é o banco mais usado em sistemas corporativos novos. Stack Overflow, Reddit, Wikipedia, **Instagram** — todos rodam sobre relacional (Postgres, MySQL ou variantes).
+
+Por quê?
+
+1. **Independência de dados** — princípio central de Codd. Mudar índices, partições, hardware não quebra a aplicação
+2. **ACID** (transações atômicas, consistentes, isoladas, duráveis) — garantia de integridade que NoSQL geralmente troca por performance
+3. **SQL é declarativo** — você diz o quê, o otimizador descobre como
+4. **Joins poderosos** — relacionamentos complexos via SQL, sem precisar denormalizar
+5. **Maturidade**: 55 anos de otimização. Postgres e Oracle são software extremamente sofisticado
+6. **Tooling**: BI, ORMs, ferramentas de migration, monitoring — toda a indústria
+
+NoSQL tem seu lugar (caches, dados muito grandes com queries simples, dados não-estruturados), mas pra **a maior parte de sistemas corporativos**, o modelo relacional segue sendo a escolha padrão. Spring Boot, JPA, Hibernate, todo o ecossistema Java de empresas é construído em cima de relacional.
+
+---
+
+## Recap
+
+**Edgar F. "Ted" Codd** (1923-2003), matemático britânico no **IBM San Jose Research Lab**, publicou em **junho de 1970** o paper fundador: *"A Relational Model of Data for Large Shared Data Banks"* (CACM 13(6), 377-387). Resolveu o problema de **dependência entre aplicação e armazenamento físico** que tornava os modelos hierárquico (IMS, 1966) e em rede (CODASYL, 1969) frágeis. Recebeu o Turing Award em 1981. Foi piloto da RAF na 2ª Guerra Mundial e estudou matemática em Oxford.
+
+**Conceitos centrais do modelo**:
+- **Relação** = tabela. **Tupla** = linha. **Atributo** = coluna. **Domínio** = tipo
+- **Sem duplicatas, ordem irrelevante, valores atômicos** (1NF)
+- **PK** (chave primária) — identifica unicamente. **FK** (chave estrangeira) — referencia PK de outra tabela, garantindo **integridade referencial**
+- **Relacionamentos**: 1:1, 1:N (FK no lado N), N:M (tabela intermediária)
+
+**Peter Chen** (n. 1947), taiwanês-americano, então no MIT, publicou em **1976** *"The Entity-Relationship Model—Toward a Unified View of Data"* (ACM TODS Vol. 1, No. 1) — modelo conceitual pra **projetar** bancos relacionais. Entidades + atributos + relacionamentos com cardinalidade e participação. Conversão mecânica pra modelo relacional. Um dos papers mais citados em CS.
+
+**História até o SQL**:
+- **1974-1979**: IBM System R, liderado por Chamberlin e Boyce — implementação experimental
+- **1974**: SEQUEL (depois SQL) — Chamberlin & Boyce. Boyce morreu aos 26 anos sem ver o impacto. **BCNF** leva o nome dele
+- **1977-1979**: Larry Ellison funda Oracle, **lança o primeiro RDBMS comercial 2 anos antes da IBM** — leu os papers e executou mais rápido
+- **1986**: SQL vira padrão ANSI; **1987** padrão ISO; **SQL-92** amplamente implementado
+
+**Por que dominou 55 anos**: independência de dados, ACID, SQL declarativo, joins, maturidade, ecossistema. NoSQL tem seu lugar mas relacional ainda é padrão pra a maior parte dos sistemas corporativos — toda a stack Java/Spring Boot que você usa é construída em cima dele.
+
+A trilha de Bancos de Dados começa agora. Próximas lições possíveis:
+
+- **Normalização** — 1NF, 2NF, 3NF, BCNF. Por que evita anomalias de inserção, atualização e remoção
+- **SQL básico** — SELECT, FROM, WHERE, JOIN, GROUP BY, HAVING, ORDER BY
+- **SQL avançado** — subqueries, CTEs, window functions, recursive queries
+- **Índices** — B+tree, hash, BRIN, GIN, GiST. Como o otimizador escolhe
+- **Transações e ACID** — isolation levels, MVCC, locking, deadlock
+- **Modelagem prática** — modelar do zero um sistema com brModelo ou dbdiagram
+
+Manda qual quer.

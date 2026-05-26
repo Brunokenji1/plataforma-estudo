@@ -1,0 +1,107 @@
+[
+  {
+    "id": "heap-01",
+    "enunciado": "Qual a complexidade de extrair o máximo (extractMax) de um max-heap com n elementos?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    "resposta": 1,
+    "explicacao": "O(log n). A extração da raiz em si é trivial (você só pega arr[0]), mas precisa restaurar o heap depois movendo o último elemento pra raiz e fazendo sift down até a propriedade ser restaurada. O sift down percorre, no pior caso, um caminho da raiz a uma folha — log n passos numa árvore quase completa de n nós. Inserção (sift up) também é O(log n) pela mesma razão. Já PEEK (ver o máximo sem remover) é O(1), porque o máximo é sempre arr[0]."
+  },
+  {
+    "id": "heap-02",
+    "enunciado": "Em um heap binário armazenado num array, qual a fórmula para encontrar o FILHO ESQUERDO do nó no índice i?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["i / 2", "2 * i", "2 * i + 1", "i + 1"],
+    "resposta": 2,
+    "explicacao": "Filho esquerdo de i = 2*i + 1 (com indexação começando em 0). Filho direito = 2*i + 2. Pai de i = (i-1) / 2. Essas três fórmulas são o coração da elegância da estrutura: você navega na árvore com aritmética simples em O(1), sem alocar nós nem seguir ponteiros. Algumas implementações antigas usam indexação começando em 1 (filho esquerdo = 2i, direito = 2i+1, pai = i/2), o que evita o +1/+2 mas desperdiça a posição 0. Em Java e C++ modernos, a indexação base-0 é o padrão."
+  },
+  {
+    "id": "heap-03",
+    "enunciado": "Quais são as DUAS propriedades que definem um heap binário?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Cada nó tem exatamente dois filhos, e os filhos são ordenados",
+      "Árvore quase completa (preenchida da esquerda pra direita), e propriedade do heap (pai >= filhos em max-heap, pai <= filhos em min-heap)",
+      "BST (busca binária) + balanceada",
+      "Cada nó tem cor vermelha ou preta"
+    ],
+    "resposta": 1,
+    "explicacao": "As duas propriedades são: (1) Árvore quase completa — cada nível está preenchido da esquerda pra direita, só o último pode estar incompleto. Essa regra permite o armazenamento compacto em array; (2) Propriedade do heap — pai >= filhos (max-heap) ou pai <= filhos (min-heap). Note que NÃO há ordem entre irmãos: dois nós filhos do mesmo pai podem estar em qualquer ordem. Isso diferencia heap de BST. A propriedade do heap só impõe relação vertical (pai-filho), não horizontal."
+  },
+  {
+    "id": "heap-04",
+    "enunciado": "Qual a complexidade de transformar um array desordenado de n elementos em um heap (heapify usando algoritmo de Floyd)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(log n)", "O(n)", "O(n log n)", "O(n²)"],
+    "resposta": 1,
+    "explicacao": "O(n) — linear no tamanho do array. Demonstrado por Robert W. Floyd em 1964. A abordagem ingênua de inserir um por um é O(n log n), mas Floyd's heapify começa pelas folhas e vai subindo aplicando sift down. A análise: metade dos nós são folhas (não fazem nada), 1/4 têm altura 1 (fazem 1 swap), 1/8 têm altura 2 (fazem 2 swaps)... A soma n/4·1 + n/8·2 + n/16·3 + ... converge pra O(n). Significa que construir um heap não custa mais que percorrer o array uma vez."
+  },
+  {
+    "id": "heap-05",
+    "enunciado": "Por padrão, a PriorityQueue em Java e std::priority_queue em C++ se comportam como:",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Java: max-heap. C++: min-heap.",
+      "Ambas como min-heap.",
+      "Java: min-heap. C++: max-heap.",
+      "Ambas como max-heap."
+    ],
+    "resposta": 2,
+    "explicacao": "Java PriorityQueue é MIN-HEAP por padrão (o menor sai primeiro). C++ std::priority_queue é MAX-HEAP por padrão (o maior sai primeiro). Essa diferença pega muita gente que troca de linguagem. Pra inverter: em Java, passa Comparator.reverseOrder(); em C++, passa std::greater<T> como terceiro parâmetro do template. Outra pegadinha em C++: pop() apenas REMOVE, não retorna. Você precisa chamar top() antes pra ver o valor — design consistente com std::stack, mas confuso vindo de Java."
+  },
+  {
+    "id": "heap-06",
+    "enunciado": "Para encontrar os K MAIORES elementos de um array de n números (com K << n), qual estratégia é MAIS EFICIENTE?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ordenar todo o array em O(n log n) e pegar os K primeiros",
+      "Manter um min-heap de tamanho K. Para cada novo elemento, comparar com o topo e trocar se for maior. Total: O(n log K)",
+      "Usar duas pilhas: O(n²)",
+      "Hash table: O(n)"
+    ],
+    "resposta": 1,
+    "explicacao": "O(n log K) com min-heap de tamanho K vence O(n log n) do sort quando K << n. A ideia: o heap mantém os K maiores vistos até agora; o topo (menor desses K) é o threshold. Para cada novo elemento, se for maior que o topo, ele substitui o topo. Operações no heap custam O(log K), e fazemos no máximo n delas. Pra n = 10⁶ e K = 10: O(n log K) ≈ 3.3 × 10⁶ operações; O(n log n) ≈ 2 × 10⁷. Ganho prático de 6×."
+  },
+  {
+    "id": "heap-07",
+    "enunciado": "Qual é a complexidade do algoritmo de Dijkstra usando MIN-HEAP em um grafo com V vértices e E arestas?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(V + E)", "O((V + E) log V)", "O(V²)", "O(VE)"],
+    "resposta": 1,
+    "explicacao": "O((V + E) log V) usando min-heap. Cada vértice é inserido e removido do heap uma vez: V × O(log V). Cada aresta pode causar um decrease-key (na prática implementado como uma nova inserção): E × O(log V). Total: O((V + E) log V). Sem heap (varrendo o array de distâncias a cada passo): O(V²). Pra grafos esparsos (E << V²), com-heap vence; pra grafos densos (E ≈ V²), a versão O(V²) pode ser competitiva. Com Fibonacci heap, cai pra O(E + V log V), mas constantes ocultas grandes tornam isso teoria — heap binário é o que se usa em prática."
+  },
+  {
+    "id": "heap-08",
+    "enunciado": "Verdadeiro ou falso: heapsort é estável.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Heapsort NÃO é estável — elementos com chaves iguais podem ter sua ordem original alterada durante as extractions. Por exemplo, durante o sift down, dois elementos iguais podem ser comparados e trocados arbitrariamente. Pra manter estabilidade, você precisaria de campos auxiliares (índice original como desempate). Outros algoritmos O(n log n) que SÃO estáveis: merge sort, TimSort. Os que NÃO são estáveis: heapsort, quicksort, dual-pivot quicksort. Por isso TimSort é escolhido pra ordenar objetos em Java (preserva ordem original em empates), e dual-pivot quicksort pra primitivos (estabilidade não importa)."
+  },
+  {
+    "id": "heap-09",
+    "enunciado": "Quem inventou o algoritmo Heapsort e a estrutura heap?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, em The Art of Computer Programming (1968)",
+      "Tony Hoare, no mesmo paper do Quicksort (1959)",
+      "J. W. J. (Bill) Williams, na Communications of the ACM (1964)",
+      "Robert Sedgewick (Princeton, 1983)"
+    ],
+    "resposta": 2,
+    "explicacao": "J. W. J. (Bill) Williams publicou 'Algorithm 232: Heapsort' na Communications of the ACM em 1964. O paper introduziu tanto o algoritmo de ordenação Heapsort quanto a estrutura de dados heap em si. Meses depois no mesmo ano, Robert W. Floyd publicou 'Algorithm 245: Treesort' na mesma revista, com a otimização do heapify em O(n). Floyd é mais famoso por outros algoritmos: Floyd-Warshall (caminhos mais curtos), Floyd's cycle detection (tortoise and hare). Williams é menos conhecido, mas o trabalho dele virou patrimônio da computação — heap está em quase toda biblioteca padrão moderna."
+  },
+  {
+    "id": "heap-10",
+    "enunciado": "Para o problema 'mediana de um stream contínuo de números', qual é a estratégia clássica usando heaps?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Manter um único heap com todos os elementos",
+      "Manter um max-heap para a metade menor e um min-heap para a metade maior, balanceando os tamanhos",
+      "Usar uma BST balanceada e fazer in-order traversal a cada inserção",
+      "Manter o array ordenado e buscar o elemento do meio"
+    ],
+    "resposta": 1,
+    "explicacao": "Dois heaps (técnica 'Two Heaps'): max-heap para a METADE MENOR dos números e min-heap para a METADE MAIOR. A mediana é o topo de uma das heaps (se tamanhos diferentes) ou a média dos dois topos (se tamanhos iguais). Cada inserção: decide em qual heap colocar baseado no valor, depois rebalancia se os tamanhos diferem em mais de 1. Total: O(log n) por inserção, O(1) pra obter a mediana. Comparado com manter array ordenado (O(n) por inserção) ou BST com rank queries (O(log n) mas mais complexa), a solução com 2 heaps é a mais elegante e eficiente. Aparece em problemas de monitoramento em tempo real, telemetria e finance."
+  }
+]

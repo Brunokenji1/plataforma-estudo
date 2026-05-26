@@ -1,0 +1,740 @@
+---
+titulo: "Teoria dos Números pra ICPC: Algoritmos com 2300 Anos de História"
+trilha: "algoritmos"
+duracaoMin: 70
+dificuldade: "intermediario"
+referencias:
+  - "Euclides de Alexandria (~300 BC), 'Elements', Livro VII, Proposições 1-2 — algoritmo do GCD original, um dos algoritmos mais antigos em uso"
+  - "Eratóstenes de Cirene (276-194 BC) — Sieve atribuído a ele por Nicomachus de Gerasa em 'Introduction to Arithmetic' (séc II CE); paper original perdido"
+  - "Pierre de Fermat (1640), carta a Frénicle de Bessy datada 18 de outubro de 1640 — enunciado do Little Theorem"
+  - "Leonhard Euler (1736), 'Theorematum Quorundam ad Numeros Primos Spectantium Demonstratio', Comm. Acad. Petropolitanae — primeira prova publicada do Fermat Little Theorem"
+  - "Leonhard Euler (1763), introdução da função totient φ(n)"
+  - "Sun Tzu Suan Ching (孫子算經, séc III-V CE) — primeira aparição do Chinese Remainder Theorem"
+  - "Étienne Bézout (séc XVIII) — identidade de Bézout"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 31 — Number-Theoretic Algorithms"
+  - "Antti Laaksonen, Competitive Programmer's Handbook (CPH), Cap. 21 — Number Theory"
+  - "cp-algorithms.com — extensive Number Theory section"
+  - "MIT OCW 6.042J — Mathematics for Computer Science, capítulos de Number Theory"
+---
+
+## Por que números primos importam pra você
+
+Toda autenticação na internet, todo HTTPS que você abre, todo blockchain — depende fundamentalmente de **propriedades de números primos** descobertas há **2300 anos** pelos gregos. Quando seu navegador estabelece uma conexão TLS com `seubanco.com.br`, o handshake usa RSA ou Elliptic Curve Cryptography (ECC) — protocolos cuja segurança vem do **Pequeno Teorema de Fermat** (1640) e da dificuldade computacional de fatorar primos grandes.
+
+Em **ICPC** especificamente, **Number Theory** aparece em quase todo regional. Problemas típicos:
+
+- "Quantos números entre 1 e N são coprimos com M?"
+- "Calcule `a^b mod p` onde `b = 10^18`"
+- "Quantos números primos existem até N = 10^7?"
+- "Resolva o sistema `x ≡ a₁ (mod m₁), x ≡ a₂ (mod m₂), ...`"
+- "Inverso modular de `a` módulo `p`?"
+
+Esta lição cobre **as ferramentas matemáticas essenciais** que resolvem essa família inteira:
+
+1. **GCD** e o **algoritmo de Euclides** (~300 BC) — o mais antigo algoritmo em uso
+2. **Crivo de Eratóstenes** (~240 BC) — listar todos os primos até N
+3. **Exponenciação modular rápida** — calcular `a^b mod m` em O(log b)
+4. **Pequeno Teorema de Fermat** (1640) e **inverso modular**
+5. **Função totient de Euler** (1763)
+6. **Teorema Chinês do Resto** (séc III-V CE)
+
+Tudo com **implementações Java e C++ prontas pra ICPC**, e contexto histórico — porque saber **de onde** vem cada algoritmo ajuda a lembrar **quando usá-lo**.
+
+---
+
+## GCD: o algoritmo mais antigo em uso
+
+Comece pela primitiva fundamental: **Máximo Divisor Comum** (MDC, ou GCD em inglês — Greatest Common Divisor).
+
+> Dados dois inteiros positivos `a` e `b`, encontre o **maior** inteiro `d` que divide ambos.
+
+Exemplos: `gcd(12, 18) = 6`, `gcd(100, 75) = 25`, `gcd(17, 13) = 1` (números coprimos).
+
+### A intuição de Euclides (~300 BC)
+
+**Euclides de Alexandria**, no Livro VII das **Elements** (~300 BC), Proposição 2, descreveu o algoritmo. É um dos **algoritmos mais antigos ainda em uso**, e talvez o mais elegante já inventado.
+
+A observação central de Euclides:
+
+> **Se `a > b > 0`, então `gcd(a, b) = gcd(a - b, b)`.**
+
+Por quê? Se `d` divide tanto `a` quanto `b`, então `d` divide `a - b`. E vice-versa. Logo o conjunto de divisores comuns de `(a, b)` e `(a-b, b)` é exatamente o mesmo.
+
+Aplicação repetida reduz os números até um deles ser zero. Quando isso acontece, o outro é o GCD.
+
+A versão **moderna** acelera substituindo subtrações repetidas por uma única **divisão com resto**:
+
+> **`gcd(a, b) = gcd(b, a mod b)`**
+
+Em vez de subtrair `b` de `a` várias vezes até o resultado ser menor que `b`, calcula `a mod b` diretamente. Mesma propriedade, muito mais rápido.
+
+Implementação trivial — **4 linhas**:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class GCD {
+    public static long gcd(long a, long b) {
+        if (b == 0) return a;
+        return gcd(b, a % b);
+    }
+
+    // Versão iterativa (evita stack overflow em recursão profunda)
+    public static long gcdIter(long a, long b) {
+        while (b != 0) {
+            long t = b;
+            b = a % b;
+            a = t;
+        }
+        return a;
+    }
+
+    // LCM via GCD: lcm(a, b) = a * b / gcd(a, b)
+    // Cuidado com overflow — divide ANTES de multiplicar
+    public static long lcm(long a, long b) {
+        return a / gcd(a, b) * b;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long long gcd(long long a, long long b) {
+    return b == 0 ? a : gcd(b, a % b);
+}
+
+// Versão iterativa
+long long gcdIter(long long a, long long b) {
+    while (b != 0) {
+        long long t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+long long lcm(long long a, long long b) {
+    return a / gcd(a, b) * b;
+}
+
+// C++17 já tem std::gcd e std::lcm em <numeric>
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(log min(a, b)). Análise rigorosa via **números de Fibonacci** — o pior caso do algoritmo é quando os inputs são consecutivos de Fibonacci. Por isso é tão rápido na prática.
+
+<ComplexidadeBox melhor="O(log min(a, b))" media="O(log min(a, b))" pior="O(log min(a, b))" />
+
+**Em produção**:
+- C++17 tem `std::gcd` e `std::lcm` em `<numeric>`
+- Java tem `BigInteger.gcd()` (mas pra `long` precisa implementar)
+- Python tem `math.gcd()` nativo
+
+### Algoritmo Estendido de Euclides
+
+Versão mais poderosa: além de calcular `gcd(a, b)`, também encontra **coeficientes `x` e `y`** tais que:
+
+```
+a·x + b·y = gcd(a, b)
+```
+
+Essa é a **Identidade de Bézout** (Étienne Bézout, matemático francês do séc XVIII). É a base do **inverso modular** (veremos adiante) e da resolução de equações diofantinas lineares.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class ExtendedGCD {
+    // Retorna {gcd, x, y} tal que a*x + b*y = gcd
+    public static long[] extGcd(long a, long b) {
+        if (b == 0) return new long[]{a, 1, 0};
+        long[] resto = extGcd(b, a % b);
+        long g = resto[0];
+        long x1 = resto[1];
+        long y1 = resto[2];
+        long x = y1;
+        long y = x1 - (a / b) * y1;
+        return new long[]{g, x, y};
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+struct ExtGcdResult { long long g, x, y; };
+
+ExtGcdResult extGcd(long long a, long long b) {
+    if (b == 0) return {a, 1, 0};
+    auto r = extGcd(b, a % b);
+    return {r.g, r.y, r.x - (a / b) * r.y};
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Aplicação imediata**: inverso modular. Dado `a` e `p` coprimos, existe `x` tal que `a·x ≡ 1 (mod p)`. Esse `x` é o **inverso modular de `a` módulo `p`**, escrito `a^(-1) mod p`. Calcula via `extGcd(a, p)` — o `x` retornado é o inverso (módulo `p`).
+
+---
+
+## Crivo de Eratóstenes: listando primos
+
+Próximo problema clássico: **liste todos os primos até N**.
+
+> Primo: número natural > 1 cujos únicos divisores são 1 e ele mesmo. 2, 3, 5, 7, 11, 13, 17, 19, 23, ...
+
+**Brute force**: pra cada `i` de 2 a N, testa se é primo verificando divisibilidade até `√i`. Complexidade O(N·√N). Pra N = 10^7, são ~3×10^10 operações. Inviável em competição.
+
+### A ideia (240 BC)
+
+**Eratóstenes de Cirene** (276-194 BC), chefe da **Biblioteca de Alexandria**, propôs o algoritmo conhecido como **Crivo de Eratóstenes** (Sieve of Eratosthenes). Curiosidade histórica: o paper original foi perdido — sabemos do algoritmo apenas porque **Nicomachus de Gerasa** o descreveu em **"Introduction to Arithmetic"** (séc II CE), atribuindo-o a Eratóstenes.
+
+A ideia é genial pela inversão: em vez de **testar** se cada número é primo, **marca os compostos**.
+
+1. Cria array `eh_primo[0..N]`, todos `true`
+2. Pra `i = 2, 3, 4, ..., √N`:
+   - Se `eh_primo[i]` ainda é `true`, então `i` é primo
+   - Marca todos os múltiplos `i², i²+i, i²+2i, ...` como `false`
+3. No final, todos `i` com `eh_primo[i] == true` são primos
+
+Visualização do crivo até N = 30:
+
+<svg width="100%" viewBox="0 0 680 240" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Visualização do Crivo de Eratóstenes</title>
+<desc>Grade 6x5 mostrando números de 1 a 30, com primos destacados em verde e compostos riscados</desc>
+
+<g fontFamily="monospace" fontSize="20" textAnchor="middle">
+<rect x="40" y="20" width="50" height="35" fill="#444444" stroke="#666666"/>
+<text x="65" y="44" fill="#999999">1</text>
+
+<rect x="100" y="20" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="125" y="44" fill="#ffffff" fontWeight="bold">2</text>
+
+<rect x="160" y="20" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="185" y="44" fill="#ffffff" fontWeight="bold">3</text>
+
+<rect x="220" y="20" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="245" y="44" fill="#999999" textDecoration="line-through">4</text>
+
+<rect x="280" y="20" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="305" y="44" fill="#ffffff" fontWeight="bold">5</text>
+
+<rect x="340" y="20" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="365" y="44" fill="#999999" textDecoration="line-through">6</text>
+
+<rect x="400" y="20" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="425" y="44" fill="#ffffff" fontWeight="bold">7</text>
+
+<rect x="460" y="20" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="485" y="44" fill="#999999" textDecoration="line-through">8</text>
+
+<rect x="520" y="20" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="545" y="44" fill="#999999" textDecoration="line-through">9</text>
+
+<rect x="580" y="20" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="605" y="44" fill="#999999" textDecoration="line-through">10</text>
+
+<rect x="40" y="65" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="65" y="89" fill="#ffffff" fontWeight="bold">11</text>
+
+<rect x="100" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="125" y="89" fill="#999999" textDecoration="line-through">12</text>
+
+<rect x="160" y="65" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="185" y="89" fill="#ffffff" fontWeight="bold">13</text>
+
+<rect x="220" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="245" y="89" fill="#999999" textDecoration="line-through">14</text>
+
+<rect x="280" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="305" y="89" fill="#999999" textDecoration="line-through">15</text>
+
+<rect x="340" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="365" y="89" fill="#999999" textDecoration="line-through">16</text>
+
+<rect x="400" y="65" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="425" y="89" fill="#ffffff" fontWeight="bold">17</text>
+
+<rect x="460" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="485" y="89" fill="#999999" textDecoration="line-through">18</text>
+
+<rect x="520" y="65" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="545" y="89" fill="#ffffff" fontWeight="bold">19</text>
+
+<rect x="580" y="65" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="605" y="89" fill="#999999" textDecoration="line-through">20</text>
+
+<rect x="40" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="65" y="134" fill="#999999" textDecoration="line-through">21</text>
+
+<rect x="100" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="125" y="134" fill="#999999" textDecoration="line-through">22</text>
+
+<rect x="160" y="110" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="185" y="134" fill="#ffffff" fontWeight="bold">23</text>
+
+<rect x="220" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="245" y="134" fill="#999999" textDecoration="line-through">24</text>
+
+<rect x="280" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="305" y="134" fill="#999999" textDecoration="line-through">25</text>
+
+<rect x="340" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="365" y="134" fill="#999999" textDecoration="line-through">26</text>
+
+<rect x="400" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="425" y="134" fill="#999999" textDecoration="line-through">27</text>
+
+<rect x="460" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="485" y="134" fill="#999999" textDecoration="line-through">28</text>
+
+<rect x="520" y="110" width="50" height="35" fill="#1d9e75" stroke="#0f6e56"/>
+<text x="545" y="134" fill="#ffffff" fontWeight="bold">29</text>
+
+<rect x="580" y="110" width="50" height="35" fill="#553333" stroke="#666666"/>
+<text x="605" y="134" fill="#999999" textDecoration="line-through">30</text>
+</g>
+
+<g fontFamily="sans-serif" fontSize="14">
+<rect x="120" y="180" width="20" height="20" fill="#1d9e75"/>
+<text x="150" y="195" fill="#cccccc">Primos: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29</text>
+
+<rect x="440" y="180" width="20" height="20" fill="#553333"/>
+<text x="470" y="195" fill="#cccccc">Compostos (riscados)</text>
+</g>
+</svg>
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class Eratostenes {
+
+    // Retorna array booleano onde ehPrimo[i] = true sse i é primo
+    public static boolean[] crivo(int n) {
+        boolean[] ehPrimo = new boolean[n + 1];
+        Arrays.fill(ehPrimo, true);
+        ehPrimo[0] = ehPrimo[1] = false;
+
+        for (int i = 2; (long) i * i <= n; i++) {
+            if (ehPrimo[i]) {
+                // Começa em i*i porque múltiplos menores já foram marcados
+                for (int j = i * i; j <= n; j += i) {
+                    ehPrimo[j] = false;
+                }
+            }
+        }
+        return ehPrimo;
+    }
+
+    // Retorna LISTA de primos até N
+    public static List<Integer> primosAte(int n) {
+        boolean[] ehPrimo = crivo(n);
+        List<Integer> primos = new ArrayList<>();
+        for (int i = 2; i <= n; i++) {
+            if (ehPrimo[i]) primos.add(i);
+        }
+        return primos;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+std::vector<bool> crivo(int n) {
+    std::vector<bool> ehPrimo(n + 1, true);
+    ehPrimo[0] = ehPrimo[1] = false;
+    for (int i = 2; (long long) i * i <= n; i++) {
+        if (ehPrimo[i]) {
+            for (int j = i * i; j <= n; j += i) {
+                ehPrimo[j] = false;
+            }
+        }
+    }
+    return ehPrimo;
+}
+
+std::vector<int> primosAte(int n) {
+    auto eh = crivo(n);
+    std::vector<int> primos;
+    for (int i = 2; i <= n; i++) if (eh[i]) primos.push_back(i);
+    return primos;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: **O(N log log N)** — quase linear. Pra N = 10^7, são ~3×10^7 operações. **Roda em menos de 1 segundo**. Cabe em memória (~1 MB com `vector<bool>`).
+
+<ComplexidadeBox melhor="O(N log log N)" media="O(N log log N)" pior="O(N log log N)" />
+
+### Detalhes importantes
+
+**1. Por que começar em `i*i`?** Múltiplos menores `i·2, i·3, ..., i·(i-1)` já foram marcados antes — quando processamos os primos menores. Começar em `i²` evita trabalho redundante.
+
+**2. Cuidado com overflow**: `i * i` em `int` pode overflowar pra `i > ~46000`. Use `(long) i * i` em Java ou `(long long) i * i` em C++.
+
+**3. Crivo linear (Sieve de Euler)**: variante O(N) usando que **cada composto é marcado uma única vez** pelo seu menor fator primo. Implementação mais complexa, mas memória e tempo lineares. Pra ICPC, geralmente Eratóstenes basta.
+
+**4. Crivo segmentado**: pra N = 10^11 ou maior, processa em blocos. Permite encontrar todos os primos em intervalos `[L, R]` mesmo com `R` gigante, desde que `R - L` seja gerenciável.
+
+---
+
+## Exponenciação modular rápida
+
+Próximo problema: calcular `a^b mod m` rapidamente.
+
+**Brute force**: multiplicar `a * a * a * ...` b vezes, com `mod m` em cada passo. O(b). Pra `b = 10^18`, **inviável**.
+
+### Binary Exponentiation (Exponenciação binária)
+
+Truque: usa a **representação binária do expoente**.
+
+```
+a^13 = a^(1101 em binário)
+     = a^8 · a^4 · a^1
+     = a^(2^3) · a^(2^2) · a^(2^0)
+```
+
+Calcula `a^1, a^2, a^4, a^8, ...` (sucessivos quadrados) e multiplica os que correspondem a bits 1 do expoente. **Total: O(log b)**.
+
+Pra `b = 10^18`, são ~60 multiplicações. **Milhares de vezes mais rápido**.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class ModExp {
+    // Calcula a^b mod m em O(log b)
+    public static long modExp(long a, long b, long m) {
+        long resultado = 1 % m;
+        a %= m;
+        while (b > 0) {
+            if ((b & 1) == 1) {                        // bit menos significativo é 1
+                resultado = resultado * a % m;
+            }
+            a = a * a % m;                             // próximo quadrado
+            b >>= 1;                                   // próximo bit
+        }
+        return resultado;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long long modExp(long long a, long long b, long long m) {
+    long long resultado = 1 % m;
+    a %= m;
+    while (b > 0) {
+        if (b & 1) resultado = resultado * a % m;
+        a = a * a % m;
+        b >>= 1;
+    }
+    return resultado;
+}
+```
+
+</Code>
+</CodeSwap>
+
+<ComplexidadeBox melhor="O(log b)" media="O(log b)" pior="O(log b)" />
+
+**Atenção a overflow**: se `m` cabe em 32 bits, `a * a` cabe em 64 bits — usa `long`/`long long`. Se `m` é até 10^9, está OK. Se `m` é até 10^18, precisa `__int128` ou multiplicação modular com `mulmod`.
+
+---
+
+## Pequeno Teorema de Fermat (1640) e Inverso Modular
+
+Em **18 de outubro de 1640**, **Pierre de Fermat** escreveu uma carta a seu amigo **Frénicle de Bessy** contendo um resultado notável que hoje conhecemos como **Pequeno Teorema de Fermat**:
+
+> **Se `p` é primo e `a` não é divisível por `p`, então `a^(p-1) ≡ 1 (mod p)`.**
+
+Fermat enunciou sem demonstração: *"Et cette proposition est généralement vraie en toutes progressions et en tous nombres premiers; de quoi je vous envoierois la démonstration, si je n'appréhendois d'être trop long."* ("Esta proposição é geralmente verdadeira para todas as progressões e todos os números primos; eu te enviaria a demonstração se não fosse longa demais.")
+
+A primeira prova publicada veio quase **100 anos depois**, por **Leonhard Euler** em **1736** — paper *"Theorematum Quorundam ad Numeros Primos Spectantium Demonstratio"* nas Comm. Acad. Petropolitanae.
+
+### Por que isso importa pra você?
+
+**Aplicação direta: inverso modular** quando `p` é primo.
+
+Lembra que o inverso modular `a^(-1) mod p` é o `x` tal que `a·x ≡ 1 (mod p)`. Pelo teorema de Fermat:
+
+```
+a^(p-1) ≡ 1 (mod p)
+a · a^(p-2) ≡ 1 (mod p)
+```
+
+Logo `a^(-1) ≡ a^(p-2) (mod p)`. Calcula com **exponenciação modular** em O(log p).
+
+```java
+// Inverso modular de a mod p, com p primo
+long inversoModular(long a, long p) {
+    return modExp(a, p - 2, p);
+}
+```
+
+**Aplicações em ICPC**:
+- Calcular `C(n, k) mod p` (coeficientes binomiais com divisão modular)
+- Aritmética modular com frações
+- Hashing polinomial com módulo primo
+- Polynomial roots, NTT (Number Theoretic Transform)
+
+### Quando `p` NÃO é primo: use Extended GCD
+
+Pra `m` não-primo, o inverso de `a` módulo `m` existe **se e somente se `gcd(a, m) = 1`** (coprimos). Use o algoritmo estendido de Euclides:
+
+```java
+// Inverso modular de a mod m, m qualquer (precisa gcd(a, m) = 1)
+long inversoMod(long a, long m) {
+    long[] r = extGcd(a, m);
+    if (r[0] != 1) throw new IllegalArgumentException("inverso não existe");
+    return ((r[1] % m) + m) % m;        // normaliza para [0, m-1]
+}
+```
+
+---
+
+## Função Totient de Euler (1763)
+
+**Leonhard Euler** definiu uma função fundamental em number theory:
+
+> **`φ(n)`** = número de inteiros em `[1, n]` que são **coprimos com `n`** (têm `gcd(i, n) = 1`).
+
+Exemplos: `φ(1) = 1`, `φ(7) = 6` (todos os 6 menores são coprimos), `φ(12) = 4` (apenas 1, 5, 7, 11).
+
+**Propriedades**:
+- Se `p` é primo: `φ(p) = p - 1`
+- Se `n = p^k`: `φ(p^k) = p^k - p^(k-1) = p^(k-1)(p - 1)`
+- Multiplicativa: se `gcd(a, b) = 1`, então `φ(a·b) = φ(a)·φ(b)`
+
+**Fórmula geral**: se `n = p₁^k₁ · p₂^k₂ · ... · pₘ^kₘ`, então:
+
+```
+φ(n) = n · ∏ (1 - 1/pᵢ)
+```
+
+### Teorema de Euler (generalização de Fermat)
+
+> **Se `gcd(a, n) = 1`, então `a^φ(n) ≡ 1 (mod n)`.**
+
+Generaliza o Little Theorem pra qualquer módulo (não só primo). Aplicação: inverso modular pra `m` não primo via `a^(-1) ≡ a^(φ(m)-1) (mod m)`.
+
+### Implementação do totient
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class Totient {
+    // Calcula φ(n) em O(√n)
+    public static long phi(long n) {
+        long resultado = n;
+        for (long p = 2; p * p <= n; p++) {
+            if (n % p == 0) {
+                while (n % p == 0) n /= p;
+                resultado -= resultado / p;
+            }
+        }
+        if (n > 1) resultado -= resultado / n;        // fator primo > √n_original
+        return resultado;
+    }
+
+    // Calcula φ(i) para todo i em [1, N] em O(N log log N) usando crivo
+    public static int[] phiAte(int N) {
+        int[] phi = new int[N + 1];
+        for (int i = 0; i <= N; i++) phi[i] = i;
+        for (int i = 2; i <= N; i++) {
+            if (phi[i] == i) {                          // i é primo
+                for (int j = i; j <= N; j += i) {
+                    phi[j] -= phi[j] / i;
+                }
+            }
+        }
+        return phi;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long long phi(long long n) {
+    long long resultado = n;
+    for (long long p = 2; p * p <= n; p++) {
+        if (n % p == 0) {
+            while (n % p == 0) n /= p;
+            resultado -= resultado / p;
+        }
+    }
+    if (n > 1) resultado -= resultado / n;
+    return resultado;
+}
+
+std::vector<int> phiAte(int N) {
+    std::vector<int> phi(N + 1);
+    for (int i = 0; i <= N; i++) phi[i] = i;
+    for (int i = 2; i <= N; i++) {
+        if (phi[i] == i) {
+            for (int j = i; j <= N; j += i) phi[j] -= phi[j] / i;
+        }
+    }
+    return phi;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Aplicações**:
+- "Quantos números em `[1, N]` são coprimos com M?" — usa `φ`
+- Calcular ordem multiplicativa
+- Criptografia RSA — a função totient de um produto `p·q` (primos) é central no algoritmo
+- Generalização de Fermat para módulos não primos
+
+---
+
+## Chinese Remainder Theorem (~séc III CE)
+
+O último resultado fundamental. **Sun Tzu** (孫子, autor do **Sun Tzu Suan Ching** 孫子算經, séc III-V CE — *não é o mesmo Sun Tzu da Arte da Guerra*), matemático chinês, formulou um problema:
+
+> "Há certas coisas cuja quantidade é desconhecida. Contando-as de 3 em 3, sobram 2. De 5 em 5, sobram 3. De 7 em 7, sobram 2. Quantas são?"
+
+Em linguagem moderna: resolva o sistema
+
+```
+x ≡ 2 (mod 3)
+x ≡ 3 (mod 5)
+x ≡ 2 (mod 7)
+```
+
+A resposta original: `x = 23` (também `23 + 105k` pra qualquer inteiro k).
+
+### O teorema
+
+> **Dados módulos `m₁, m₂, ..., mₖ` dois-a-dois coprimos, e restos `a₁, a₂, ..., aₖ`, existe solução única `x` módulo `M = m₁·m₂·...·mₖ` para o sistema `x ≡ aᵢ (mod mᵢ)`.**
+
+**Construção da solução**:
+
+```
+M = m₁ · m₂ · ... · mₖ
+Mᵢ = M / mᵢ
+yᵢ = Mᵢ⁻¹ (mod mᵢ)    [inverso modular]
+
+x = (a₁·M₁·y₁ + a₂·M₂·y₂ + ... + aₖ·Mₖ·yₖ) mod M
+```
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class CRT {
+    // Resolve x ≡ a[i] (mod m[i]), todos os m[i] dois-a-dois coprimos
+    // Retorna x em [0, M) onde M = produto dos m[i]
+    public static long crt(long[] a, long[] m) {
+        long M = 1;
+        for (long mi : m) M *= mi;
+
+        long x = 0;
+        for (int i = 0; i < a.length; i++) {
+            long Mi = M / m[i];
+            long yi = inversoMod(Mi % m[i], m[i]);
+            x = (x + a[i] * Mi % M * yi % M) % M;
+        }
+        return (x + M) % M;
+    }
+
+    // Usa extGcd da seção anterior
+    static long inversoMod(long a, long mod) {
+        long[] r = extGcd(a, mod);
+        return ((r[1] % mod) + mod) % mod;
+    }
+
+    static long[] extGcd(long a, long b) {
+        if (b == 0) return new long[]{a, 1, 0};
+        long[] r = extGcd(b, a % b);
+        return new long[]{r[0], r[2], r[1] - (a / b) * r[2]};
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long long inversoMod(long long a, long long m);    // de seções anteriores
+
+long long crt(std::vector<long long>& a, std::vector<long long>& m) {
+    long long M = 1;
+    for (auto mi : m) M *= mi;
+
+    long long x = 0;
+    for (size_t i = 0; i < a.size(); i++) {
+        long long Mi = M / m[i];
+        long long yi = inversoMod(Mi % m[i], m[i]);
+        x = (x + a[i] * Mi % M * yi % M) % M;
+    }
+    return (x + M) % M;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Aplicações**:
+- Problemas de calendário (encontrar datas com propriedades específicas)
+- Cripto: combinação de resultados modulares pra reconstruir números grandes
+- RSA-CRT (otimização do RSA usando CRT)
+- Solving problems em ICPC com múltiplas congruências
+
+---
+
+## Recap
+
+**Number Theory** é uma das áreas mais antigas da matemática **ainda relevantes em computação**. Toda criptografia moderna depende dos resultados aqui.
+
+**GCD via algoritmo de Euclides** (~300 BC) — `gcd(a, b) = gcd(b, a mod b)`. Um dos algoritmos mais antigos em uso, **O(log min(a, b))**. Versão estendida calcula coeficientes da **identidade de Bézout**: `a·x + b·y = gcd(a, b)`. Base do **inverso modular**.
+
+**Crivo de Eratóstenes** (~240 BC, **Eratóstenes**, chefe da Biblioteca de Alexandria) — lista todos primos até N em **O(N log log N)**. Idea genial: marcar compostos a partir dos primos descobertos, começando em `i²` por otimização. **Crivo linear** existe (O(N)) mas mais complexo. **Crivo segmentado** trata intervalos `[L, R]` com R gigante.
+
+**Exponenciação modular rápida** — `a^b mod m` em **O(log b)** usando representação binária do expoente. Truque essencial pra problemas com expoentes gigantes (`b = 10^18`).
+
+**Pequeno Teorema de Fermat** (Pierre de Fermat, **1640**, carta a Frénicle de Bessy; prova por **Euler em 1736**) — se `p` primo e `a` não divisível por `p`, então `a^(p-1) ≡ 1 (mod p)`. **Aplicação direta**: inverso modular quando módulo é primo via `a^(-1) ≡ a^(p-2) (mod p)`. Pra módulo não primo, use **Extended GCD**.
+
+**Função Totient de Euler** (`φ(n)`, **Euler 1763**) — quantidade de inteiros em `[1, n]` coprimos com `n`. Multiplicativa, fórmula simples via fatoração. **Teorema de Euler**: `a^φ(n) ≡ 1 (mod n)` para `gcd(a, n) = 1` — generaliza Fermat. Base de RSA.
+
+**Chinese Remainder Theorem** (Sun Tzu, **séc III-V CE**) — resolve sistemas `x ≡ aᵢ (mod mᵢ)` com módulos coprimos. Solução única módulo `M = ∏mᵢ`. Aplicações em problemas modulares múltiplos, RSA-CRT, calendário.
+
+**Em ICPC**, esses 6 tópicos cobrem **80% dos problemas de Number Theory**. Combinações comuns:
+- "Calcule C(n, k) mod p" → Fermat + modExp
+- "Quantos coprimos com M até N?" → Totient
+- "Resolva múltiplas congruências" → CRT
+- "Liste primos até 10^7" → Crivo
+- "`a^b mod m` para b gigante" → Exponenciação binária
+
+A trilha cobre agora **24 lições**. Próximas direções possíveis:
+
+- **String matching avançado**: suffix arrays, Z-function, suffix automaton (expande Lição 17)
+- **Algoritmos randomizados e aproximados**: Las Vegas vs Monte Carlo, Christofides (TSP), Vertex Cover 2-approx
+- **Mudar de trilha**: Bancos de Dados, Sistemas Operacionais, Redes, Arquitetura de Software
+
+Manda qual direção quer seguir.

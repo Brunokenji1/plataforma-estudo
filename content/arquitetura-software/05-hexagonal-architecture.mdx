@@ -1,0 +1,568 @@
+---
+titulo: "Hexagonal Architecture (Ports & Adapters)"
+descricao: "Alistair Cockburn (2005), o pattern que coloca o domínio no centro e trata UI, banco e mensageria como cidadãos de igual status. Comparação com Clean Architecture e DDD."
+---
+
+As três lições anteriores construíram a base: princípios de arquitetura, Clean Architecture, DDD estratégico e tático. Tudo apontando pra mesma ideia: o domínio fica no centro, a infraestrutura nas bordas, e dependências apontam pra dentro.
+
+Hexagonal Architecture é a formulação original dessa ideia. Alistair Cockburn publicou em 4 de setembro de 2005 o paper "Hexagonal Architecture" (HaT Technical Report 2005.02, disponível em alistair.cockburn.us/hexagonal-architecture). Sete anos antes do "The Clean Architecture" do Uncle Bob (publicado em 13 de agosto de 2012 no blog 8thlight, hoje em blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html).
+
+Esta lição cobre o que Hexagonal traz de específico, onde ela difere de Clean Architecture (pouco) e onde ela difere de DDD (em outra dimensão), e qual é o lugar correto do Spring Boot na história.
+
+<Insight>
+O nome "Hexagonal" é histórico, não técnico. Cockburn usa seis lados no diagrama porque o desenho fica simétrico e cabe na lousa, mas não há nada de especial em ser seis. Em 2005 ele renomeou o padrão pra **Ports and Adapters** justamente pra parar de pessoas perguntarem "por que seis lados?". O nome velho pegou; o nome técnico é Ports and Adapters.
+</Insight>
+
+## Por que Hexagonal surgiu
+
+A motivação original de Cockburn está no abstract do paper (citação literal):
+
+> *"Allow an application to equally be driven by users, programs, automated test or batch scripts, and to be developed and tested in isolation from its eventual run-time devices and databases."* (Cockburn, 2005)
+
+Em português livre: permitir que a aplicação seja dirigida igualmente por usuários, programas, testes automatizados ou scripts de batch, e ser desenvolvida e testada em isolamento dos dispositivos e bancos de dados que vai usar em produção.
+
+Dois pontos importantes nessa formulação:
+
+- **"Equally"** (igualmente). UI humano, REST API, testes automatizados, batch — todos são tratados como cidadãos de status equivalente. Nenhum é "principal", nenhum é "auxiliar". Você pode rodar o sistema em produção via REST e em testes via batch script sem mudar o domínio.
+- **"Isolation"** (isolamento). O domínio funciona sem banco, sem UI, sem framework. Você consegue rodar testes do domínio inteiro sem subir nada externo.
+
+A motivação prática de Cockburn vinha de problemas concretos dos anos 90: aplicações onde a lógica de negócio "vazava" pra UI (lógica em handlers de botão), pra banco (regras em stored procedures), pra arquivos de configuração XML do framework. Quando a UI mudava, regras de negócio morriam. Quando o banco mudava, semântica do negócio se perdia. Sistemas viravam reféns das suas próprias dependências.
+
+## A geometria não é o ponto
+
+Olha o hexágono que todo mundo desenha:
+
+<svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-hex" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
+    </marker>
+  </defs>
+
+  <polygon points="360,80 500,160 500,320 360,400 220,320 220,160"
+           fill="currentColor" fillOpacity="0.06"
+           stroke="currentColor" strokeWidth="2" />
+
+  <text x="360" y="225" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="18" fontWeight="600">Domínio</text>
+  <text x="360" y="248" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fillOpacity="0.7">Use Cases</text>
+  <text x="360" y="270" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">(sem framework)</text>
+
+  <circle cx="220" cy="180" r="6" fill="currentColor" />
+  <circle cx="220" cy="240" r="6" fill="currentColor" />
+  <circle cx="220" cy="300" r="6" fill="currentColor" />
+  <text x="200" y="140" textAnchor="end" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">PORTS</text>
+  <text x="200" y="155" textAnchor="end" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">primary</text>
+
+  <circle cx="500" cy="180" r="6" fill="currentColor" />
+  <circle cx="500" cy="240" r="6" fill="currentColor" />
+  <circle cx="500" cy="300" r="6" fill="currentColor" />
+  <text x="520" y="140" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">PORTS</text>
+  <text x="520" y="155" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">secondary</text>
+
+  <rect x="40" y="155" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="105" y="180" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">REST</text>
+  <text x="105" y="195" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Controller</text>
+
+  <rect x="40" y="215" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="105" y="240" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">CLI / Batch</text>
+  <text x="105" y="255" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Job</text>
+
+  <rect x="40" y="275" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="105" y="300" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Test Driver</text>
+  <text x="105" y="315" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">(JUnit, FIT)</text>
+
+  <rect x="550" y="155" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="615" y="180" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Postgres</text>
+  <text x="615" y="195" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Repository</text>
+
+  <rect x="550" y="215" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="615" y="240" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Kafka</text>
+  <text x="615" y="255" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Producer</text>
+
+  <rect x="550" y="275" width="130" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="615" y="300" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">In-Memory</text>
+  <text x="615" y="315" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">(testes)</text>
+
+  <line x1="170" y1="180" x2="214" y2="180" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+  <line x1="170" y1="240" x2="214" y2="240" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+  <line x1="170" y1="300" x2="214" y2="300" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+
+  <line x1="506" y1="180" x2="550" y2="180" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+  <line x1="506" y1="240" x2="550" y2="240" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+  <line x1="506" y1="300" x2="550" y2="300" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.8" markerEnd="url(#seta-hex)" />
+
+  <text x="105" y="370" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.7">DRIVING ADAPTERS</text>
+  <text x="105" y="386" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">(primary, left)</text>
+
+  <text x="615" y="370" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.7">DRIVEN ADAPTERS</text>
+  <text x="615" y="386" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">(secondary, right)</text>
+</svg>
+
+O hexágono tem três componentes:
+
+- **Domínio (centro)**: regras de negócio, agregados, use cases. Não conhece banco, framework, UI, mensageria.
+- **Ports (pontos nos lados)**: interfaces definidas pelo domínio. Contratos do que entra e do que sai.
+- **Adapters (caixas fora)**: implementações concretas que conectam ports a tecnologias externas (HTTP, JDBC, Kafka, console, testes).
+
+A regra de dependência é única: **tudo aponta pra dentro**. Adapters dependem de ports. Domínio não conhece adapters. Quando o domínio precisa de algo do mundo externo, ele declara um port; algum adapter implementa.
+
+## Ports: o domínio define os contratos
+
+Port é uma interface (ou conjunto de interfaces). O domínio diz "preciso de algo que faça X" sem saber se esse algo é banco, fila ou arquivo CSV. Quem decide a tecnologia é o adapter.
+
+Cockburn distingue dois tipos:
+
+- **Primary ports** (ou *driving ports*, input ports). O mundo externo usa esses ports pra dirigir a aplicação. São tipicamente os use cases expostos: "criar compensação", "reservar crédito", "listar transações".
+- **Secondary ports** (ou *driven ports*, output ports). O domínio usa esses ports pra falar com o mundo externo. São tipicamente abstrações de infraestrutura: "salvar compensação", "publicar evento", "buscar crédito disponível".
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+package com.carbon.compensacao.dominio.port;
+
+// Primary port (driving): use case exposto
+public interface IniciarCompensacaoUseCase {
+    CompensacaoId executar(IniciarCompensacaoCommand comando);
+}
+
+public record IniciarCompensacaoCommand(
+    CNPJ emissor,
+    BigDecimal toneladas
+) {}
+
+// Secondary port (driven): infraestrutura abstrata
+public interface RepositorioCompensacoes {
+    Optional<CompensacaoEmissao> buscarPorId(CompensacaoId id);
+    void salvar(CompensacaoEmissao c);
+}
+
+public interface PublicadorEventos {
+    void publicar(EventoDominio evento);
+}
+
+// Implementação do use case (no domínio)
+package com.carbon.compensacao.dominio.usecase;
+
+public class IniciarCompensacaoUseCaseImpl implements IniciarCompensacaoUseCase {
+    private final RepositorioEmissores repoEmissores;
+    private final RepositorioCompensacoes repoCompensacoes;
+    private final PublicadorEventos publicador;
+
+    public IniciarCompensacaoUseCaseImpl(
+            RepositorioEmissores repoEmissores,
+            RepositorioCompensacoes repoCompensacoes,
+            PublicadorEventos publicador) {
+        this.repoEmissores = repoEmissores;
+        this.repoCompensacoes = repoCompensacoes;
+        this.publicador = publicador;
+    }
+
+    @Override
+    public CompensacaoId executar(IniciarCompensacaoCommand comando) {
+        Emissor emissor = repoEmissores.buscarPorCNPJ(comando.emissor())
+            .orElseThrow(() -> new EmissorNaoEncontrado(comando.emissor()));
+
+        CompensacaoEmissao compensacao = CompensacaoEmissao.iniciar(
+            emissor, comando.toneladas()
+        );
+
+        repoCompensacoes.salvar(compensacao);
+        compensacao.eventosNaoPublicados().forEach(publicador::publicar);
+
+        return compensacao.id();
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace carbon::compensacao::dominio::port {
+
+struct IniciarCompensacaoCommand {
+    CNPJ emissor;
+    int64_t toneladasMilhar;
+};
+
+class IniciarCompensacaoUseCase {
+public:
+    virtual ~IniciarCompensacaoUseCase() = default;
+    virtual CompensacaoId executar(const IniciarCompensacaoCommand& c) = 0;
+};
+
+class RepositorioCompensacoes {
+public:
+    virtual ~RepositorioCompensacoes() = default;
+    virtual std::optional<CompensacaoEmissao>
+        buscarPorId(const CompensacaoId& id) = 0;
+    virtual void salvar(const CompensacaoEmissao& c) = 0;
+};
+
+class PublicadorEventos {
+public:
+    virtual ~PublicadorEventos() = default;
+    virtual void publicar(const EventoDominio& evento) = 0;
+};
+
+} // namespace carbon::compensacao::dominio::port
+
+namespace carbon::compensacao::dominio::usecase {
+
+class IniciarCompensacaoUseCaseImpl
+    : public port::IniciarCompensacaoUseCase {
+
+    port::RepositorioEmissores& repoEmissores_;
+    port::RepositorioCompensacoes& repoCompensacoes_;
+    port::PublicadorEventos& publicador_;
+
+public:
+    IniciarCompensacaoUseCaseImpl(
+        port::RepositorioEmissores& re,
+        port::RepositorioCompensacoes& rc,
+        port::PublicadorEventos& p
+    ) : repoEmissores_(re), repoCompensacoes_(rc), publicador_(p) {}
+
+    CompensacaoId executar(const port::IniciarCompensacaoCommand& c) override {
+        auto emissor = repoEmissores_.buscarPorCNPJ(c.emissor);
+        if (!emissor) throw EmissorNaoEncontrado(c.emissor);
+
+        auto compensacao = CompensacaoEmissao::iniciar(*emissor, c.toneladasMilhar);
+        repoCompensacoes_.salvar(compensacao);
+        for (const auto& evento : compensacao.eventosNaoPublicados()) {
+            publicador_.publicar(evento);
+        }
+        return compensacao.id();
+    }
+};
+
+} // namespace carbon::compensacao::dominio::usecase
+```
+
+</Code>
+
+</CodeSwap>
+
+O `IniciarCompensacaoUseCaseImpl` mora no domínio. Ele recebe três dependências, todas pelos ports (interfaces abstratas). Nenhuma referência a Spring, JDBC, Kafka, REST. Você consegue testar essa classe com mocks em memória sem subir um único bean do framework.
+
+## Adapters: tradutores entre o mundo e o domínio
+
+Adapter é a implementação concreta de um port. Cockburn descreve dois lados também:
+
+- **Driving adapters** (primary). Recebem estímulo do mundo externo e chamam o domínio através dos primary ports. Exemplos: REST controller, CLI, consumer de fila, agendador, teste automatizado.
+- **Driven adapters** (secondary). São chamados pelo domínio através dos secondary ports, e traduzem pra alguma tecnologia. Exemplos: implementação JPA do repository, producer Kafka, cliente HTTP pra API externa, repository in-memory pra testes.
+
+A regra de teste do Cockburn: se você consegue substituir um driving adapter REST por um teste JUnit sem alterar o domínio, e substituir um driven adapter Postgres por um in-memory sem alterar o domínio, o hexágono está bem desenhado.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Driving adapter (esquerda): REST controller chamando o use case
+package com.carbon.compensacao.adapter.driving.rest;
+
+@RestController
+@RequestMapping("/compensacoes")
+public class CompensacaoController {
+
+    private final IniciarCompensacaoUseCase iniciar;
+
+    public CompensacaoController(IniciarCompensacaoUseCase iniciar) {
+        this.iniciar = iniciar;
+    }
+
+    @PostMapping
+    public ResponseEntity<CompensacaoIniciadaDTO> iniciar(
+            @RequestBody IniciarCompensacaoRequest req) {
+
+        IniciarCompensacaoCommand cmd = new IniciarCompensacaoCommand(
+            new CNPJ(req.cnpj()),
+            req.toneladas()
+        );
+
+        CompensacaoId id = iniciar.executar(cmd);
+        return ResponseEntity.status(201).body(new CompensacaoIniciadaDTO(id.valor()));
+    }
+}
+
+// Driven adapter (direita): implementação do repository com JPA
+package com.carbon.compensacao.adapter.driven.persistencia;
+
+@Repository
+public class RepositorioCompensacoesJPA implements RepositorioCompensacoes {
+
+    private final CompensacaoJpaRepository jpa;
+    private final MapeadorCompensacao mapeador;
+
+    public RepositorioCompensacoesJPA(
+            CompensacaoJpaRepository jpa,
+            MapeadorCompensacao mapeador) {
+        this.jpa = jpa;
+        this.mapeador = mapeador;
+    }
+
+    @Override
+    public Optional<CompensacaoEmissao> buscarPorId(CompensacaoId id) {
+        return jpa.findById(id.valor())
+                  .map(mapeador::paraDominio);
+    }
+
+    @Override
+    public void salvar(CompensacaoEmissao c) {
+        jpa.save(mapeador.paraEntidade(c));
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace carbon::adapter::driving::http {
+
+class CompensacaoHandler {
+    dominio::port::IniciarCompensacaoUseCase& iniciar_;
+
+public:
+    explicit CompensacaoHandler(dominio::port::IniciarCompensacaoUseCase& i)
+        : iniciar_(i) {}
+
+    http::Response post(const http::Request& req) {
+        auto body = json::parse(req.body());
+        dominio::port::IniciarCompensacaoCommand cmd{
+            CNPJ{body["cnpj"].get<std::string>()},
+            body["toneladas_milhar"].get<int64_t>()
+        };
+        auto id = iniciar_.executar(cmd);
+        return http::Response::created(json::object({{"id", id.valor()}}));
+    }
+};
+
+} // namespace carbon::adapter::driving::http
+
+namespace carbon::adapter::driven::persistencia {
+
+class RepositorioCompensacoesSQL : public dominio::port::RepositorioCompensacoes {
+    sql::Connection& conn_;
+
+public:
+    explicit RepositorioCompensacoesSQL(sql::Connection& c) : conn_(c) {}
+
+    std::optional<CompensacaoEmissao>
+    buscarPorId(const CompensacaoId& id) override {
+        auto stmt = conn_.prepare("SELECT * FROM compensacoes WHERE id = ?");
+        stmt.bind(1, id.valor());
+        auto rs = stmt.execute();
+        if (!rs.next()) return std::nullopt;
+        return mapearParaDominio(rs);
+    }
+
+    void salvar(const CompensacaoEmissao& c) override {
+        // INSERT ou UPDATE conforme existir
+    }
+};
+
+} // namespace carbon::adapter::driven::persistencia
+```
+
+</Code>
+
+</CodeSwap>
+
+Repara a assimetria nos nomes de pacote: `dominio.port`, `adapter.driving.rest`, `adapter.driven.persistencia`. A estrutura física do código materializa a estrutura conceitual do hexágono. Isso não é decorativo — é o que permite que regras de dependência sejam verificáveis automaticamente (você consegue rodar ArchUnit pra checar que `dominio` nunca importa nada de `adapter`).
+
+## Driving vs Driven: as duas direções
+
+Essa distinção entre primary/secondary não é só nomenclatura. É a separação fundamental que Hexagonal traz pra organização do código.
+
+**Driving adapters** chamam o domínio. O fluxo de controle vai de fora pra dentro:
+
+```
+HTTP request → REST Controller (adapter) → UseCase (port) → Aggregate (domínio)
+```
+
+**Driven adapters** são chamados pelo domínio. O fluxo de controle vai de dentro pra fora:
+
+```
+UseCase (domínio) → RepositorioCompensacoes (port) → JPA Repository (adapter) → Postgres
+```
+
+Em ambos os casos, **a dependência de código aponta pra dentro**. O controller depende do use case (port). O use case depende do repository (port). Ninguém no domínio sabe que existe REST nem JPA.
+
+Isso é a Inversão de Dependência (o "D" do SOLID) aplicada como princípio arquitetural. O domínio "manda no" mundo externo definindo os ports que ele precisa, e o mundo externo se adapta implementando os ports.
+
+## O lugar correto do Spring Boot
+
+Aqui está o que mais confunde quem está aprendendo: **Spring Boot não é o centro da arquitetura. Spring Boot é um adapter.**
+
+Mais precisamente, Spring Boot oferece infraestrutura pra você construir adapters. Quando você usa `@RestController`, você está construindo um driving adapter HTTP. Quando você usa `@Repository` com JPA, você está construindo um driven adapter de persistência. Quando você usa `@KafkaListener`, você está construindo um driving adapter de mensageria.
+
+A tentação inicial é colocar Spring no centro: anotar agregados com `@Entity`, deixar serviços como `@Service` que importam JdbcTemplate, fazer use cases retornarem `ResponseEntity`. Isso funciona, mas joga fora todo o benefício de Hexagonal. Você acopla o domínio a Spring; quando precisar testar sem subir o contexto Spring, não vai conseguir.
+
+A estrutura correta de pacotes Java pro Carbon Credit Platform com Spring Boot:
+
+```
+src/main/java/com/carbon/compensacao/
+├── dominio/                         ← ZERO Spring aqui
+│   ├── modelo/
+│   │   ├── CompensacaoEmissao.java
+│   │   ├── ItemCompensacao.java
+│   │   └── ...
+│   ├── port/
+│   │   ├── primary/
+│   │   │   ├── IniciarCompensacaoUseCase.java
+│   │   │   └── ReservarCreditoUseCase.java
+│   │   └── secondary/
+│   │       ├── RepositorioCompensacoes.java
+│   │       ├── RepositorioCreditos.java
+│   │       └── PublicadorEventos.java
+│   └── usecase/
+│       ├── IniciarCompensacaoUseCaseImpl.java
+│       └── ReservarCreditoUseCaseImpl.java
+├── adapter/
+│   ├── driving/                     ← Spring aqui (entrada)
+│   │   ├── rest/
+│   │   │   ├── CompensacaoController.java
+│   │   │   └── dto/
+│   │   └── kafka/
+│   │       └── EventoEmissaoConsumer.java
+│   └── driven/                      ← Spring aqui (saída)
+│       ├── persistencia/
+│       │   ├── RepositorioCompensacoesJPA.java
+│       │   └── jpa/
+│       │       ├── CompensacaoEntity.java
+│       │       └── CompensacaoJpaRepository.java
+│       └── eventos/
+│           └── PublicadorEventosKafka.java
+└── config/                          ← Spring Configuration
+    ├── BeansConfig.java
+    └── HexagonAppConfig.java
+```
+
+`dominio/` é Spring-free. Você consegue compilar e testar essa pasta inteira sem `spring-boot-starter` no classpath. As classes `*UseCaseImpl` recebem dependências pelo construtor; quem faz o wiring é a `config/BeansConfig.java` da camada mais externa.
+
+<Aviso>
+Esse setup tem custo. Você escreve mais código (interfaces de port, classes de mapeamento entre Entity JPA e modelo de domínio) do que num CRUD direto com `@Entity` + `@Repository`. Pra Generic Subdomains (lição 3) o custo não compensa. Pra Core Domain compensa porque o domínio precisa evoluir independente do banco e do framework — e Spring Boot vai mudar de versão muitas vezes ao longo da vida do sistema.
+</Aviso>
+
+## Hexagonal, Clean Architecture e Onion: a mesma ideia, três nomes
+
+A linhagem histórica importa porque você vai encontrar todos esses termos misturados em vagas, posts e código:
+
+- **2005**: Cockburn publica Hexagonal Architecture (Ports & Adapters). Quatro de setembro, em alistair.cockburn.us.
+- **2008**: Jeffrey Palermo publica Onion Architecture. Mesma ideia, círculos concêntricos em vez de hexágono. Ênfase em "infraestrutura na borda externa".
+- **2012**: Robert Martin (Uncle Bob) publica "The Clean Architecture" no blog 8thlight (13 de agosto). Consolida Hexagonal, Onion, DCI, BCE e outras propostas em um único diagrama com regra de dependência explícita.
+- **2017**: Uncle Bob publica o livro "Clean Architecture: A Craftsman's Guide" (Addison-Wesley, ISBN 978-0-13-449416-6) expandindo o post.
+- **2024**: Cockburn e Juan Manuel Garrido de Paz publicam o primeiro livro completo sobre Hexagonal: "Hexagonal Architecture Explained" (Wirfs-Brock Associates, abril de 2024).
+
+As três arquiteturas — Hexagonal, Onion, Clean — convergem em quatro princípios:
+
+1. Domínio no centro, infraestrutura na borda
+2. Dependências apontam pra dentro
+3. Domínio define interfaces que a infraestrutura implementa (Inversão de Dependência)
+4. UI, banco e mensageria são detalhes — não dirigem o design
+
+A diferença é principalmente didática. Hexagonal tem o conceito explícito de ports e adapters como linguagem cotidiana. Clean Architecture tem círculos concêntricos com nomes específicos (Entities, Use Cases, Interface Adapters, Frameworks & Drivers). Onion tem ênfase em "domain services" como camada separada.
+
+Pra escolher entre os termos numa apresentação ou documentação: use **Ports and Adapters** quando o foco for testabilidade e troca de tecnologia; use **Clean Architecture** quando o foco for as regras de dependência entre camadas; use **Hexagonal** quando quiser o desenho visual canônico que todo mundo reconhece.
+
+Em DDD, Hexagonal entra como recurso de implementação. Vaughn Vernon no "Implementing Domain-Driven Design" (2013) discute Hexagonal num capítulo de arquitetura, mostrando como o domínio DDD se encaixa no centro do hexágono e como Aggregates, Repositories e Domain Services ficam todos dentro. Os Repositories que DDD define (interface no domínio, implementação na infraestrutura) são literalmente secondary ports.
+
+## Aplicação no Carbon Credit
+
+No projeto da Fatec, o Carbon Credit Compensation Platform fica assim com Hexagonal:
+
+**Bounded Context Compensação** (Core Domain, lição 3):
+
+- Primary ports:
+  - `IniciarCompensacaoUseCase`
+  - `ReservarCreditoUseCase`
+  - `EfetivarCompensacaoUseCase`
+  - `ConsultarHistoricoCompensacoesQuery`
+
+- Secondary ports:
+  - `RepositorioCompensacoes` (consultar e salvar agregados)
+  - `RepositorioEmissores` (consultar emissor por CNPJ)
+  - `BuscadorDeCreditos` (consultar inventário com filtros)
+  - `PublicadorEventos` (publicar `CompensacaoEfetivada`, etc)
+
+- Driving adapters:
+  - REST controller (entrada HTTP)
+  - JUnit tests (entrada de testes)
+  - Eventualmente CLI ou consumer Kafka, mas no projeto atual REST basta
+
+- Driven adapters:
+  - `RepositorioCompensacoesEmMemoria` (sem banco, decisão do grupo)
+  - `BuscadorDeCreditosViaInventario` (chama o contexto Inventário via Customer/Supplier)
+  - `PublicadorEventosSimples` (escreve em lista in-memory; depois pode virar Kafka)
+
+A vantagem concreta dessa estrutura pro grupo: Bruno e Murilo podem trabalhar no Core Domain sem esperar Fabiano terminar o Inventário. Basta que o port `BuscadorDeCreditos` esteja definido. Bruno escreve uma versão fake do adapter que devolve créditos hardcoded; quando Fabiano entregar a implementação real, basta trocar o adapter no `BeansConfig`.
+
+Pra Pedro Chaves que está em Cadastro de Emissores, mesmo princípio: o port `RepositorioEmissores` é definido pelo Compensação; Pedro entrega o adapter quando puder.
+
+```java
+@Configuration
+public class BeansConfig {
+
+    @Bean
+    @Profile("!prod")
+    public RepositorioCompensacoes repoCompensacoesDev() {
+        return new RepositorioCompensacoesEmMemoria();
+    }
+
+    @Bean
+    @Profile("prod")
+    public RepositorioCompensacoes repoCompensacoesProd(
+            CompensacaoJpaRepository jpa,
+            MapeadorCompensacao mapeador) {
+        return new RepositorioCompensacoesJPA(jpa, mapeador);
+    }
+
+    @Bean
+    public IniciarCompensacaoUseCase iniciarCompensacaoUseCase(
+            RepositorioEmissores repoEmissores,
+            RepositorioCompensacoes repoCompensacoes,
+            PublicadorEventos publicador) {
+        return new IniciarCompensacaoUseCaseImpl(
+            repoEmissores, repoCompensacoes, publicador
+        );
+    }
+}
+```
+
+Quando o grupo decidir adicionar persistência (provavelmente em uma disciplina futura), só essa classe `BeansConfig` muda. O domínio inteiro fica intacto.
+
+## Anti-patterns: o falso hexágono
+
+Há um anti-pattern descrito por Steven Stuart em texto recente: usar dependency injection e interfaces de repository e achar que isso é Hexagonal. Não é.
+
+Hexagonal exige três coisas que injection sozinho não traz:
+
+1. **UI e banco como cidadãos simétricos**. Se REST é "principal" e banco é "secundário" na sua mente, você ainda está num layered architecture, não num hexagonal.
+2. **Múltiplos driving adapters como first-class**. Não basta ter REST + um JUnit. O ponto é que CLI, batch, message consumer e teste são todos formas legítimas de dirigir a aplicação, sem hierarquia.
+3. **Ports definidos pelo domínio, não pela infraestrutura**. Se sua interface `IRepositorioCompensacoes` mora num pacote `infrastructure/`, você está com a hierarquia invertida. Os ports moram no domínio porque o domínio é quem decide o que precisa.
+
+Outro anti-pattern comum: tratar Hexagonal como receita de pastas. O hexágono é uma forma de pensar sobre dependências, não um template de scaffolding. Você pode ter código fielmente hexagonal numa estrutura de pastas estranha, e pode ter uma estrutura "hexagonal-style" perfeita com lógica de negócio sangrando pra dentro do controller.
+
+A pergunta-teste útil: *consigo rodar o domínio inteiro sem Spring no classpath e sem nenhum mock de framework?* Se sim, é hexagonal. Se não, é layered com aparência hexagonal.
+
+## Próximos passos
+
+A próxima lição entra em Event-Driven Architecture: como `CompensacaoEfetivada`, `CreditoReservado` e os outros eventos de domínio que apareceram nas lições 4 e 5 viram a base de uma arquitetura assíncrona. Vai cobrir Domain Events (já introduzidos), Integration Events, Event Sourcing como variante avançada, e CQRS como leitura separada da escrita. É onde a separação entre agregados que vimos em DDD tático ganha o transporte natural pra escalar.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Cockburn, Alistair. "Hexagonal Architecture" (HaT Technical Report 2005.02). alistair.cockburn.us/hexagonal-architecture, 4 de setembro de 2005. Renomeado pelo autor como "Ports and Adapters" em 2005.
+- Martin, Robert C. "The Clean Architecture". Blog 8thlight, 13 de agosto de 2012. Hoje em blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html.
+- Martin, Robert C. *Clean Architecture: A Craftsman's Guide to Software Structure and Design*. Pearson/Addison-Wesley, setembro de 2017. ISBN 978-0-13-449416-6.
+- Cockburn, Alistair; Garrido de Paz, Juan Manuel. *Hexagonal Architecture Explained*. Wirfs-Brock Associates, abril de 2024.
+- Vernon, Vaughn. *Implementing Domain-Driven Design*. Addison-Wesley Professional, 2013. Capítulo de Arquitetura discute Hexagonal aplicada a DDD. ISBN 978-0-321-83457-7.
+- Palermo, Jeffrey. "The Onion Architecture: part 1". jeffreypalermo.com, 29 de julho de 2008.
+- Evans, Eric. *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley Professional, 2003. ISBN 0-321-12521-5.

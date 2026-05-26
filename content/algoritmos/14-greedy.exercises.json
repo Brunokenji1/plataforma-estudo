@@ -1,0 +1,132 @@
+[
+  {
+    "id": "greedy-01",
+    "enunciado": "Qual é a filosofia FUNDAMENTAL de um algoritmo greedy?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Testar todas as combinações possíveis e escolher a melhor",
+      "A cada passo, fazer a escolha localmente ótima, sem voltar atrás, esperando que isso produza o resultado globalmente ótimo",
+      "Dividir o problema em metades recursivamente",
+      "Memorizar resultados de subproblemas em uma tabela"
+    ],
+    "resposta": 1,
+    "explicacao": "Greedy compromete-se com a melhor escolha imediata a cada passo. Nunca volta atrás. A diferença com DP é fundamental: DP testa todas as decisões e escolhe a melhor combinação considerando o futuro; greedy decide já e confia que vai dar certo. Quando funciona, greedy é mais simples e mais rápido que DP. Quando NÃO funciona, falha silenciosamente — produz uma resposta, mas não a ótima. Por isso provar a corretude (via exchange argument) não é opcional."
+  },
+  {
+    "id": "greedy-02",
+    "enunciado": "Para o problema 'Activity Selection' (escolher máximo de atividades não-conflitantes), qual a estratégia gulosa CORRETA?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Pegar a atividade mais curta primeiro",
+      "Pegar a atividade que começa mais cedo",
+      "Ordenar por horário de TÉRMINO crescente e pegar a primeira que não conflita com a última escolhida",
+      "Pegar a atividade com mais participantes"
+    ],
+    "resposta": 2,
+    "explicacao": "Ordenar por horário de TÉRMINO crescente. A intuição: terminar mais cedo significa que a próxima atividade pode começar mais cedo, deixando mais tempo livre depois. Outras estratégias gulosas plausíveis FALHAM: 'mais curta primeiro' falha em casos como [(1,5), (4,6), (5,9)] onde pegar (4,6) bloqueia tanto (1,5) quanto (5,9). 'Mais cedo primeiro' falha quando uma atividade inicial é muito longa. Prova de corretude via exchange argument: se uma solução ótima não começa com a escolha gulosa, pode trocar a primeira escolha por ela sem piorar."
+  },
+  {
+    "id": "greedy-03",
+    "enunciado": "Por que GREEDY funciona em Fractional Knapsack mas NÃO em 0/1 Knapsack?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque Fractional tem menos itens",
+      "Em Fractional você pode pegar frações dos itens, então sempre dá pra completar a mochila com o item mais denso disponível. Em 0/1 você precisa pegar item inteiro ou nada, e a melhor combinação requer testar opções (DP)",
+      "Porque Fractional usa números reais e 0/1 usa inteiros",
+      "Greedy também funciona em 0/1, apenas é mais lento"
+    ],
+    "resposta": 1,
+    "explicacao": "Em Fractional Knapsack você ordena por densidade (valor/peso) decrescente e pega itens em ordem. Quando o próximo não cabe inteiro, pega só a fração que cabe — sempre completa a mochila. Em 0/1, sobra um espaço de 0.3 kg e o próximo item pesa 1 kg: você não pode pegar 30% dele. Aí surge a necessidade de testar combinações de itens menores — domínio do DP. A lição mais ampla: a estrutura do problema determina se greedy funciona. Mudar uma regra aparentemente pequena (poder pegar fração ou não) muda completamente o algoritmo correto."
+  },
+  {
+    "id": "greedy-04",
+    "enunciado": "Quem inventou o Huffman Coding e em que circunstâncias?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Claude Shannon, 1948, junto com a teoria da informação",
+      "David A. Huffman, 1952, como aluno de doutorado no MIT — resolveu um problema aberto que o próprio professor Robert M. Fano não tinha conseguido resolver",
+      "Donald Knuth, 1968, em The Art of Computer Programming",
+      "Alan Turing, 1936, para a máquina Bombe em Bletchley Park"
+    ],
+    "resposta": 1,
+    "explicacao": "David A. Huffman, em 1952, como aluno de doutorado no MIT. História épica: o professor Robert M. Fano (que tinha trabalhado com Claude Shannon no 'Shannon-Fano coding') ofereceu aos alunos a escolha entre fazer prova final ou escrever um paper sobre 'o método mais eficiente de codificação binária'. Fano NÃO contou aos alunos que era um problema aberto que ele próprio tinha trabalhado sem conseguir resolver completamente. Huffman quase desistiu depois de meses, ia estudar pra prova, mas teve o insight na manhã seguinte: construir a árvore de BAIXO PRA CIMA combinando os menos frequentes primeiro. Provou rigorosamente que era ótimo. Aluno superou professor. Hoje, Huffman está em todo PNG, JPEG, MP3, ZIP, GZIP."
+  },
+  {
+    "id": "greedy-05",
+    "enunciado": "Qual é a estratégia gulosa do algoritmo de Huffman Coding?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Atribuir códigos curtos aos caracteres em ordem alfabética",
+      "Combinar repetidamente os DOIS NÓS DE MENOR FREQUÊNCIA em um novo nó pai (somando frequências), até sobrar um único nó (a raiz)",
+      "Atribuir códigos de tamanho fixo a todos os caracteres",
+      "Usar busca binária para escolher os códigos"
+    ],
+    "resposta": 1,
+    "explicacao": "Sempre combine os dois nós de menor frequência em um nó pai cuja frequência é a soma dos dois. Eles ficam no fundo da árvore (códigos longos), o que faz sentido porque aparecem pouco. Implementação: min-heap por frequência, repetir 'tira 2 menores → combina → coloca de volta' até sobrar 1. O caminho da raiz até cada folha (0 pra esquerda, 1 pra direita) dá o código binário do caractere. Garantia: nenhum código é prefixo de outro (prefix code, decodificação não-ambígua) e o tamanho médio é MÍNIMO entre todos prefix codes possíveis. Complexidade O(n log n)."
+  },
+  {
+    "id": "greedy-06",
+    "enunciado": "Quem foi o PRIMEIRO a inventar um algoritmo para o problema da Minimum Spanning Tree, e em qual ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Joseph Kruskal, 1956",
+      "Robert Prim, 1957",
+      "Otakar Borůvka, 1926, motivado pela eletrificação rural da Morávia do Sul (Tchecoslováquia)",
+      "Edsger Dijkstra, 1959"
+    ],
+    "resposta": 2,
+    "explicacao": "Otakar Borůvka, em 1926, no paper 'O jistém problému minimálním' (Sobre certo problema mínimo). A motivação era prática: ele precisava planejar a eletrificação rural da Morávia do Sul, na Tchecoslováquia — conectar várias vilas com a menor quantidade possível de cabo elétrico. O paper ficou décadas relativamente desconhecido fora da Tchecoslováquia. Em 1930, Vojtěch Jarník simplificou o algoritmo. Em 1956, Kruskal publicou o algoritmo dele (independente). Em 1957, Prim REDESCOBRIU o algoritmo de Jarník sem conhecê-lo. Dijkstra (1959) também redescobriu Jarník. Caso clássico de redescoberta independente em CS — múltiplas pessoas chegaram à mesma ideia."
+  },
+  {
+    "id": "greedy-07",
+    "enunciado": "Qual a diferença entre o algoritmo de Kruskal e o de Prim para MST?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Kruskal só funciona em grafos direcionados, Prim só em não-direcionados",
+      "Kruskal ordena TODAS as arestas por peso e pega cada uma se não formar ciclo (usando Union-Find para detectar). Prim começa em um vértice e expande mantendo uma 'fronteira', pegando sempre a aresta de menor peso que conecta a fronteira ao resto (com min-heap, igual Dijkstra mas com peso de aresta em vez de distância acumulada)",
+      "Kruskal é O(V²) e Prim é O(V log V)",
+      "Não há diferença prática"
+    ],
+    "resposta": 1,
+    "explicacao": "São abordagens diferentes pra mesma resposta. KRUSKAL: ordena TODAS as arestas por peso ascendente, pega cada uma em ordem se não formar ciclo (Union-Find detecta em O(α(n)) amortizado). Tipicamente O(E log E). PRIM: começa em um vértice qualquer, mantém uma 'fronteira' de vértices já incluídos, a cada passo pega a aresta de menor peso conectando fronteira ao resto via min-heap. Tipicamente O((V+E) log V) — basicamente Dijkstra com peso de aresta em vez de distância acumulada. Kruskal vence em grafos esparsos (E próximo de V); Prim vence em grafos densos (E próximo de V²). Ambos produzem MST válida — apenas diferem na ORDEM em que escolhem as arestas."
+  },
+  {
+    "id": "greedy-08",
+    "enunciado": "Qual é a técnica CLÁSSICA para PROVAR a corretude de um algoritmo greedy?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Indução estrutural sobre árvores binárias",
+      "Exchange argument: assumir uma solução ótima qualquer, mostrar que dá pra TROCAR elementos por escolhas gulosas SEM PIORAR, e concluir que o greedy também é ótimo",
+      "Redução polinomial para SAT",
+      "Não é necessário provar — basta testar"
+    ],
+    "resposta": 1,
+    "explicacao": "EXCHANGE ARGUMENT é a técnica padrão. A estrutura típica: (1) Assume uma solução ótima S* qualquer; (2) Compara com a solução G produzida pelo greedy; (3) Mostra que pode TROCAR elementos de S* por elementos de G sem piorar o resultado; (4) Conclui que G também é ótima. Aparece nas provas de Activity Selection, Huffman, MST (Kruskal e Prim), e quase todo greedy clássico. Não é trivial, mas o padrão é mecânico depois que você pega o jeito. Sem prova formal, você NUNCA tem certeza que um greedy funciona — Coin Change com moedas arbitrárias mostra que greedy óbvio falha em casos pequenos. Aceitar greedy sem prova é fonte clássica de bugs."
+  },
+  {
+    "id": "greedy-09",
+    "enunciado": "Em quais formatos de arquivo modernos o algoritmo de Huffman (ou descendentes diretos) está rodando AGORA?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas em arquivos texto",
+      "PNG, JPEG, MP3, ZIP, GZIP, MPEG, H.264 — praticamente todo formato de compressão sem perda usa Huffman ou descendente",
+      "Apenas em arquivos científicos especializados",
+      "Em nenhum formato moderno — foi substituído por LZ77 totalmente"
+    ],
+    "resposta": 1,
+    "explicacao": "Huffman e variantes estão em praticamente todo formato de compressão moderna: DEFLATE (PNG, ZIP, GZIP) combina LZ77 + Huffman; JPEG usa Huffman para comprimir os coeficientes DCT; MP3 e AAC usam Huffman para coeficientes quantizados; MPEG e H.264 (vídeo) usam variantes pra compressão de coeficientes. Versões mais sofisticadas (arithmetic coding, ANS — Asymmetric Numeral Systems) superam Huffman em casos específicos por algumas porcentagens, mas Huffman ainda é o método MAIS USADO do mundo pra prefix codes. O paper de 1952 de Huffman tem mais de 7.500 citações e é um dos mais influentes da computação."
+  },
+  {
+    "id": "greedy-10",
+    "enunciado": "Quando GREEDY tipicamente FALHA, exigindo DP ou outra técnica?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Em problemas envolvendo strings",
+      "Em problemas com trade-offs entre decisões, onde 'pegar o melhor agora' pode bloquear opções importantes depois — exemplos: 0/1 Knapsack, Coin Change com moedas arbitrárias, Traveling Salesman, Set Cover",
+      "Apenas em problemas com mais de 1000 itens",
+      "Em problemas que envolvem grafos"
+    ],
+    "resposta": 1,
+    "explicacao": "Greedy falha quando há TRADE-OFFS: a melhor decisão imediata pode bloquear opções que dariam um total melhor no futuro. Exemplos clássicos onde greedy ingênuo falha: 0/1 Knapsack (precisa testar combinações via DP); Coin Change com moedas arbitrárias (coins=[1,3,4], amount=6, greedy dá 4+1+1=3 enquanto ótimo é 3+3=2); Traveling Salesman (NP-difícil); Set Cover (NP-difícil, mas existe aproximação greedy com fator log n). Regra prática: se você não consegue provar corretude com exchange argument, NÃO use greedy. Em ICPC e entrevistas, muitos problemas têm greedy aparente que está errado — o algoritmo correto é DP. Quando em dúvida, prefira DP."
+  }
+]

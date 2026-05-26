@@ -1,0 +1,117 @@
+[
+  {
+    "id": "hash-01",
+    "enunciado": "Qual é a complexidade MÉDIA das operações put, get e remove em um HashMap (Java) ou unordered_map (C++)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1) amortizado", "O(log n)", "O(n)", "O(n log n)"],
+    "resposta": 0,
+    "explicacao": "O(1) amortizado. O 'amortizado' aplica-se ao put: ocasionalmente o rehash é disparado (quando size > capacity × load_factor), copiando todos os elementos para uma nova tabela com o dobro do tamanho — isso é O(n). Mas como a capacidade dobra exponencialmente, esses eventos ficam cada vez mais raros, e o custo amortizado por inserção converge para O(1). Get e remove são sempre O(1) na média, assumindo função hash bem distribuída."
+  },
+  {
+    "id": "hash-02",
+    "enunciado": "Em Java 8+, quando um único bucket do HashMap atinge 8 ou mais elementos, o que acontece?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Um warning é impresso no console",
+      "A lista ligada do bucket é convertida em uma árvore vermelho-preta",
+      "O bucket é dividido em dois",
+      "Uma exceção HashOverflowException é lançada"
+    ],
+    "resposta": 1,
+    "explicacao": "Quando TREEIFY_THRESHOLD (=8) é atingido E a tabela tem pelo menos MIN_TREEIFY_CAPACITY (=64) buckets, o Java converte a lista ligada em uma árvore vermelho-preta. Isso reduz o pior caso de busca de O(n) para O(log n). É a melhoria do JEP 180 (Java 8, 2014). Se o número de elementos no bucket cair para UNTREEIFY_THRESHOLD (=6), volta a ser lista. Antes do Java 8, buckets cheios degradavam para O(n) puro — vulnerável a ataques de colisão proposital."
+  },
+  {
+    "id": "hash-03",
+    "enunciado": "Por que o Java HashMap aplica `(h = key.hashCode()) ^ (h >>> 16)` antes de calcular o índice do bucket?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Para criptografar a chave",
+      "Para misturar os bits superiores com os inferiores, melhorando a distribuição",
+      "Para garantir que o hash seja sempre positivo",
+      "Para reduzir o tamanho do hash para 16 bits"
+    ],
+    "resposta": 1,
+    "explicacao": "O índice do bucket é calculado com `(n - 1) & hash`, onde n é o tamanho da tabela. Se n = 16, só os 4 BITS INFERIORES do hash importam. Muitas funções hash do mundo real variam mais nos bits superiores que nos inferiores. O XOR com `h >>> 16` (shift lógico de 16 bits para direita) mistura os bits altos com os baixos, ESPALHANDO os hashes melhor pelos buckets disponíveis. Sem esse passo, chaves com hashes similares nos 4 bits inferiores cairiam todas no mesmo bucket."
+  },
+  {
+    "id": "hash-04",
+    "enunciado": "Qual o load factor padrão do HashMap em Java e o que ele significa?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "0.5 — rehash quando metade dos buckets estão ocupados",
+      "0.75 — rehash quando size > capacity × 0.75",
+      "1.0 — rehash quando todos os buckets estão ocupados",
+      "0.9 — rehash quando 90% dos buckets têm colisão"
+    ],
+    "resposta": 1,
+    "explicacao": "0.75 é o padrão. O rehash dispara quando size > capacity × 0.75 (capacity é o número de buckets). Em uma tabela com 16 buckets, o rehash dispara na 13ª inserção (16 × 0.75 = 12). A capacidade dobra: 16 → 32 → 64 → 128. O 0.75 é um balanço empírico: valores menores (ex: 0.5) reduzem colisões mas usam mais memória; valores maiores (ex: 0.9) economizam memória mas aumentam colisões. O C++ unordered_map usa load factor padrão de 1.0 — mais agressivo em memória."
+  },
+  {
+    "id": "hash-05",
+    "enunciado": "Você quer contar a frequência de cada caractere ASCII minúsculo (a-z) em uma string. Qual é a estrutura MAIS EFICIENTE?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "HashMap<Character, Integer>",
+      "TreeMap<Character, Integer>",
+      "int[] de tamanho 26 indexado por (c - 'a')",
+      "ArrayList<Pair<Character, Integer>>"
+    ],
+    "resposta": 2,
+    "explicacao": "Para um range pequeno e CONHECIDO (a-z são apenas 26 valores), um array int[26] é dramaticamente mais rápido que HashMap: zero overhead de boxing (sem criar Character/Integer), memória 100% contígua, acesso direto sem cálculo de hash, e cache-friendly. Para letras maiúsculas E minúsculas, use int[128] indexado pelo código ASCII direto. Hash table só faz sentido quando o domínio das chaves é grande ou desconhecido."
+  },
+  {
+    "id": "hash-06",
+    "enunciado": "Verdadeiro ou falso: o Two Sum (LeetCode #1) tem solução em O(n log n) usando ordenação, mas com hash map cai para O(n).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Com ordenação + two pointers, Two Sum é O(n log n) — domina o sort. Com hash map (percorrer uma vez procurando o complemento `target - nums[i]` no map), cai para O(n) tempo e O(n) espaço. É o exemplo canônico do trade-off espaço-por-tempo. O LeetCode #1 também ilustra uma técnica geral: 'visto até agora' como hash map é base de muitos algoritmos (Longest Substring Without Repeating Characters, Subarray Sum Equals K, etc.)."
+  },
+  {
+    "id": "hash-07",
+    "enunciado": "Qual estrutura você deveria usar se precisa armazenar pares chave-valor E iterar sobre eles em ORDEM CRESCENTE das chaves?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "HashMap (Java) / unordered_map (C++)",
+      "TreeMap (Java) / std::map (C++)",
+      "ArrayList ordenada com binary search",
+      "LinkedHashMap"
+    ],
+    "resposta": 1,
+    "explicacao": "TreeMap (Java) e std::map (C++) são implementados como árvores vermelho-pretas, mantendo as chaves em ordem ordenada. Operações são O(log n) garantido (não amortizado). HashMap NÃO garante ordem alguma. LinkedHashMap preserva a ordem de INSERÇÃO, não de ordenação das chaves. ArrayList com binary search funciona, mas inserções no meio são O(n). TreeMap também suporta range queries como subMap(low, high), que hash map não consegue oferecer."
+  },
+  {
+    "id": "hash-08",
+    "enunciado": "Por que o C++ unordered_map é considerado mais vulnerável a ataques de DoS por colisão proposital comparado ao HashMap do Java?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque C++ é compilado e Java é interpretado",
+      "Porque o C++ não treeifica buckets, então buckets cheios degradam para O(n)",
+      "Porque C++ usa funções hash mais simples",
+      "Porque o C++ tem load factor menor"
+    ],
+    "resposta": 1,
+    "explicacao": "C++ std::unordered_map usa sempre lista ligada (sem treeification). Um atacante que conhece a função hash pode enviar chaves que sabidamente colidem, forçando um único bucket a virar uma lista de N elementos — busca passa a ser O(n). Em Java 8+, o mesmo ataque é mitigado: o bucket vira árvore com 8+ elementos, mantendo busca em O(log n). Por isso bibliotecas C++ modernas (absl::flat_hash_map do Google) usam funções hash com SEED ALEATÓRIO, dificultando o ataque mesmo sem treeification."
+  },
+  {
+    "id": "hash-09",
+    "enunciado": "Verdadeiro ou falso: a complexidade amortizada de put em um HashMap é O(1), mas operações individuais podem ser O(n) quando um rehash é disparado.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro — e essa é uma DIFERENÇA IMPORTANTE entre amortizado e pior caso. O rehash precisa percorrer todos os elementos atuais e redistribuí-los na nova tabela (dobrada), custando O(n) NAQUELA inserção. Em sistemas de tempo real (jogos, sistemas embarcados, trading de baixa latência), esse 'jitter' pode ser inaceitável. A mitigação é pré-dimensionar: `new HashMap<>((int)(esperados / 0.75) + 1)` evita rehashes durante o build."
+  },
+  {
+    "id": "hash-10",
+    "enunciado": "No problema Group Anagrams (LeetCode #49), por que usar a string ORDENADA como chave do HashMap funciona?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque strings ordenadas têm hash mais único",
+      "Porque duas strings são anagramas se e somente se, ordenadas, viram a mesma string",
+      "Porque o HashMap só aceita chaves ordenadas",
+      "Porque ordenação reduz a complexidade para O(1)"
+    ],
+    "resposta": 1,
+    "explicacao": "Anagramas são strings com os mesmos caracteres em ordens diferentes. Ordenar normaliza ambas para uma forma canônica única — todas as variações 'eat', 'tea', 'ate' viram 'aet'. Essa string canônica vira chave do HashMap, e o valor é a lista de strings que compartilham essa chave. Otimização: em vez de sort O(K log K), use array de contagem de letras int[26] convertido em string — reduz para O(K) por chave. É a técnica de 'chave canônica para classes de equivalência', útil em muitos outros problemas."
+  }
+]

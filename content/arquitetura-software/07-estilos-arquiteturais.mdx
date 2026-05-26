@@ -1,0 +1,530 @@
+---
+titulo: "Estilos Arquiteturais"
+descricao: "Monolito, Modular Monolith, Layered, SOA, Microservices, Microkernel, Serverless, Lambda e Kappa. Como cada estilo resolve problemas diferentes, e por que escolher o errado custa caro."
+---
+
+As seis lições anteriores cobriram princípios (SOLID, coupling/cohesion), Clean Architecture, DDD estratégico e tático, Hexagonal e Event-Driven. Tudo isso aplica a qualquer estilo arquitetural — são padrões internos que organizam o código.
+
+Esta lição cobre o nível acima: o **estilo arquitetural** do sistema como um todo. A pergunta agora não é "como organizar o código dentro de um agregado" mas "quantos processos esse sistema tem, como eles se comunicam, e por que essa escolha importa".
+
+A referência canônica moderna é Mark Richards e Neal Ford, "Fundamentals of Software Architecture: An Engineering Approach" (O'Reilly, primeira edição março de 2020, ISBN 978-1-492-04345-4; segunda edição 2025, ISBN 978-1-098-17551-1). O capítulo de architectural styles é organizado por trade-offs concretos — exatamente o framework que esta lição usa. Outra referência foundacional é Buschmann et al., "Pattern-Oriented Software Architecture, Volume 1: A System of Patterns" (Wiley, agosto de 1996, ISBN 0-471-95869-7), conhecido como POSA Vol 1, onde muitos dos patterns originais (Layers, Pipes and Filters, Broker, Microkernel) foram catalogados pela primeira vez.
+
+<Insight>
+Não existe "melhor estilo arquitetural". Cada estilo otimiza para um conjunto de qualidades (escalabilidade, deploy independente, simplicidade operacional, tempo até produção) sacrificando outros. Richards e Ford chamam essa escolha de "first law of software architecture": *everything in software architecture is a trade-off* — tudo em arquitetura de software é trade-off. Quando alguém diz que microservices é "melhor que monolito", a pergunta correta é: melhor pra quê, em que escala, com que time?
+</Insight>
+
+## O espectro monolito ↔ distribuído
+
+A forma mais útil de pensar em estilos arquiteturais é como um espectro, não uma lista. De um lado, **uma unidade de deploy** (monolito). Do outro lado, **dezenas ou centenas de unidades de deploy independentes** (microservices, serverless). No meio, vários estilos intermediários.
+
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <line x1="60" y1="100" x2="660" y2="100" stroke="currentColor" strokeWidth="2" strokeOpacity="0.4" />
+
+  <circle cx="80" cy="100" r="6" fill="currentColor" />
+  <text x="80" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">Monolito</text>
+  <text x="80" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">1 deploy</text>
+
+  <circle cx="200" cy="100" r="6" fill="currentColor" />
+  <text x="200" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">Modular Monolith</text>
+  <text x="200" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">1 deploy, N módulos</text>
+
+  <circle cx="320" cy="100" r="6" fill="currentColor" />
+  <text x="320" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">N-Tier / Layered</text>
+  <text x="320" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">3-5 camadas</text>
+
+  <circle cx="440" cy="100" r="6" fill="currentColor" />
+  <text x="440" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">SOA</text>
+  <text x="440" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">poucos serviços</text>
+
+  <circle cx="560" cy="100" r="6" fill="currentColor" />
+  <text x="560" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">Microservices</text>
+  <text x="560" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">dezenas+</text>
+
+  <circle cx="660" cy="100" r="6" fill="currentColor" />
+  <text x="660" y="80" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="600">FaaS</text>
+  <text x="660" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.6">funções</text>
+
+  <text x="80" y="180" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.75">— complexidade operacional →</text>
+  <text x="660" y="180" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.75">— complexidade operacional →</text>
+
+  <text x="370" y="180" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85" fontWeight="600">+ complexidade operacional</text>
+  <line x1="180" y1="195" x2="560" y2="195" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
+
+  <text x="370" y="225" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85" fontWeight="600">+ deploy independente</text>
+  <line x1="180" y1="240" x2="560" y2="240" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
+
+  <text x="370" y="265" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85" fontWeight="600">+ resiliência potencial / + custo cognitivo</text>
+</svg>
+
+Cinco eixos importam ao comparar estilos:
+
+1. **Unidades de deploy**: quantos processos/containers/lambdas você precisa subir pra ter o sistema funcionando.
+2. **Acoplamento**: quão preso um componente está aos outros. Acoplamento de código (mesmo classpath), de banco (mesma tabela), de deploy (sobem juntos).
+3. **Escalabilidade**: você consegue escalar partes diferentes de forma independente?
+4. **Resiliência**: se um componente cai, o resto do sistema continua funcionando?
+5. **Complexidade operacional**: quanto trabalho é necessário pra rodar isso em produção (monitoramento, deploy, debug, rollback).
+
+Cada estilo é um conjunto específico de respostas a essas cinco perguntas. Vamos aos principais.
+
+## Monolito tradicional
+
+O estilo mais antigo e ainda o mais comum globalmente. Toda a aplicação roda como uma única unidade de deploy: um JAR, uma DLL, um binário, um servidor. Banco compartilhado (frequentemente uma única instância). Time único acessando o mesmo repositório.
+
+**Forma típica em Java empresarial**:
+
+```
+src/main/java/com/empresa/sistema/
+├── controllers/     ← REST endpoints
+├── services/        ← lógica de negócio
+├── repositories/    ← acesso ao banco
+├── entities/        ← entidades JPA
+└── utils/           ← código compartilhado
+```
+
+Tudo no mesmo classpath, deploy único, banco único.
+
+**Vantagens reais (não pode subestimar)**:
+
+- **Deploy simples**: um único artefato. CI/CD trivial. Rollback é trocar a versão e reiniciar.
+- **Debug local fácil**: você roda tudo na sua máquina, debugger nativo, breakpoints atravessam toda a aplicação.
+- **Transações ACID gratuitas**: tudo no mesmo banco, mesma conexão JDBC, transações funcionam naturalmente.
+- **Performance de chamadas internas**: chamada de método é nanossegundos. Chamada HTTP entre microservices é milissegundos.
+- **Tooling maduro**: IDEs, profilers, debuggers, todos foram desenhados pra monolitos.
+
+**Desvantagens reais**:
+
+- **Acoplamento sem fronteiras**: nada impede o pacote `pagamento` de chamar diretamente uma classe interna do pacote `estoque`. Com o tempo, vira "big ball of mud" (termo dos editores Brian Foote e Joseph Yoder em PLoP'97, publicado em 1999 no livro "Pattern Languages of Program Design 4", capítulo 29).
+- **Escalonamento grosseiro**: pra escalar a parte de relatórios, você duplica a aplicação inteira (com todos os módulos, mesmo os que não escalam).
+- **Stack único**: trocar de Java pra Kotlin numa parte específica é difícil. Trocar pra Go é praticamente impossível sem reescrever tudo.
+- **Falha cascateada**: um memory leak num módulo derruba a aplicação inteira.
+
+**Quando usar**: produtos novos, MVPs, times pequenos (menos de 10 pessoas), domínio ainda em descoberta. Praticamente todo sistema bem-sucedido começou como monolito — Shopify, Basecamp, GitHub, Stack Overflow.
+
+## Modular Monolith
+
+O Monolito Modular é uma evolução madura do monolito tradicional, popularizada por Simon Brown em palestras e posts a partir de 2016 ("Monolithic vs. Microservices is missing the point" e a palestra "Modular Monoliths" no Devoxx UK 2016). A ideia central: você mantém **uma única unidade de deploy** (com todas as vantagens do monolito), mas impõe **fronteiras de módulo explícitas e auditáveis** dentro do código.
+
+A diferença em relação ao monolito tradicional não é só convenção de pastas. É arquitetural:
+
+- Cada módulo tem sua **API pública** (interfaces expostas) e seu **interior** (classes que ninguém de fora pode chamar)
+- A comunicação entre módulos passa **só pelas APIs públicas**, nunca por classes internas
+- Cada módulo tem suas **próprias tabelas de banco**, com regra de que outros módulos não fazem JOIN nelas
+- Violações de fronteira são detectadas automaticamente (ArchUnit, jMolecules, Spring Modulith)
+
+Estrutura de pacotes típica em Java:
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Monolito tradicional: tudo misturado
+src/main/java/com/empresa/sistema/
+├── controllers/
+│   ├── PedidoController.java
+│   ├── PagamentoController.java
+│   └── EstoqueController.java
+├── services/
+│   ├── PedidoService.java      // chama EstoqueService direto
+│   ├── PagamentoService.java   // chama PedidoService direto
+│   └── EstoqueService.java
+├── entities/
+└── repositories/
+
+// Modular Monolith: cada módulo isolado
+src/main/java/com/empresa/sistema/
+├── pedido/
+│   ├── api/                    ← interfaces públicas
+│   │   ├── PedidoFacade.java
+│   │   └── PedidoCriadoEvent.java
+│   └── interno/                ← package-private, isolado
+│       ├── Pedido.java
+│       ├── PedidoController.java
+│       ├── PedidoService.java
+│       └── PedidoRepository.java
+├── pagamento/
+│   ├── api/
+│   │   └── PagamentoFacade.java
+│   └── interno/
+│       └── ...
+├── estoque/
+│   ├── api/
+│   │   └── EstoqueFacade.java
+│   └── interno/
+│       └── ...
+└── compartilhado/
+    └── eventos/
+
+// Regras enforced via ArchUnit:
+// 1. *.interno é package-private (não exportado)
+// 2. pedido.interno NUNCA importa pagamento.interno
+// 3. Comunicação entre módulos: só via *.api
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+// Monolito tradicional: namespaces planos, tudo público
+namespace empresa::sistema {
+    class PedidoService { /* ... */ };
+    class PagamentoService { /* chama PedidoService direto */ };
+    class EstoqueService { /* ... */ };
+}
+
+// Modular Monolith em C++: módulos isolados por header pattern
+// pedido/include/empresa/pedido/api.hpp  ← header público
+namespace empresa::pedido::api {
+    class PedidoFacade {
+    public:
+        virtual ~PedidoFacade() = default;
+        virtual PedidoId criar(const CriarPedidoCommand&) = 0;
+    };
+}
+
+// pedido/src/pedido_service.hpp  ← header privado (não instalado)
+namespace empresa::pedido::interno {
+    class PedidoService : public api::PedidoFacade {
+        // implementação que NUNCA é incluída por outros módulos
+    };
+}
+
+// pagamento/src/pagamento_service.cpp  ← só pode incluir api/, nunca interno/
+#include "empresa/pedido/api.hpp"     // OK
+// #include "empresa/pedido/interno/...hpp"  // PROIBIDO
+
+namespace empresa::pagamento::interno {
+    class PagamentoService {
+        api::PedidoFacade& pedidos_;   // depende só da API pública
+        // ...
+    };
+}
+
+// Em C++ moderno (C++20), também pode usar "modules" oficiais
+// para criar fronteiras de export explícitas
+```
+
+</Code>
+
+</CodeSwap>
+
+O case study mais conhecido é da Shopify. Em 2019, Kirsten Westeinde (Senior Engineer na Shopify) apresentou no Shopify Unite a transição da Shopify de um monolito Ruby on Rails clássico pra um modular monolith. O artigo "Deconstructing the Monolith" no Shopify Engineering Blog (com agradecimento explícito ao Simon Brown) descreve o processo. Decisão central documentada: a Shopify deliberadamente **não** foi pra microservices, escolheu modular monolith porque mantinha as vantagens operacionais (deploy único, transações ACID) enquanto resolvia o problema de acoplamento.
+
+**Quando usar Modular Monolith**:
+
+- Time entre 10 e 50 pessoas que está sentindo dor de acoplamento mas não está pronto pra complexidade operacional de microservices
+- Sistema já em produção sentindo dor de "big ball of mud" mas com domínio ainda em refinamento
+- Etapa intermediária antes de extrair módulos individuais como microservices (estratégia "monolith first" defendida por Martin Fowler e Sam Newman)
+
+## Layered Architecture (N-Tier)
+
+O estilo mais comum em sistemas empresariais clássicos — Java EE, .NET enterprise, sistemas bancários antigos. Aparece já no POSA Vol 1 de 1996 sob o nome "Layers". Diferente do "Clean Architecture" da Lição 2 (que tem círculos concêntricos com regra de dependência específica), Layered é um padrão **horizontal**: camadas empilhadas onde cada camada chama só a camada imediatamente abaixo.
+
+Estrutura típica em 3 camadas (3-tier):
+
+- **Presentation Layer**: UI, controllers, view models, mapeamento de DTOs
+- **Business Layer** (ou Service Layer): regras de negócio, validações, orquestração
+- **Data Access Layer** (ou Persistence Layer): repositories, DAOs, conexões com banco
+
+Variantes comuns adicionam camadas:
+- 4-tier: separa Domain (entidades) de Service
+- 5-tier: adiciona uma camada de Integration acima da de Data (clientes pra serviços externos)
+
+A regra fundamental: **chamadas só descem**. Presentation chama Business. Business chama Data. Data nunca chama Business. Business nunca chama Presentation. Em alguns sistemas existe a regra estrita de "fechado", em outros é "aberto" (pode pular camadas).
+
+**Vantagens**:
+
+- Separação de responsabilidades clara, fácil de explicar
+- Tooling enterprise (Spring, Java EE) foi construído pensando nisso
+- Times grandes conseguem se organizar: time de UI, time de backend, time de DBA
+
+**Desvantagens**:
+
+- **Domain Anêmico**: como Martin Fowler descreveu no post "AnemicDomainModel" (25 de novembro de 2003, martinfowler.com/bliki/AnemicDomainModel.html), Layered tende a produzir entidades sem comportamento (só getters/setters) com toda lógica vivendo na camada de Service. Isso é o oposto do que DDD prescreve.
+- **Mudança vertical custa caro**: adicionar um novo campo de produto exige tocar em UI (DTO), Service (validação), Repository (mapeamento), Entity (campo), Migration (banco). Cinco camadas pra uma mudança que conceitualmente é uma só.
+- **Acopla-se a infraestrutura na vertical**: muda framework de UI, todos os controllers mudam. Muda ORM, todos os repositories mudam.
+
+**Quando usar**: sistemas CRUD-pesados, domínio simples, time já familiarizado com o estilo, integração com tooling enterprise. Para sistemas com domínio complexo, Clean Architecture ou DDD tático são opções melhores.
+
+## SOA (Service-Oriented Architecture)
+
+SOA é o predecessor histórico dos Microservices. Surgiu nos anos 2000 (formalizado em padrões como SOAP, WS-*, BPEL) com a ideia de quebrar o monolito em **serviços de negócio**, comunicando via protocolos padronizados e mediados por um **Enterprise Service Bus (ESB)**.
+
+A arquitetura típica:
+
+```
+Cliente ──→ [API Gateway] ──→ [ESB] ──┬─→ Serviço de Pedidos
+                                       ├─→ Serviço de Pagamentos
+                                       ├─→ Serviço de Estoque
+                                       └─→ Serviço de Clientes
+                                       
+                              [ESB faz: roteamento, transformação,
+                               orquestração, governança, segurança]
+```
+
+A diferença essencial em relação a Microservices: o **ESB é um componente central inteligente**, e os serviços são relativamente **gordos** (cada um cobre um domínio inteiro). Em microservices, os serviços são pequenos e a comunicação é "dumb pipes, smart endpoints" — exatamente o oposto.
+
+**Por que SOA caiu em desgraça**:
+
+- ESB virou ponto único de falha. Quando o ESB caía, todo o sistema caía.
+- Governança centralizada virou gargalo organizacional. Qualquer mudança precisava passar pelo time de integração.
+- Padrões SOAP/WS-* viraram pesados demais. XML verboso, SOAP envelopes de 50KB pra payload de 1KB.
+- O ESB acumulou lógica de negócio que devia estar nos serviços — virou um "novo monolito" no meio.
+
+**Por que SOA ainda importa**: muitos sistemas empresariais grandes (bancos, telecoms, governos) ainda rodam SOA. Conhecer SOA ajuda a entender por que microservices surgiram como reação a esse modelo. Sam Newman explica essa transição no capítulo 1 do "Building Microservices" segunda edição (O'Reilly, agosto de 2021).
+
+## Microservices
+
+Microservices é o estado da arte distribuído atual — embora também o estilo mais ruidoso e frequentemente mal aplicado. Sam Newman define microservices, no "Building Microservices" segunda edição (O'Reilly, agosto de 2021, ISBN 978-1-492-03402-5), como serviços pequenos, deployáveis de forma independente, modelados em torno de um domínio de negócio.
+
+Características essenciais que distinguem microservices de SOA:
+
+- **Pequenos**: cada serviço cobre um Bounded Context (DDD), idealmente algo que um time de 2-8 pessoas mantém inteiro.
+- **Deploy independente**: você consegue subir uma nova versão de Pagamentos sem deployar Pedidos. Isso exige contratos estáveis entre serviços.
+- **Banco próprio**: cada serviço tem seu próprio schema (e idealmente sua própria instância de banco). Nada de joins entre tabelas de serviços diferentes.
+- **Dumb pipes, smart endpoints**: comunicação simples (REST/gRPC/mensageria), inteligência dentro dos serviços. Sem ESB centralizado.
+- **Polyglot**: cada time pode escolher seu stack. Java pra um, Go pra outro, Python pra um terceiro.
+
+**O case study canônico é a Netflix**. Migraram do monolito de DVD-locação pra microservices entre 2009 e 2012, expondo ferramentas open source que viraram base do ecossistema (Eureka, Hystrix, Zuul, Ribbon). Esses tools foram em grande parte absorvidos depois por Kubernetes, Istio e cloud providers.
+
+**Custos reais de Microservices**:
+
+- **Complexidade operacional explode**: cada serviço precisa de seu pipeline CI/CD, monitoramento, alertas, logs centralizados, tracing distribuído (Jaeger, Zipkin), service mesh (Istio, Linkerd). Você precisa de SRE/DevOps maduro pra rodar isso.
+- **Transações distribuídas viram pesadelo**: você não tem ACID entre serviços. Precisa de patterns como Saga (choreography ou orchestration) e consistência eventual. Discutido na Lição 6 (Event-Driven) e expandido em Newman cap 6.
+- **Network failures como parte do design**: chamadas entre serviços falham. Latência é variável. Você precisa de Circuit Breaker, Bulkhead, Retry com backoff exponencial, Timeout. Esses patterns são padrão em microservices, opcionais em monolito.
+- **Debug distribuído é difícil**: stack trace não atravessa serviços. Você precisa de distributed tracing (OpenTelemetry) pra entender o fluxo de uma requisição que passa por 7 serviços.
+- **Custos de infraestrutura**: 30 serviços em produção exigem 30+ pods, 30+ pipelines, 30+ dashboards. Cada um com mínimo de RAM e CPU.
+
+**Lei de Conway** (Melvin Conway, 1968): "organizations design systems that are a copy of their communication structure". Tradução prática: sua estrutura de serviços tende a refletir a estrutura dos seus times. Se você tem 4 times, você tende a ter sistemas que se quebram naturalmente em 4 partes. Microservices força você a levar isso a sério desde cedo — ou sofre.
+
+**Quando usar Microservices**:
+
+- Organização com mais de 50-100 engenheiros, várias squads autônomas
+- Necessidade real de escalonamento independente (parte do sistema com 1000x mais tráfego que outra)
+- Heterogeneidade de stack como benefício (ML em Python, backend em Java, real-time em Go)
+- Tolerância organizacional pra investir em DevOps/SRE
+
+**Quando NÃO usar Microservices**:
+
+- Time pequeno (menos de 15-20 engenheiros)
+- Domínio ainda em descoberta — fronteiras vão mudar e refatorar entre serviços é muito mais caro que entre módulos
+- Sem maturidade DevOps. Sam Newman é explícito: você precisa de pipelines automatizados, monitoramento, e capacidade de provisionar infraestrutura rápido antes de pensar em microservices.
+
+A regra "monolith first" defendida por Martin Fowler (post "MonolithFirst", martinfowler.com/bliki/MonolithFirst.html, 3 de junho de 2015) e Sam Newman: comece monolito, evolua pra modular monolith, extraia microservices quando o problema concreto justificar.
+
+## Microkernel (Plugin Architecture)
+
+Microkernel é um estilo que aparece menos em conversas de produto, mas é fundamental em IDEs, browsers, sistemas operacionais e qualquer software extensível. Catalogado no POSA Vol 1 (Buschmann et al. 1996). A ideia: um **núcleo mínimo** que provê funcionalidade básica, e **plugins** que estendem o sistema sem modificar o núcleo.
+
+Estrutura conceitual:
+
+```
+                ┌─────────────────────────────────────┐
+                │            CORE SYSTEM              │
+                │  (gerencia plugins, lifecycle,      │
+                │   contratos, isolamento)            │
+                └────────┬────────────────────────────┘
+                         │
+       ┌─────────────────┼─────────────────┐
+       ▼                 ▼                 ▼
+   ┌────────┐      ┌────────┐        ┌────────┐
+   │Plugin A│      │Plugin B│        │Plugin C│
+   │(Python)│      │ (Java) │        │(Folder)│
+   └────────┘      └────────┘        └────────┘
+```
+
+**Exemplos clássicos**:
+
+- **Eclipse IDE**: o core é a plataforma RCP (Rich Client Platform). Tudo — editor Java, debugger, Git integration, Maven — são plugins. Eclipse só faz sentido como microkernel.
+- **VS Code**: arquitetura idêntica. Core mínimo + marketplace de extensões. Linguagens, debuggers, themes, snippets, todos são plugins.
+- **IntelliJ IDEA**: mesmo padrão (PluginManager, extension points).
+- **Browsers (Chrome, Firefox)**: extensões.
+- **WordPress, Magento, Shopify**: temas e plugins.
+
+**Vantagens**:
+
+- **Extensibilidade sem modificar o core**: terceiros adicionam funcionalidade sem precisar do código do core.
+- **Isolamento de falhas** (parcial): um plugin defeituoso idealmente não derruba o core (depende da implementação).
+- **Customização por domínio**: o mesmo core serve mercados diferentes com plugins diferentes.
+
+**Desvantagens**:
+
+- **Design do contrato é difícil**: definir as APIs de extensão certas é uma arte. Errar significa que plugins não conseguem fazer o que precisam, ou que mudanças no core quebram todos os plugins.
+- **Versionamento de plugin é dor crônica**: VS Code atualiza, extensões quebram. Eclipse atualiza, plugins quebram. Resolver isso exige semver rigoroso no core.
+
+**Quando usar**: quando o sistema precisa ser extensível por terceiros, ou quando você quer permitir customização por cliente sem fork de código. Não é estilo de aplicação de negócio típica — é estilo de plataforma.
+
+## Serverless (FaaS — Function as a Service)
+
+Estilo nascido em 2014 quando a AWS lançou Lambda. A ideia: você não escreve aplicações nem serviços — escreve **funções individuais** que rodam em resposta a **eventos** (HTTP request, mensagem em fila, arquivo subido em bucket, agendamento, etc).
+
+A infraestrutura é totalmente abstraída: não há servidores pra provisionar, escalar ou patchear (daí "serverless", embora servidores existam — só não são gerenciados por você). Você paga por execução: invocação + tempo de execução + memória. Quando não há tráfego, custo é zero.
+
+Plataformas principais: AWS Lambda, Google Cloud Functions, Azure Functions, Cloudflare Workers (edge computing).
+
+A metodologia mais relacionada é o **Twelve-Factor App**, publicado por Adam Wiggins (co-fundador da Heroku) em novembro de 2011, em 12factor.net. As doze diretrizes (codebase, dependencies, config, backing services, build/release/run, processes, port binding, concurrency, disposability, dev/prod parity, logs, admin processes) foram pensadas pra aplicações SaaS escaláveis em PaaS, mas se aplicam quase integralmente a serverless. Em novembro de 2025, o Twelve-Factor foi anunciado como projeto open source community-driven.
+
+**Características**:
+
+- **Stateless por construção**: funções não guardam estado entre invocações. Estado vai pra serviços externos (DynamoDB, S3, Redis, RDS).
+- **Cold start**: primeira invocação de uma função "fria" tem latência extra (100ms-2s dependendo da plataforma e runtime). Java/.NET costumam ser piores; Node/Python/Go costumam ser melhores.
+- **Limite de execução**: AWS Lambda tem timeout máximo de 15 minutos. Pra workloads de longa duração, não serve.
+- **Pricing baseado em uso**: ótimo pra cargas intermitentes, péssimo pra cargas constantes (acaba sendo mais caro que um EC2 reservado).
+
+**Quando usar**:
+
+- Cargas event-driven com tráfego irregular (webhook handlers, processadores de upload, jobs agendados)
+- MVPs e prototipagem rápida (zero setup de servidor)
+- Glue code entre serviços (transformação de eventos, integrações)
+- Tarefas de processamento paralelo embaraçoso (processar 10.000 arquivos em paralelo)
+
+**Quando NÃO usar**:
+
+- Aplicações com tráfego constante e alto: EC2/Kubernetes sai mais barato
+- Workloads com requisitos de latência baixa consistente (cold starts são fatais)
+- Workloads longos (> 15min) ou que precisam de muita memória
+- Stack quando o domínio exige stateful complexo (você acaba fazendo gambiarra com cache externo)
+
+## Outros estilos relevantes (referência rápida)
+
+Estes aparecem em contextos específicos. Vale conhecer o nome e quando aparecem.
+
+**Pipe-and-Filter**: catalogado no POSA Vol 1. Aplicação como pipeline de transformações: cada filtro recebe input, transforma, manda pro próximo. Exemplos: shell pipes UNIX (`grep ... | sort | uniq`), build systems (compile → link → package), ETL pipelines (extract → transform → load), processadores de stream (Kafka Streams).
+
+**Space-Based Architecture** (Tuple Spaces): originalmente conceito da Linda (David Gelernter, 1985), popularizado em sistemas de trading e gaming pelo JavaSpaces e depois GigaSpaces. Aplicação roda em grid de memória compartilhada, sem banco central. Latência de microssegundos, mas complexidade altíssima.
+
+**Lambda Architecture** (Big Data): proposta por Nathan Marz no post "How to beat the CAP theorem" (2011), formalizada com James Warren no livro "Big Data: Principles and Best Practices of Scalable Realtime Data Systems" (Manning Publications, 2015). Combina três camadas: **batch layer** (Hadoop/MapReduce, alta latência, alta acurácia), **speed layer** (Storm/streaming, baixa latência, aproximação) e **serving layer** (merge das duas pra responder queries). Complexidade alta — duas codebases mantidas em sincronia.
+
+**Kappa Architecture** (Big Data): proposta por Jay Kreps (co-criador do Apache Kafka, hoje CEO da Confluent) no post "Questioning the Lambda Architecture" no O'Reilly Radar (2 de julho de 2014, oreilly.com/radar/questioning-the-lambda-architecture/). Crítica fundamental ao Lambda: manter duas codebases (batch e streaming) é caro e propenso a inconsistências. Proposta: uma única camada de **streaming** sobre um log replayável (Kafka), reprocessamento por replay dos eventos. Mais simples que Lambda quando funciona, mas exige stream processing maduro.
+
+## Como escolher: trade-offs concretos
+
+A escolha do estilo arquitetural depende de cinco eixos que você precisa avaliar pro seu contexto concreto. Mark Richards e Neal Ford ("Fundamentals of Software Architecture", capítulo de architectural styles) propõem uma matriz de avaliação que adapto aqui pra perguntas práticas:
+
+**1. Tamanho do time** — quantos engenheiros vão trabalhar no sistema?
+- ≤ 10: monolito ou modular monolith
+- 10-50: modular monolith
+- 50-200: modular monolith maduro evoluindo pra microservices selecionados
+- 200+: microservices (com SRE/DevOps maduros)
+
+**2. Maturidade do domínio** — você já sabe quais são os bounded contexts certos?
+- Domínio em descoberta: monolito ou modular monolith (fronteiras vão mudar)
+- Domínio estável: microservices viável
+
+**3. Requisitos de escalonamento** — partes diferentes precisam escalar de forma diferente?
+- Tudo escala junto, tráfego previsível: monolito serve
+- Partes muito desiguais (1000x diferença): microservices ou serverless faz sentido
+
+**4. Requisitos de disponibilidade** — falha de uma parte pode derrubar tudo?
+- Tudo ou nada está OK: monolito serve
+- Resiliência crítica (financeiro, saúde): microservices com circuit breakers, ou redundância de monolito
+
+**5. Maturidade operacional** — você tem DevOps/SRE?
+- Sem: monolito ou modular monolith
+- Time pequeno DevOps: até 5-10 serviços no máximo
+- DevOps maduro: microservices viável
+
+A pergunta diagnóstica de Richards e Ford resumida em uma frase: *você tem capacidade organizacional pra operar um sistema distribuído com tudo que isso implica?* Se a resposta é "não" ou "talvez", a resposta arquitetural é "monolito ou modular monolith".
+
+<Aviso>
+O viés do mercado é favorecer microservices porque é o que aparece em palestras, blogs e vagas. Mas a literatura técnica séria (Richards/Ford, Newman, Fowler, Brown) é cada vez mais cautelosa: a maioria dos sistemas se beneficia de começar como monolito modular. Migrar é fácil quando preciso; migrar de microservices prematuro pra monolito é caro e doloroso. Se você está iniciando um projeto e a primeira pergunta é "vou usar microservices?", a resposta provavelmente é "ainda não".
+</Aviso>
+
+## Aplicação no Carbon Credit
+
+Voltando ao Carbon Credit Compensation Platform, qual estilo arquitetural faz sentido?
+
+**Contexto do projeto**:
+- Time: 4 pessoas (Bruno, Murilo, Fabiano, Pedro Chaves)
+- Domínio: ainda em descoberta — Bounded Contexts foram desenhados nas lições 3 e 4 mas não testados em produção
+- Escalonamento: nenhum (projeto acadêmico)
+- Disponibilidade: nenhuma exigência crítica
+- Operações: nenhuma maturidade DevOps no time pra disciplina ESIII
+- Decisão prévia: sem banco, in-memory
+
+**Estilo correto: Modular Monolith**
+
+Não é monolito tradicional porque vocês já têm Bounded Contexts identificados (Compensação, Inventário, Cadastro, Auditoria). Não é microservices porque seria over-engineering catastrófico pra 4 pessoas, sem DevOps e com domínio em descoberta.
+
+A estrutura concreta:
+
+```
+src/main/java/com/carbon/compensacaocredito/
+├── compensacao/                  ← módulo (Bounded Context)
+│   ├── api/                       ← interfaces públicas
+│   │   ├── IniciarCompensacaoUseCase.java
+│   │   ├── EfetivarCompensacaoUseCase.java
+│   │   └── eventos/
+│   │       └── CompensacaoEfetivada.java
+│   └── interno/                   ← package-private
+│       ├── dominio/
+│       ├── usecase/
+│       └── adapter/
+├── inventario/                   ← outro Bounded Context
+│   ├── api/
+│   │   ├── BuscarCreditosQuery.java
+│   │   └── ReservarCreditoUseCase.java
+│   └── interno/
+│       └── ...
+├── cadastro/
+│   ├── api/
+│   └── interno/
+├── auditoria/
+│   ├── api/
+│   └── interno/
+└── compartilhado/                ← Shared Kernel (Lição 3)
+    ├── CNPJ.java
+    ├── CompensacaoId.java
+    └── eventos/
+        └── EventoDominio.java
+```
+
+**Regras enforced (validar com ArchUnit no futuro)**:
+
+1. Pacotes `*.interno` são package-private — só classes do mesmo pacote acessam
+2. Cross-module: `compensacao.interno` NUNCA importa de `inventario.interno`
+3. Comunicação cross-module: só via `*.api` (Facades ou eventos)
+4. `compartilhado` é importado por todos, mas nunca importa de módulos específicos
+
+**Vantagens pro contexto da Fatec**:
+
+- Deploy único (vocês não têm Kubernetes nem CI/CD complexo)
+- Transações in-memory triviais
+- Debug local fácil (um único processo Java)
+- Quando vocês adicionarem banco numa disciplina futura, basta cada módulo ter seu schema próprio
+- Se algum dia quiserem extrair `inventario` como microservice, as fronteiras já estão lá — só virar o módulo num serviço separado
+
+**O que NÃO fazer**:
+
+- Não tentem microservices "pra aprender" — sem DevOps maduro vira pesadelo de produtividade
+- Não façam monolito tradicional sem fronteiras — perdem todo o trabalho de DDD que fizeram nas lições 3 e 4
+- Não façam Layered tradicional — produziria Domain Anêmico e quebraria o modelo DDD
+
+## Próximos passos
+
+Esta lição fecha a sequência principal da trilha de Arquitetura: princípios (L1), Clean (L2), DDD estratégico (L3), DDD tático (L4), Hexagonal (L5), Event-Driven (L6) e Estilos Arquiteturais (L7). Os próximos tópicos que fariam sentido como extensões:
+
+1. **Resilience Patterns**: Circuit Breaker (Michael Nygard, "Release It!" 2007/2018), Bulkhead, Retry com backoff exponencial, Timeout — relevante quando o projeto evoluir pra distribuído ou usar APIs externas.
+2. **C4 Model** (Simon Brown): notação moderna pra documentar arquitetura em 4 níveis (Context, Container, Component, Code). Útil pra apresentar o sistema em entrevistas e em reviews.
+3. **ADR (Architecture Decision Records)**: Michael Nygard propôs em 2011 (cognitect.com/blog/2011/11/15/documenting-architecture-decisions); virou padrão pra registrar decisões arquiteturais e por que foram tomadas.
+4. **Modular Monolith aprofundado com Spring Modulith**: framework do Spring que automatiza muitas das regras descritas nesta lição.
+
+Pra todo o resto — aplicar essas ideias no Carbon Credit e nos outros sistemas que vocês forem construir — o que está nas lições 1 a 7 forma uma base sólida.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Richards, Mark; Ford, Neal. *Fundamentals of Software Architecture: An Engineering Approach*. O'Reilly Media, primeira edição março de 2020, ISBN 978-1-492-04345-4. Segunda edição 2025, ISBN 978-1-098-17551-1. Referência canônica moderna para architectural styles.
+- Buschmann, Frank; Meunier, Regine; Rohnert, Hans; Sommerlad, Peter; Stal, Michael. *Pattern-Oriented Software Architecture, Volume 1: A System of Patterns*. John Wiley & Sons, 16 de agosto de 1996, ISBN 0-471-95869-7. Conhecido como POSA Vol 1. Cataloga Layers, Pipes-and-Filters, Broker, Microkernel, Model-View-Controller.
+- Newman, Sam. *Building Microservices: Designing Fine-Grained Systems*. O'Reilly Media, segunda edição agosto de 2021, ISBN 978-1-492-03402-5.
+- Brown, Simon. "Modular Monoliths". Palestra no Devoxx UK 2016. Post republicado em simonbrown.je/modular-monolith.
+- Westeinde, Kirsten. "Deconstructing the Monolith: Designing Software that Maximizes Developer Productivity". Shopify Engineering Blog, 21 de fevereiro de 2019. shopify.engineering/deconstructing-monolith-designing-software-maximizes-developer-productivity.
+- Wiggins, Adam. "The Twelve-Factor App". 12factor.net, novembro de 2011. Anunciado como projeto open source community-driven em novembro de 2025.
+- Marz, Nathan. "How to beat the CAP theorem". Blog post de 2011 introduzindo Lambda Architecture. Aprofundado em Marz, Nathan; Warren, James. *Big Data: Principles and Best Practices of Scalable Realtime Data Systems*. Manning Publications, 2015.
+- Kreps, Jay. "Questioning the Lambda Architecture". O'Reilly Radar, 2 de julho de 2014. oreilly.com/radar/questioning-the-lambda-architecture/. Introduz Kappa Architecture.
+- Fowler, Martin. "MonolithFirst". martinfowler.com/bliki/MonolithFirst.html, 3 de junho de 2015.
+- Fowler, Martin. "AnemicDomainModel". martinfowler.com/bliki/AnemicDomainModel.html, 25 de novembro de 2003.
+- Conway, Melvin E. "How Do Committees Invent?". *Datamation*, abril de 1968. Origem da "Lei de Conway".
+- Foote, Brian; Yoder, Joseph. "Big Ball of Mud". Apresentado em PLoP'97, publicado em *Pattern Languages of Program Design 4* (editores Harrison, Foote, Rohnert), Addison-Wesley, 1999, capítulo 29.

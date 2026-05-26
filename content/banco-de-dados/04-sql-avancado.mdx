@@ -1,0 +1,700 @@
+---
+titulo: "SQL Avançado: CTEs, Window Functions e Queries Recursivas"
+trilha: "banco-de-dados"
+duracaoMin: 75
+dificuldade: "intermediario"
+referencias:
+  - "ISO/IEC 9075:1999 (SQL:1999) — introduz Common Table Expressions (CTEs) e queries recursivas via WITH RECURSIVE"
+  - "ISO/IEC 9075:2003 (SQL:2003) — padroniza window functions (OVER, PARTITION BY, ROW_NUMBER, RANK, LAG, LEAD)"
+  - "ISO/IEC 9075:2016 (SQL:2016) — operadores JSON nativos no padrão SQL"
+  - "ISO/IEC 9075:2023 — versão atual; adiciona property graph queries (SQL/PGQ)"
+  - "Yannakakis (1981) — base teórica de queries recursivas em álgebra relacional"
+  - "PostgreSQL Documentation — Window Functions: https://www.postgresql.org/docs/current/tutorial-window.html"
+  - "PostgreSQL Documentation — WITH Queries (CTEs): https://www.postgresql.org/docs/current/queries-with.html"
+  - "Joe Celko, 'SQL for Smarties: Advanced SQL Programming', 5ª ed., Morgan Kaufmann 2014"
+  - "Markus Winand, 'Modern SQL' — https://modern-sql.com — referência sobre SQL pós-92"
+  - "Itzik Ben-Gan, 'T-SQL Querying', Microsoft Press 2015"
+---
+
+## O que separa um dev Java júnior de sênior em SQL
+
+Na Lição 3, você viu o **core do SQL** que existe desde 1986: `SELECT`, `JOIN`, `GROUP BY`. Esse é o conjunto que dá conta de **uns 70% dos problemas reais**.
+
+Os outros 30% — os problemas mais interessantes — exigem ferramentas modernas:
+
+- **CTEs** (Common Table Expressions, `WITH`): introduzidas no **SQL:1999**
+- **Window Functions**: padronizadas no **SQL:2003**
+- **Recursive Queries** (`WITH RECURSIVE`): SQL:1999 — tornam o SQL **Turing-completo**
+- **JSON operators**: SQL:2016
+
+Saber esses recursos é **o que separa um dev Java júnior que escreve SQL "como em 1986" de um sênior** que resolve problemas em **uma query elegante** em vez de 100 linhas de Java com loops e listas. Em Spring Boot, isso significa **menos N+1 queries**, **menos lógica duplicada na aplicação**, e **dashboards/relatórios** que rodam em milissegundos.
+
+Esta lição cobre tudo isso com exemplos práticos usando as tabelas das lições anteriores. **Padrão de progressão**:
+
+1. **CTEs** — organizar queries complexas
+2. **Window Functions** — análises sem perder linhas
+3. **Recursive CTEs** — hierarquias e grafos
+4. **JSON** — dados semi-estruturados
+
+No fim, você consegue resolver problemas que **antes você não imaginava possíveis em SQL puro**.
+
+---
+
+## CTEs: o "WITH" que muda tudo
+
+**CTE** = **Common Table Expression** = um `SELECT` com nome, definido antes da query principal.
+
+Em vez de empilhar subqueries dentro de subqueries (legibilidade horrível), você nomeia cada passo. Sintaxe:
+
+```sql
+WITH nome_da_cte AS (
+    SELECT ...
+)
+SELECT * FROM nome_da_cte;
+```
+
+### Comparando: subquery vs CTE
+
+Pergunta: "Quais alunos têm média de notas acima de 7?"
+
+**Sem CTE** (subquery aninhada):
+
+```sql
+SELECT a.nome, medias.media
+FROM Aluno a
+INNER JOIN (
+    SELECT aluno_id, AVG(nota) AS media
+    FROM Matricula
+    GROUP BY aluno_id
+    HAVING AVG(nota) > 7
+) AS medias ON a.id = medias.aluno_id
+ORDER BY medias.media DESC;
+```
+
+**Com CTE**:
+
+```sql
+WITH MediasPorAluno AS (
+    SELECT aluno_id, AVG(nota) AS media
+    FROM Matricula
+    GROUP BY aluno_id
+    HAVING AVG(nota) > 7
+)
+SELECT a.nome, m.media
+FROM Aluno a
+INNER JOIN MediasPorAluno m ON a.id = m.aluno_id
+ORDER BY m.media DESC;
+```
+
+A query principal fica **limpa e linear**. Você lê de cima pra baixo. Em queries com 5-6 passos lógicos, a diferença de legibilidade é enorme.
+
+### Múltiplas CTEs em sequência
+
+Você pode definir várias CTEs separadas por vírgula:
+
+```sql
+WITH
+MediasPorAluno AS (
+    SELECT aluno_id, AVG(nota) AS media
+    FROM Matricula
+    GROUP BY aluno_id
+),
+AlunosDestaque AS (
+    SELECT * FROM MediasPorAluno WHERE media > 8.0
+),
+ContagemPorCurso AS (
+    SELECT a.curso, COUNT(*) AS total_destaques
+    FROM Aluno a
+    INNER JOIN AlunosDestaque d ON a.id = d.aluno_id
+    GROUP BY a.curso
+)
+SELECT * FROM ContagemPorCurso ORDER BY total_destaques DESC;
+```
+
+Cada CTE pode **referenciar as anteriores**. Funciona como um pipeline ETL dentro de uma única query.
+
+### CTE também funciona em INSERT / UPDATE / DELETE
+
+```sql
+-- Deletar matrículas de alunos inativos identificados por CTE
+WITH AlunosInativos AS (
+    SELECT id FROM Aluno
+    WHERE id NOT IN (
+        SELECT aluno_id FROM Matricula
+        WHERE data_matricula > CURRENT_DATE - INTERVAL '2 years'
+    )
+)
+DELETE FROM Matricula
+WHERE aluno_id IN (SELECT id FROM AlunosInativos);
+```
+
+### MATERIALIZED hint (PostgreSQL)
+
+Por padrão, PostgreSQL trata CTEs como **otimization fence** — ele materializa o resultado em memória antes de continuar. Em algumas situações, isso ajuda; noutras, atrapalha (o otimizador não pode "empurrar" filtros pra dentro da CTE).
+
+Desde **PostgreSQL 12**, você pode dar hint explícito:
+
+```sql
+WITH MediasPorAluno AS NOT MATERIALIZED (
+    SELECT aluno_id, AVG(nota) AS media
+    FROM Matricula
+    GROUP BY aluno_id
+)
+SELECT ...
+```
+
+`NOT MATERIALIZED` permite que o otimizador **integre** a CTE na query principal (igual subquery). `MATERIALIZED` força executar e cachear. **Default**: PostgreSQL decide automaticamente se a CTE é referenciada uma vez (integra) ou múltiplas (materializa). Você quase nunca precisa especificar.
+
+---
+
+## Window Functions: a virada de jogo do SQL:2003
+
+Aqui vem o recurso que **mais transforma como você pensa em SQL**.
+
+**Problema clássico**: você quer mostrar, pra cada aluno, sua nota **e a média do curso** ao lado. Como?
+
+**Sem window function** (caminho da pedra):
+
+```sql
+SELECT a.nome, m.nota, a.curso,
+    (SELECT AVG(m2.nota)
+     FROM Matricula m2
+     INNER JOIN Aluno a2 ON m2.aluno_id = a2.id
+     WHERE a2.curso = a.curso) AS media_curso
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id;
+```
+
+Subquery correlacionada — executa **uma vez por linha**. Em grandes volumes, é lentíssimo.
+
+**Com window function**:
+
+```sql
+SELECT a.nome, m.nota, a.curso,
+    AVG(m.nota) OVER (PARTITION BY a.curso) AS media_curso
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id;
+```
+
+Uma linha. Ordem de magnitude mais rápido. Mais legível.
+
+### A ideia central
+
+Window function = função agregada **que NÃO colapsa as linhas**. Diferente de `GROUP BY` (que reduz N linhas a 1 por grupo), window function **mantém todas as linhas** e adiciona uma coluna com o cálculo.
+
+Sintaxe:
+
+```sql
+funcao() OVER (
+    [PARTITION BY ...]    -- divide as linhas em grupos (opcional)
+    [ORDER BY ...]        -- ordena dentro do grupo (opcional)
+    [ROWS/RANGE BETWEEN ... AND ...]    -- frame: quais linhas considerar
+)
+```
+
+A "janela" (window) é o **conjunto de linhas** que a função considera pra cada linha do resultado.
+
+<svg width="100%" viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Diferença entre GROUP BY e Window Function</title>
+<desc>Duas tabelas lado a lado mostrando que GROUP BY colapsa linhas enquanto window function mantém todas</desc>
+
+<g fontFamily="sans-serif" fontSize="13">
+
+<text x="170" y="25" fill="#FF6B6B" fontWeight="bold" textAnchor="middle">GROUP BY (colapsa)</text>
+<text x="170" y="42" fill="#888888" fontSize="11" textAnchor="middle">N linhas → 1 linha por grupo</text>
+
+<rect x="20" y="55" width="300" height="32" fill="#1d4d3f"/>
+<text x="40" y="76" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">curso</text>
+<text x="200" y="76" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">AVG(nota)</text>
+
+<rect x="20" y="87" width="300" height="28" fill="#222222"/>
+<text x="40" y="106" fontFamily="monospace" fontSize="11" fill="#cccccc">ADS</text>
+<text x="200" y="106" fontFamily="monospace" fontSize="11" fill="#cccccc">8.16</text>
+
+<rect x="20" y="115" width="300" height="28" fill="#1a1a1a"/>
+<text x="40" y="134" fontFamily="monospace" fontSize="11" fill="#cccccc">Direito</text>
+<text x="200" y="134" fontFamily="monospace" fontSize="11" fill="#cccccc">7.50</text>
+
+<text x="170" y="170" fill="#888888" fontSize="10" textAnchor="middle">apenas 2 linhas no resultado</text>
+
+<text x="500" y="25" fill="#1d9e75" fontWeight="bold" textAnchor="middle">WINDOW FUNCTION (preserva)</text>
+<text x="500" y="42" fill="#888888" fontSize="11" textAnchor="middle">todas as N linhas + coluna nova</text>
+
+<rect x="360" y="55" width="320" height="32" fill="#1d4d3f"/>
+<text x="380" y="76" fontFamily="monospace" fontSize="11" fill="#ffffff" fontWeight="bold">nome</text>
+<text x="490" y="76" fontFamily="monospace" fontSize="11" fill="#ffffff" fontWeight="bold">nota</text>
+<text x="555" y="76" fontFamily="monospace" fontSize="11" fill="#ffffff" fontWeight="bold">avg_curso</text>
+
+<rect x="360" y="87" width="320" height="26" fill="#222222"/>
+<text x="380" y="105" fontFamily="monospace" fontSize="10" fill="#cccccc">Bruno</text>
+<text x="490" y="105" fontFamily="monospace" fontSize="10" fill="#cccccc">8.5</text>
+<text x="555" y="105" fontFamily="monospace" fontSize="10" fill="#7F77DD">8.16</text>
+
+<rect x="360" y="113" width="320" height="26" fill="#1a1a1a"/>
+<text x="380" y="131" fontFamily="monospace" fontSize="10" fill="#cccccc">Bruno</text>
+<text x="490" y="131" fontFamily="monospace" fontSize="10" fill="#cccccc">7.0</text>
+<text x="555" y="131" fontFamily="monospace" fontSize="10" fill="#7F77DD">8.16</text>
+
+<rect x="360" y="139" width="320" height="26" fill="#222222"/>
+<text x="380" y="157" fontFamily="monospace" fontSize="10" fill="#cccccc">Murilo</text>
+<text x="490" y="157" fontFamily="monospace" fontSize="10" fill="#cccccc">9.0</text>
+<text x="555" y="157" fontFamily="monospace" fontSize="10" fill="#7F77DD">8.16</text>
+
+<rect x="360" y="165" width="320" height="26" fill="#1a1a1a"/>
+<text x="380" y="183" fontFamily="monospace" fontSize="10" fill="#cccccc">Pedro</text>
+<text x="490" y="183" fontFamily="monospace" fontSize="10" fill="#cccccc">8.2</text>
+<text x="555" y="183" fontFamily="monospace" fontSize="10" fill="#7F77DD">8.16</text>
+
+<rect x="360" y="191" width="320" height="26" fill="#222222"/>
+<text x="380" y="209" fontFamily="monospace" fontSize="10" fill="#cccccc">Erika</text>
+<text x="490" y="209" fontFamily="monospace" fontSize="10" fill="#cccccc">7.5</text>
+<text x="555" y="209" fontFamily="monospace" fontSize="10" fill="#7F77DD">7.50</text>
+
+<text x="500" y="240" fill="#888888" fontSize="10" textAnchor="middle">5 linhas preservadas + média do curso ao lado</text>
+
+<text x="350" y="290" fill="#cccccc" fontSize="13" textAnchor="middle">Window function = "agregação inline" sem perder o detalhe</text>
+</g>
+</svg>
+
+### Window functions de RANKING
+
+As mais usadas. Três variantes que confundem iniciantes:
+
+```sql
+SELECT
+    a.nome,
+    a.curso,
+    m.nota,
+    ROW_NUMBER() OVER (PARTITION BY a.curso ORDER BY m.nota DESC) AS row_num,
+    RANK()       OVER (PARTITION BY a.curso ORDER BY m.nota DESC) AS rank_pos,
+    DENSE_RANK() OVER (PARTITION BY a.curso ORDER BY m.nota DESC) AS dense_pos
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id;
+```
+
+Resultado hipotético com empate:
+
+| nome | curso | nota | row_num | rank_pos | dense_pos |
+|---|---|---|---|---|---|
+| Murilo | ADS | 9.0 | 1 | 1 | 1 |
+| Bruno | ADS | 8.5 | 2 | 2 | 2 |
+| Pedro | ADS | 8.5 | 3 | 2 | 2 |
+| Bruno | ADS | 7.0 | 4 | 4 | 3 |
+
+**Diferenças**:
+- `ROW_NUMBER`: sempre sequencial, sem empate. Bruno e Pedro recebem 2 e 3 (escolha "aleatória" na ordem dos empatados)
+- `RANK`: empate recebe mesmo rank. Próximo rank **pula** (1, 2, 2, 4 — não tem 3)
+- `DENSE_RANK`: empate recebe mesmo rank. Próximo rank **não pula** (1, 2, 2, 3)
+
+Casos de uso:
+- **ROW_NUMBER**: paginação, "primeiros N de cada grupo"
+- **RANK**: rankings tipo "top 10 da Bolsa" onde empate é OK
+- **DENSE_RANK**: rankings sem buracos, "níveis de qualificação"
+
+### Top N por grupo (pattern clássico)
+
+> "Quero os **3 melhores alunos de cada curso** por nota média."
+
+Esse é um dos problemas mais comuns em SQL real, e brutal sem window function. **Com**:
+
+```sql
+WITH MediasPorAluno AS (
+    SELECT
+        a.id, a.nome, a.curso,
+        AVG(m.nota) AS media,
+        ROW_NUMBER() OVER (PARTITION BY a.curso ORDER BY AVG(m.nota) DESC) AS rn
+    FROM Aluno a
+    INNER JOIN Matricula m ON a.id = m.aluno_id
+    GROUP BY a.id, a.nome, a.curso
+)
+SELECT id, nome, curso, media
+FROM MediasPorAluno
+WHERE rn <= 3
+ORDER BY curso, media DESC;
+```
+
+Esse pattern **(window function + CTE + filtro)** resolve uma família inteira de problemas. Imprescindível pra ICPC, entrevistas, e relatórios reais.
+
+### LAG e LEAD — comparar com linha anterior/posterior
+
+`LAG(coluna, offset)` retorna o valor da coluna `offset` linhas **atrás**. `LEAD` faz o oposto. Usado pra comparar com período anterior, calcular diferenças, detectar gaps.
+
+```sql
+-- Variação de nota entre matrículas consecutivas do mesmo aluno
+SELECT
+    a.nome,
+    m.disciplina_id,
+    m.data_matricula,
+    m.nota,
+    LAG(m.nota) OVER (PARTITION BY a.id ORDER BY m.data_matricula) AS nota_anterior,
+    m.nota - LAG(m.nota) OVER (PARTITION BY a.id ORDER BY m.data_matricula) AS variacao
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id
+ORDER BY a.nome, m.data_matricula;
+```
+
+A primeira matrícula de cada aluno tem `nota_anterior = NULL` (não tem antes dela). Útil pra dashboards: "mostrar variação % de receita mês a mês".
+
+### Running totals (somas acumuladas)
+
+```sql
+-- Soma acumulada de notas por aluno, em ordem cronológica
+SELECT
+    a.nome,
+    m.data_matricula,
+    m.nota,
+    SUM(m.nota) OVER (
+        PARTITION BY a.id
+        ORDER BY m.data_matricula
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS soma_acumulada
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id;
+```
+
+A cláusula `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` define o **frame da janela**: pra cada linha, considera **todas as linhas anteriores + a atual**.
+
+Outros frames úteis:
+- `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW` — média móvel de 7 dias
+- `ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING` — soma de tudo daqui pra frente
+- `ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING` — janela centrada (suavização)
+
+<Insight>
+Window functions são **a feature SQL mais subutilizada** por desenvolvedores que vieram do Java sem aprofundamento em DB. Muito código que vejo em produção é: "buscar tudo no Java, processar em loop, calcular agregações em memória". Em 90% dos casos, isso vira **uma window function** em uma query. Diferença de performance: **10x a 1000x**. Diferença de código: **20 linhas Java → 5 linhas SQL**. Vale o investimento de aprender bem.
+</Insight>
+
+---
+
+## Recursive CTEs: SQL Turing-completo
+
+**Recursive CTE** = uma CTE que **se referencia**. Adicionada no **SQL:1999**. Torna o SQL **Turing-completo** — em princípio, pode expressar qualquer computação.
+
+Estrutura:
+
+```sql
+WITH RECURSIVE nome AS (
+    -- Anchor (caso-base): query inicial
+    SELECT ...
+
+    UNION ALL
+
+    -- Recursive (passo): query que referencia "nome"
+    SELECT ... FROM nome WHERE condicao_de_parada
+)
+SELECT * FROM nome;
+```
+
+A execução:
+1. Executa o **anchor**: produz resultado R₀
+2. Aplica o **recursive**: usa R₀ como input, produz R₁
+3. Aplica o **recursive** em R₁: produz R₂
+4. Continua até produzir resultado vazio
+5. Resultado final: UNION de R₀, R₁, R₂, ...
+
+### Exemplo 1: gerar uma sequência
+
+```sql
+WITH RECURSIVE Numeros AS (
+    SELECT 1 AS n              -- anchor: começa em 1
+    UNION ALL
+    SELECT n + 1 FROM Numeros  -- recursive: incrementa
+    WHERE n < 10               -- condição de parada
+)
+SELECT * FROM Numeros;
+-- Retorna: 1, 2, 3, ..., 10
+```
+
+### Exemplo 2: hierarquia organizacional
+
+Cenário real: tabela de funcionários com auto-referência (cada um aponta pro supervisor):
+
+```sql
+CREATE TABLE Funcionario (
+    id              SERIAL PRIMARY KEY,
+    nome            VARCHAR(100),
+    cargo           VARCHAR(50),
+    supervisor_id   INTEGER REFERENCES Funcionario(id)
+);
+```
+
+> "Liste **todos os subordinados diretos e indiretos** do CEO."
+
+```sql
+WITH RECURSIVE Hierarquia AS (
+    -- Anchor: o próprio CEO
+    SELECT id, nome, cargo, supervisor_id, 0 AS nivel
+    FROM Funcionario
+    WHERE cargo = 'CEO'
+
+    UNION ALL
+
+    -- Recursive: pega quem tem supervisor já incluído
+    SELECT f.id, f.nome, f.cargo, f.supervisor_id, h.nivel + 1
+    FROM Funcionario f
+    INNER JOIN Hierarquia h ON f.supervisor_id = h.id
+)
+SELECT * FROM Hierarquia ORDER BY nivel, nome;
+```
+
+**Resultado** (exemplo):
+
+| id | nome | cargo | supervisor_id | nivel |
+|---|---|---|---|---|
+| 1 | Ana | CEO | NULL | 0 |
+| 2 | Bruno | CTO | 1 | 1 |
+| 3 | Carla | CFO | 1 | 1 |
+| 4 | Diego | Dev Lead | 2 | 2 |
+| 5 | Erika | Senior Dev | 4 | 3 |
+
+Cada execução do recursive desce **um nível**. Para naturalmente quando ninguém mais tem supervisor já incluído.
+
+### Exemplo 3: grafo / "todos os caminhos"
+
+> "Dado um grafo de cidades conectadas por estradas, encontre todas as cidades alcançáveis a partir de Cruzeiro."
+
+```sql
+WITH RECURSIVE Alcancaveis AS (
+    SELECT 'Cruzeiro' AS cidade
+
+    UNION       -- nota: UNION (sem ALL) — remove duplicatas, evita ciclos
+
+    SELECT e.destino
+    FROM Alcancaveis a
+    INNER JOIN Estrada e ON a.cidade = e.origem
+)
+SELECT * FROM Alcancaveis;
+```
+
+**Importante**: usar `UNION` (sem `ALL`) em recursive remove duplicatas — evita loops infinitos em grafos com ciclos. Se você usar `UNION ALL` num grafo cíclico, **a query nunca termina** (na prática trava por limite de memória ou iterações).
+
+### Limitando recursão
+
+Pra evitar infinito por bug:
+
+```sql
+-- PostgreSQL
+SET max_recursive_iterations = 1000;
+
+-- Ou no próprio query:
+WITH RECURSIVE Numeros AS (
+    SELECT 1 AS n
+    UNION ALL
+    SELECT n + 1 FROM Numeros WHERE n < 1000     -- explicit limit
+)
+SELECT * FROM Numeros;
+```
+
+Cada SGBD tem limites default (PostgreSQL: sem limite explícito mas dá out-of-memory; SQL Server: 100 por default; MySQL: `cte_max_recursion_depth = 1000`).
+
+<Insight>
+Recursive CTE **torna o SQL Turing-completo**. Em princípio, você pode implementar qualquer algoritmo nele — calculadora, Game of Life, até interpretador de outras linguagens (algumas pessoas implementaram **fractal de Mandelbrot** em recursive CTE como joke). Na prática, use pra **hierarquias e travessia de grafos**. Pra cálculos complexos, prefira lógica na aplicação ou stored procedures.
+</Insight>
+
+---
+
+## JSON em SQL: o melhor dos dois mundos
+
+Desde o **SQL:2016** padronizou JSON. PostgreSQL tem suporte excelente com **JSONB** (JSON binário, indexável); MySQL 5.7+ tem JSON nativo; SQL Server tem JSON via funções.
+
+### Quando usar JSON em coluna
+
+**Bom uso**:
+- Configurações do usuário (`preferencias_ui`)
+- Metadados variáveis (`config_extra`)
+- Dados de APIs externas armazenados como-recebidos (`raw_response`)
+- Schemas que mudam frequentemente
+
+**Mau uso**:
+- Relacionamentos (use FK, não array de IDs)
+- Dados que serão filtrados/ordenados frequentemente (use colunas)
+- Quando você precisa de integridade referencial
+
+### Operadores JSON em PostgreSQL (JSONB)
+
+```sql
+CREATE TABLE Configuracao (
+    usuario_id  INTEGER PRIMARY KEY,
+    prefs       JSONB
+);
+
+INSERT INTO Configuracao VALUES (1, '{
+    "tema": "dark",
+    "idioma": "pt-BR",
+    "notificacoes": {"email": true, "push": false},
+    "linguagens_favoritas": ["Java", "Python", "Rust"]
+}');
+
+-- Acessar campo (retorna JSONB)
+SELECT prefs -> 'tema' FROM Configuracao;            -- "dark"
+
+-- Acessar campo como texto (retorna TEXT)
+SELECT prefs ->> 'tema' FROM Configuracao;           -- dark (sem aspas)
+
+-- Acessar caminho aninhado
+SELECT prefs -> 'notificacoes' ->> 'email' FROM Configuracao;    -- true
+
+-- Filtrar por valor JSON
+SELECT * FROM Configuracao WHERE prefs ->> 'tema' = 'dark';
+
+-- Verificar existência de chave
+SELECT * FROM Configuracao WHERE prefs ? 'idioma';
+
+-- Verificar se um array contém valor
+SELECT * FROM Configuracao
+WHERE prefs -> 'linguagens_favoritas' @> '"Java"';
+
+-- Atualizar campo (cria novo JSONB)
+UPDATE Configuracao
+SET prefs = jsonb_set(prefs, '{tema}', '"light"')
+WHERE usuario_id = 1;
+```
+
+### Indexando JSONB
+
+```sql
+-- Índice GIN — bom pra queries com @> e ?
+CREATE INDEX idx_prefs ON Configuracao USING GIN (prefs);
+
+-- Índice em campo específico (B-tree, mais rápido pra esse campo)
+CREATE INDEX idx_prefs_tema ON Configuracao ((prefs ->> 'tema'));
+```
+
+Veremos índices em profundidade na **próxima lição**.
+
+### JSON em SELECT — gerando JSON na query
+
+PostgreSQL pode **construir JSON** no resultado:
+
+```sql
+-- Retornar alunos com matrículas aninhadas como JSON
+SELECT
+    a.id,
+    a.nome,
+    jsonb_agg(
+        jsonb_build_object(
+            'disciplina_id', m.disciplina_id,
+            'nota', m.nota
+        )
+    ) AS matriculas
+FROM Aluno a
+LEFT JOIN Matricula m ON a.id = m.aluno_id
+GROUP BY a.id, a.nome;
+```
+
+Resultado:
+
+```json
+[
+  {
+    "id": 1,
+    "nome": "Bruno Kenji",
+    "matriculas": [
+      {"disciplina_id": 101, "nota": 8.5},
+      {"disciplina_id": 102, "nota": 7.0}
+    ]
+  }
+]
+```
+
+**Em Spring Boot**: usar isso evita N+1 queries ao retornar JSON pra API. Em vez de buscar aluno + uma query por matrícula, **uma query devolve a estrutura aninhada pronta**.
+
+---
+
+## EXISTS vs IN: pegadinha sutil
+
+Você viu na Lição 3 que `NOT EXISTS` é preferível a `NOT IN` (NULL semantics). Mas há um caso ainda mais sutil onde **`EXISTS` ganha de `IN`**: queries correlacionadas.
+
+```sql
+-- Alunos com pelo menos uma nota > 8
+-- Versão IN:
+SELECT * FROM Aluno
+WHERE id IN (SELECT aluno_id FROM Matricula WHERE nota > 8);
+
+-- Versão EXISTS:
+SELECT * FROM Aluno a
+WHERE EXISTS (SELECT 1 FROM Matricula m WHERE m.aluno_id = a.id AND m.nota > 8);
+```
+
+**Otimizadores modernos** (PostgreSQL, MySQL 8+) costumam transformar ambos no mesmo plano (semi-join). Mas há diferenças sutis:
+
+- `IN` **avalia a subquery uma vez** (no caso geral) e materializa o resultado
+- `EXISTS` **avalia por linha** mas pode parar assim que encontrar o primeiro match (semi-join lazy)
+
+Pra grandes volumes onde a subquery é cara, `EXISTS` costuma ser **igual ou mais rápido**. Em casos específicos onde a subquery é pequena e você quer reusar, `IN` pode ser mais conveniente.
+
+**Regra prática**: `EXISTS` por padrão; `IN` com listas literais (`WHERE x IN (1, 2, 3)`).
+
+---
+
+## CASE: lógica condicional em SELECT
+
+Não é avançado, mas é **essencial** e muita gente não conhece a sintaxe completa:
+
+```sql
+-- CASE simples
+SELECT
+    nome,
+    nota,
+    CASE
+        WHEN nota >= 9 THEN 'A'
+        WHEN nota >= 7 THEN 'B'
+        WHEN nota >= 5 THEN 'C'
+        ELSE 'F'
+    END AS conceito
+FROM Matricula m
+INNER JOIN Aluno a ON m.aluno_id = a.id;
+
+-- CASE em GROUP BY (pivoteamento básico)
+SELECT
+    a.curso,
+    COUNT(CASE WHEN m.nota >= 9 THEN 1 END) AS conceito_a,
+    COUNT(CASE WHEN m.nota BETWEEN 7 AND 8.99 THEN 1 END) AS conceito_b,
+    COUNT(CASE WHEN m.nota < 7 THEN 1 END) AS reprovados
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id
+GROUP BY a.curso;
+```
+
+Pivoteamento real (linhas viram colunas) tem sintaxe específica em SQL Server (`PIVOT`) e em PostgreSQL (`crosstab` no `tablefunc`), mas `CASE + GROUP BY` resolve a maioria dos casos práticos.
+
+---
+
+## Recap
+
+**CTEs** (`WITH`, SQL:1999): nomeiam subqueries pra deixar queries complexas **legíveis e lineares**. Múltiplas CTEs em sequência funcionam como pipeline. PostgreSQL 12+ permite hint `MATERIALIZED` / `NOT MATERIALIZED`.
+
+**Window Functions** (`OVER`, SQL:2003): funções agregadas **que não colapsam linhas**. Mantêm todas as linhas e adicionam coluna com cálculo. **Ferramenta mais transformadora** do SQL moderno.
+
+Funções principais:
+- **`ROW_NUMBER()`** — sequência única (1, 2, 3, 4...)
+- **`RANK()`** — empate compartilha, próximo pula (1, 2, 2, 4)
+- **`DENSE_RANK()`** — empate compartilha, próximo não pula (1, 2, 2, 3)
+- **`LAG / LEAD`** — comparar com linha anterior/posterior
+- **`SUM / AVG / COUNT / MIN / MAX OVER`** — agregação inline com PARTITION BY
+
+Sintaxe geral: `funcao() OVER (PARTITION BY ... ORDER BY ... ROWS BETWEEN ...)`. **Pattern essencial**: window function + CTE + filtro = top-N por grupo.
+
+**Recursive CTEs** (`WITH RECURSIVE`, SQL:1999): CTE que se referencia. Tornam SQL **Turing-completo**. Usadas pra **hierarquias** (organogramas, categorias) e **travessia de grafos** (cidades, redes sociais). Sempre tenha condição de parada. Use `UNION` (sem ALL) em grafos cíclicos pra evitar loop infinito.
+
+**JSON em SQL** (SQL:2016): PostgreSQL com JSONB tem suporte excelente. Operadores `->`, `->>`, `@>`, `?`. Indexação com GIN. Função `jsonb_agg` + `jsonb_build_object` permite **gerar JSON aninhado direto na query** — elimina N+1 em APIs Spring Boot.
+
+**EXISTS vs IN**: prefira `EXISTS` por padrão (NULL semantics, lazy evaluation). Use `IN` com listas literais pequenas.
+
+**CASE**: lógica condicional dentro de SELECT, ORDER BY e GROUP BY. `CASE WHEN cond THEN val ELSE val END`. Combinado com `COUNT()` permite pivoteamento básico (linhas → colunas).
+
+**Linha do tempo SQL**:
+- 1986 — ANSI SQL-86 (CORE)
+- 1992 — SQL-92 (JOIN explícito, CASE, subqueries)
+- **1999 — SQL:1999** (CTEs, recursive)
+- **2003 — SQL:2003** (window functions, MERGE)
+- 2016 — SQL:2016 (JSON nativo)
+- 2023 — SQL:2023 (property graph queries)
+
+Próximas lições da trilha:
+
+- **Índices** — B+tree, hash, BRIN, GIN, GiST, `EXPLAIN ANALYZE`, otimizador, quando criar/não criar
+- **Transações e ACID** — isolation levels, MVCC, locking, deadlock detection
+- **Modelagem prática** — modelar do zero um sistema usando brModelo/dbdiagram.io
+- **JPA/Hibernate** — `@Entity`, `@OneToMany`, lazy/eager, N+1 problem
+
+Manda qual quer.

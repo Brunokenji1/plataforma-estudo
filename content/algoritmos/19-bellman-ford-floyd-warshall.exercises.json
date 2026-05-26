@@ -1,0 +1,127 @@
+[
+  {
+    "id": "bfw-01",
+    "enunciado": "Qual a principal LIMITAÇÃO do algoritmo de Dijkstra que motivou o Bellman-Ford?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Dijkstra só funciona em grafos não-direcionados",
+      "Dijkstra não aceita pesos NEGATIVOS — a premissa greedy de 'o vértice de menor distância tentativa já tem distância final' quebra quando uma aresta negativa pode encurtar caminhos posteriores",
+      "Dijkstra só funciona com menos de 1000 vértices",
+      "Dijkstra é lento demais para problemas práticos"
+    ],
+    "resposta": 1,
+    "explicacao": "Dijkstra é greedy e assume pesos não-negativos. A lógica 'finaliza o vértice de menor distância conhecida' quebra quando há pesos negativos — chegar via um vértice 'mais distante' pode ficar mais barato se houver aresta negativa adiante. Dijkstra falha SILENCIOSAMENTE: produz uma resposta, mas pode estar errada. Casos reais onde pesos negativos importam: arbitragem em câmbio (taxa de conversão como peso, lucro = ciclo negativo), roteamento BGP, manutenção em redes elétricas com incentivos, project scheduling com paralelização. Pra esses, usa Bellman-Ford (O(V·E)) ou Floyd-Warshall (O(V³))."
+  },
+  {
+    "id": "bfw-02",
+    "enunciado": "Quantos pesquisadores DESCOBRIRAM INDEPENDENTEMENTE o algoritmo conhecido como Bellman-Ford?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas Bellman e Ford",
+      "Pelo menos 6: Alfonso Shimbel (1955), Lester Ford Jr. (1956), Edward F. Moore (1957), Woodbury & Dantzig (1957), Richard Bellman (1958), George Minty (1958) — caso clássico da Lei de Stigler",
+      "3: Bellman, Ford e Moore",
+      "12 pesquisadores diferentes"
+    ],
+    "resposta": 1,
+    "explicacao": "Pelo menos 6 pessoas descobriram o algoritmo independentemente entre 1955-1958: (1) Alfonso Shimbel, 1955 — 'Structure in communication nets' (primeira publicação); (2) Lester Ford Jr., 1956 — RAND Corporation paper P-923; (3) Edward F. Moore, 1957 — variante com fila (daí 'Bellman-Ford-Moore'); (4) Max Woodbury & George Dantzig, 1957 — não publicado; (5) Richard Bellman, 1958 — formalizou via DP; (6) George Minty, 1958 — não publicado. Caso clássico da LEI DE STIGLER: 'nenhuma descoberta científica é nomeada em homenagem ao seu descobridor original'. Bellman ganhou o crédito porque formalizou matematicamente conectando com programação dinâmica."
+  },
+  {
+    "id": "bfw-03",
+    "enunciado": "Qual a complexidade do algoritmo de Bellman-Ford?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(V + E)",
+      "O((V+E) log V) igual ao Dijkstra",
+      "O(V·E) — onde V é o número de vértices e E o número de arestas",
+      "O(V³) sempre"
+    ],
+    "resposta": 2,
+    "explicacao": "O(V·E). Pra grafos esparsos (E ≈ V), fica O(V²). Pra grafos densos (E ≈ V²), fica O(V³). É mais lento que Dijkstra O((V+E) log V), MAS necessário quando há pesos negativos. A intuição: Bellman-Ford faz V-1 iterações, em cada uma relaxa TODAS as E arestas (versus Dijkstra que processa cada vértice uma vez via heap). V-1 iterações bastam porque qualquer caminho simples tem no máximo V-1 arestas. Em produção, Dijkstra domina (caso comum: pesos não-negativos); Bellman-Ford aparece em casos especializados como detecção de arbitragem e BGP."
+  },
+  {
+    "id": "bfw-04",
+    "enunciado": "Como o Bellman-Ford DETECTA a presença de um ciclo negativo no grafo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Procurando explicitamente por ciclos com DFS",
+      "Depois das V-1 iterações normais, faz UMA ITERAÇÃO EXTRA. Se ainda houver relaxamento possível, existe um ciclo negativo alcançável da origem",
+      "Verificando se alguma aresta tem peso < 0",
+      "Não detecta — falha silenciosamente"
+    ],
+    "resposta": 1,
+    "explicacao": "Esse é o SUPERPODER do Bellman-Ford. Após as V-1 iterações normais, executa UMA iteração extra (a V-ésima). Se ainda houver QUALQUER relaxamento possível, existe ciclo negativo alcançável da origem. Por quê funciona: sem ciclo negativo, todas as distâncias mínimas usam no máximo V-1 arestas (caminhos simples), então convergem em V-1 iterações. Se ainda dá pra relaxar na V-ésima passada, é porque tem ciclo onde 'dar mais uma volta' DIMINUI o custo total — definição de ciclo negativo. Dijkstra simplesmente NÃO detecta isso. Aplicação prática: Bellman-Ford pode encontrar ciclos negativos = oportunidades de arbitragem em mercados financeiros."
+  },
+  {
+    "id": "bfw-05",
+    "enunciado": "Como você modela ARBITRAGEM EM CÂMBIO como um problema de ciclo negativo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Vértices = moedas, arestas com peso = taxa de câmbio (positivo). Procurar caminho mais curto",
+      "Vértices = moedas, arestas com peso = -log(taxa de câmbio). Procurar CICLO NEGATIVO — produto de taxas > 1 vira soma de -log < 0",
+      "Vértices = bancos, arestas = transferências",
+      "Não dá pra modelar como grafo"
+    ],
+    "resposta": 1,
+    "explicacao": "Modelagem clássica. Vértices = moedas; aresta de moeda A pra moeda B com peso = -log(taxa(A→B)). Caminho de A pra B = sequência de conversões. Como log(a·b) = log(a) + log(b), o produto das taxas vira soma dos logs. Lucro acontece quando o produto > 1, que é equivalente a soma dos logs > 0, ou seja, soma dos -logs < 0. CICLO NEGATIVO = arbitragem! Sistemas de high-frequency trading rodam variantes de Bellman-Ford continuamente sobre books de ordens procurando ciclos negativos em frações de segundo. Quando encontrado, executa a sequência antes que outros traders apaguem a oportunidade. Em mercados reais, oportunidades duram milissegundos."
+  },
+  {
+    "id": "bfw-06",
+    "enunciado": "Quem inventou o algoritmo conhecido como Floyd-Warshall?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas Robert Floyd",
+      "Bernard Roy (1959) descobriu primeiro para fecho transitivo. Stephen Warshall (1962) e Robert Floyd (1962) publicaram independentemente. Peter Ingerman (1962) formulou os 3 loops aninhados que viraram a apresentação canônica",
+      "Floyd e Warshall trabalharam juntos no MIT",
+      "Donald Knuth"
+    ],
+    "resposta": 1,
+    "explicacao": "Quatro descobertas no mesmo período: (1) Bernard Roy, 1959 — 'Transitivité et connexité' (C.R. Acad. Sci. Paris 249), primeira publicação para FECHO TRANSITIVO, em francês, relativamente desconhecido; (2) Stephen Warshall, 1962 — 'A theorem on Boolean matrices' (JACM 9(1)), independente, também para fecho transitivo; (3) Robert W. Floyd, 1962 — 'Algorithm 97: Shortest Path' (CACM 5(6)), adaptou para grafos com pesos; (4) Peter Z. Ingerman, 1962 — 'Algorithm 141: Path Matrix' (CACM 5(11)), formulou os 3 loops aninhados que viraram apresentação canônica. Nomes alternativos: Roy-Warshall, Roy-Floyd, WFI (Warshall-Floyd-Ingerman). Floyd ganhou Turing Award em 1978 (por outros trabalhos sobre precondições)."
+  },
+  {
+    "id": "bfw-07",
+    "enunciado": "Qual a complexidade do Floyd-Warshall para encontrar TODAS as distâncias entre pares de vértices?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(V²) tempo, O(V) espaço",
+      "O(V³) tempo, O(V²) espaço — 3 loops aninhados k, i, j; matriz V×V de distâncias modificada in-place",
+      "O((V+E) log V) tempo",
+      "O(V·E) tempo"
+    ],
+    "resposta": 1,
+    "explicacao": "O(V³) tempo, O(V²) espaço. Três loops aninhados (k, i, j cada um indo até V), executando uma comparação simples. Matriz V×V armazena distâncias entre todos os pares, modificada in-place. Forma compacta (6 linhas de algoritmo central): 'for k: for i: for j: dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])'. Para V=10.000, custa 10^12 operações e 100 MB — inviável pra grafos grandes. Pra esses, use Johnson's algorithm (combina Bellman-Ford + Dijkstra): O(V·E·log V), vence quando o grafo é esparso. Floyd-Warshall é ideal pra V ≤ ~1000 onde a constante é pequena e a implementação é trivial."
+  },
+  {
+    "id": "bfw-08",
+    "enunciado": "Por que o loop de 'k' precisa ser o LOOP MAIS EXTERNO no Floyd-Warshall (em vez dos loops de i ou j)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por convenção de código",
+      "Pra ser legível",
+      "Porque a recorrência depende de dp[k-1][i][k] e dp[k-1][k][j]. Como reusamos a mesma matriz in-place, precisamos garantir que esses valores ainda são da iteração anterior quando lidos. Inverter os loops quebraria a correção",
+      "Pra economizar memória"
+    ],
+    "resposta": 2,
+    "explicacao": "É detalhe sutil mas crítico. A recorrência é dp[k][i][j] = min(dp[k-1][i][j], dp[k-1][i][k] + dp[k-1][k][j]). Quando reusamos a mesma matriz (versão O(V²) espaço), precisamos que dp[k][i][k] e dp[k][k][j] sejam IGUAIS a dp[k-1][i][k] e dp[k-1][k][j]. Felizmente: dp[k][i][k] = min(dp[k-1][i][k], dp[k-1][i][k] + dp[k-1][k][k]). Como dp[k-1][k][k] = 0 (caminho zero do vértice pra si mesmo), dp[k][i][k] = dp[k-1][i][k]. Mesma coisa pra dp[k][k][j]. Isso só funciona se k é o loop EXTERNO — i e j podem ser invertidos entre si. Inverter pra colocar i ou j fora QUEBRA a correção."
+  },
+  {
+    "id": "bfw-09",
+    "enunciado": "Como o Floyd-Warshall DETECTA ciclos negativos no grafo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Não detecta — falha silenciosamente",
+      "Procurando arestas com peso negativo",
+      "Após a execução, se dist[i][i] < 0 para algum vértice i, existe um ciclo negativo passando por i — porque a distância de um vértice pra ele mesmo deveria ser 0, e ficar negativa significa que dar uma volta diminui o custo",
+      "Contando o número de iterações"
+    ],
+    "resposta": 2,
+    "explicacao": "Se dist[i][i] < 0 após a execução, existe ciclo negativo alcançável passando por i. Lógica: a distância de um vértice pra ele mesmo deveria ser 0 (caminho vazio). Se ficou negativa, significa que tem caminho i → ... → i que soma menos que zero — definição de ciclo negativo. Verificação simples em O(V): 'for i: if dist[i][i] < 0: return true'. Importante: Floyd-Warshall NÃO produz respostas corretas se houver ciclo negativo (as 'distâncias' podem ser arbitrariamente pequenas), MAS detecta a presença. Pra problemas onde você quer caminhos mais curtos garantidamente corretos com pesos negativos, primeiro verifica se há ciclo negativo; se não houver, as distâncias estão certas."
+  },
+  {
+    "id": "bfw-10",
+    "enunciado": "Verdadeiro ou falso: A 'santíssima trindade' de algoritmos de caminho mais curto (Dijkstra, Bellman-Ford, Floyd-Warshall) cobre TODOS os cenários práticos — pesos não-negativos vs negativos, single-source vs all-pairs.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Os três algoritmos cobrem o espaço prático: (1) DIJKSTRA: SSSP com pesos NÃO-NEGATIVOS — caso comum em produção (GPS, OSPF, IA de jogos); (2) BELLMAN-FORD: SSSP com pesos NEGATIVOS, detecta ciclos negativos — arbitragem, BGP, problemas com incentivos negativos; (3) FLOYD-WARSHALL: APSP (all-pairs) em grafos pequenos-médios, aceita pesos negativos — análise de redes sociais, roteamento pré-computado, fecho transitivo. Pra all-pairs em grafos GRANDES e ESPARSOS, existe Johnson's algorithm (1977, Donald Johnson) que combina Bellman-Ford + Dijkstra: usa Bellman-Ford pra reweighting (eliminar pesos negativos) e depois Dijkstra V vezes. Mas os três principais cobrem 95% dos casos."
+  }
+]

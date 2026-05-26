@@ -1,0 +1,122 @@
+[
+  {
+    "id": "graph-01",
+    "enunciado": "Quem fundou a teoria dos grafos e em que ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, 1968",
+      "Leonhard Euler, 1736, ao resolver o problema das Sete Pontes de Königsberg",
+      "Alan Turing, 1936",
+      "Dijkstra, 1959"
+    ],
+    "resposta": 1,
+    "explicacao": "Leonhard Euler em 1736, no paper 'Solutio problematis ad geometriam situs pertinentis'. Ele resolveu o problema das Sete Pontes de Königsberg (na atual Kaliningrado, Rússia): era possível andar pela cidade cruzando cada uma das 7 pontes exatamente uma vez? Euler provou que NÃO. Pra isso, abstraiu a cidade num diagrama de pontos (massa de terra) conectados por linhas (pontes) — inventando o conceito de grafo. Curiosamente, o paper de Euler nem usa a palavra 'grafo' — esse termo só foi consolidado séculos depois. Dijkstra (1959) e Turing são personagens posteriores, importantes em algoritmos mas não na fundação da teoria."
+  },
+  {
+    "id": "graph-02",
+    "enunciado": "Você está modelando o Facebook como grafo: vértices são usuários, arestas são amizades. O Facebook tem ~3 bilhões de usuários. Qual representação você deve usar?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Matriz de adjacência — acesso O(1) a qualquer par",
+      "Lista de adjacência — memória O(V+E), suporta grafos esparsos",
+      "Hash table com pares (u, v) como chaves",
+      "Array bidimensional simples"
+    ],
+    "resposta": 1,
+    "explicacao": "Lista de adjacência. Para 3 bilhões de vértices, matriz de adjacência precisaria de 9 × 10¹⁸ células — totalmente inviável (toda a memória do planeta não é suficiente). Grafos do mundo real são ESPARSOS: ninguém tem 3 bilhões de amigos. Lista de adjacência usa O(V + E) de memória, proporcional ao tamanho REAL do grafo. Mesmo grandes redes sociais cabem em pouca memória com essa representação. Matriz de adjacência só vale a pena pra grafos pequenos (até alguns milhares de vértices) E densos (a maioria dos pares conectados)."
+  },
+  {
+    "id": "graph-03",
+    "enunciado": "Qual a complexidade de BFS em um grafo com V vértices e E arestas, usando lista de adjacência?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(V)", "O(V + E)", "O(V × E)", "O(V²)"],
+    "resposta": 1,
+    "explicacao": "O(V + E). Cada vértice é colocado na fila exatamente uma vez (graças à marcação de visitados): O(V). Pra cada vértice removido da fila, percorremos sua lista de adjacência. A soma de todas as listas é 2E em grafo não direcionado (cada aresta aparece duas vezes, em cada extremidade) ou E em grafo direcionado: O(E). Total: O(V + E). Com matriz de adjacência, seria O(V²) — precisa varrer linha inteira pra cada vértice. DFS tem a mesma complexidade O(V + E)."
+  },
+  {
+    "id": "graph-04",
+    "enunciado": "Qual a PROPRIEDADE FUNDAMENTAL do BFS em grafos sem peso?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Visita todos os vértices em ordem aleatória",
+      "Encontra o caminho mais curto (em número de arestas) da origem para qualquer outro vértice",
+      "Detecta ciclos em O(V)",
+      "Garante a maior profundidade possível"
+    ],
+    "resposta": 1,
+    "explicacao": "BFS encontra o caminho mais curto em grafos sem peso (ou onde todas as arestas têm o mesmo peso). Isso é consequência de processar vértices em ordem de distância da origem — primeiro distância 1, depois 2, etc. Aplicações: graus de separação em redes sociais ('seis graus de Kevin Bacon'), distância mais curta em labirintos, menor número de movimentos em quebra-cabeças. Pra grafos com PESOS diferentes nas arestas, BFS não funciona — use Dijkstra (BFS + heap)."
+  },
+  {
+    "id": "graph-05",
+    "enunciado": "Em um BFS, em que momento devemos marcar um vértice como 'visitado'?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando o tiramos da fila (no momento de processar)",
+      "Quando o colocamos na fila (no momento de descobrir)",
+      "Antes de iniciar o BFS, marcar todos como visitados",
+      "Não precisa marcar"
+    ],
+    "resposta": 1,
+    "explicacao": "Marcar como visitado QUANDO COLOCAMOS NA FILA. Se você marca só quando TIRA, o mesmo vértice pode ser colocado na fila várias vezes pelos vizinhos diferentes — o algoritmo continua correto, mas vira O(V·E) no pior caso em vez de O(V+E). Isso é uma bug sutil mas devastador em grafos grandes. A regra geral: marcar visitado IMEDIATAMENTE ao descobrir, antes de inserir na fila. Vale tanto pra BFS quanto pra DFS."
+  },
+  {
+    "id": "graph-06",
+    "enunciado": "Se você TROCAR a fila do BFS por uma pilha, qual algoritmo você obtém?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Dijkstra",
+      "DFS (Depth-First Search)",
+      "Topological Sort",
+      "A* search"
+    ],
+    "resposta": 1,
+    "explicacao": "DFS — Depth-First Search. A diferença literal é uma palavra: fila vira pilha, BFS vira DFS. Com pilha (LIFO), o algoritmo sempre prioriza o último vértice descoberto, então mergulha em profundidade antes de voltar. O comportamento é radicalmente diferente: BFS visita em camadas, DFS visita em ramos. A estrutura ESCOLHIDA define o algoritmo. Se trocasse por fila de prioridade (heap), viraria Dijkstra. É um exemplo elegante de como a 'mesma ideia geral' produz algoritmos diferentes dependendo da estrutura interna."
+  },
+  {
+    "id": "graph-07",
+    "enunciado": "Para detectar ciclos em um grafo DIRECIONADO com DFS, você precisa de quantos estados por vértice?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "2 (visitado / não visitado)",
+      "3 (não visitado / em exploração / finalizado)",
+      "4 (start / discovered / processed / final)",
+      "1 (apenas booleano)"
+    ],
+    "resposta": 1,
+    "explicacao": "3 estados: não visitado (0), em exploração (1, no caminho atual da pilha do DFS), finalizado (2, já voltei dele). Durante o DFS, se você encontra um vizinho que está EM EXPLORAÇÃO, achou um ciclo (caminho que retorna a um ancestral). Só 2 estados (visitado/não-visitado) detecta visitação repetida, mas não distingue ciclo de simples revisita por outro caminho. Aplicações dessa técnica: detecção de deadlocks em SO, validação de dependências circulares em build systems (npm, Maven, Cargo), validação de pré-requisitos circulares em currículos universitários."
+  },
+  {
+    "id": "graph-08",
+    "enunciado": "Topological Sort só funciona em qual tipo de grafo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Qualquer grafo conexo",
+      "Grafos não-direcionados",
+      "DAG (Directed Acyclic Graph) — grafo direcionado sem ciclos",
+      "Grafos ponderados"
+    ],
+    "resposta": 2,
+    "explicacao": "DAG: Directed Acyclic Graph (grafo direcionado sem ciclos). Topological Sort produz uma ordem linear onde cada vértice aparece ANTES de todos que dependem dele. Isso só faz sentido se: (a) o grafo é DIRECIONADO (existe noção de 'A depende de B' vs 'B depende de A'), e (b) NÃO tem ciclos (senão A depende de B e B depende de A — impossível ordenar). Aplicações: build systems (Make, Bazel, Gradle), instalação de pacotes (npm, pip, apt), currículo universitário com pré-requisitos, recálculo de células no Excel. O algoritmo de Kahn (1962) e a versão DFS-based são as duas implementações clássicas."
+  },
+  {
+    "id": "graph-09",
+    "enunciado": "Verdadeiro ou falso: DFS recursivo pode estourar a stack do programa em grafos com muitos vértices em cadeia.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Java e C++ não têm Tail Call Optimization, então cada chamada recursiva consome uma stack frame. A JVM por padrão reserva ~512 KB de stack, permitindo entre 5.000 e 10.000 chamadas recursivas antes de StackOverflowError. Em grafos muito profundos (cadeia linear com 100.000+ vértices), DFS recursivo quebra. A solução: usar DFS iterativo com pilha EXPLÍCITA (std::stack ou ArrayDeque). A pilha vai pro heap (que tem GBs disponíveis em vez de KBs), eliminando o problema. Vale a pena pra problemas de ICPC e produção quando você não controla o tamanho do grafo."
+  },
+  {
+    "id": "graph-10",
+    "enunciado": "Para encontrar todos os COMPONENTES CONEXOS de um grafo não-direcionado, qual a estratégia?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Rodar BFS ou DFS começando de cada vértice ainda não visitado — cada execução marca um componente",
+      "Calcular o determinante da matriz de adjacência",
+      "Ordenar os vértices por grau",
+      "Usar Dijkstra a partir do vértice 0"
+    ],
+    "resposta": 0,
+    "explicacao": "Rodar BFS ou DFS a partir de cada vértice não-visitado: cada execução completa marca todos os vértices de UM componente conexo. Contador incrementa a cada nova execução. Complexidade total: O(V + E), pois cada vértice e aresta é tocado uma vez no total (não uma vez por componente). Aplicações práticas: detecção de cluster em redes sociais (grupos de amigos isolados), flood fill em editores de imagem (Photoshop's 'balde de tinta' seleciona região conectada por cor), análise de propagação em redes (qual conjunto de máquinas pode ser afetado por um vírus), análise de circuitos elétricos."
+  }
+]

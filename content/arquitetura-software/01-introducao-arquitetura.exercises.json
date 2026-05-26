@@ -1,0 +1,127 @@
+[
+  {
+    "id": "arq-01",
+    "enunciado": "Frederick Brooks (1986) distinguiu dois tipos de complexidade em software. Quais são e o que arquitetura faz a respeito?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Complexidade alta e complexidade baixa — arquitetura sempre escolhe a baixa",
+      "ESSENTIAL COMPLEXITY: inerente ao problema (folha de pagamento É complicada porque legislação trabalhista É complicada). ACCIDENTAL COMPLEXITY: que nós próprios introduzimos com decisões ruins (frameworks errados, código mal organizado, abstrações que não cabem). Arquitetura de software é a disciplina de MINIMIZAR ACCIDENTAL COMPLEXITY sem fingir que ESSENTIAL COMPLEXITY não existe",
+      "Complexidade do front-end e do back-end",
+      "Complexidade de hardware e de software"
+    ],
+    "resposta": 1,
+    "explicacao": "Frederick Brooks, autor do clássico 'The Mythical Man-Month' (1975), publicou em 1986 o paper 'No Silver Bullet — Essence and Accident in Software Engineering'. Distinção crucial: ESSENTIAL COMPLEXITY é INERENTE ao problema sendo resolvido — folha de pagamento brasileira É complicada porque a legislação trabalhista (CLT, INSS, FGTS, IRRF) é complicada; um sistema bancário É complicado porque regras financeiras são complicadas. Nenhuma tecnologia mágica vai eliminar essa complexidade — é parte do domínio. ACCIDENTAL COMPLEXITY é a que NÓS introduzimos: framework errado pro problema, código mal organizado, abstrações que não cabem, ferramenta inadequada, padrão arquitetural não combinando com o domínio. ARQUITETURA é a disciplina de MINIMIZAR a accidental complexity sem fingir que a essential desaparece. O título 'No Silver Bullet' é uma referência cultural — em folclore, balas de prata matam lobisomens e vampiros; Brooks argumenta que NÃO HÁ bala de prata em engenharia de software que vá resolver tudo de uma vez, é trabalho contínuo de boa engenharia. Citação famosa: 'There is no single development, in either technology or management technique, which by itself promises even one order of magnitude improvement within a decade in productivity, in reliability, in simplicity'."
+  },
+  {
+    "id": "arq-02",
+    "enunciado": "Quem cunhou o termo 'Separation of Concerns' e em qual contexto?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Robert C. Martin em 2000",
+      "Edsger W. Dijkstra (1974), no paper 'On the Role of Scientific Thought'. Dijkstra é um dos pais da computação — também autor do paper 'Go To Considered Harmful' e do algoritmo de caminho mais curto. Citação: 'It is what I sometimes have called the separation of concerns, which, even if not perfectly possible, is yet the only available technique for effective ordering of one's thoughts'",
+      "Eric Evans em 2003",
+      "Larry Constantine em 1968"
+    ],
+    "resposta": 1,
+    "explicacao": "Edsger W. Dijkstra (1930-2002), holandês, um dos pais da computação. Vencedor do Turing Award em 1972. Conhecido por: (1) algoritmo de Dijkstra (caminho mais curto em grafos, 1956); (2) paper 'Go To Considered Harmful' (1968, Communications of the ACM); (3) trabalho fundamental em concorrência (semáforos, problema dos jantadores filósofos); (4) cunhar 'separation of concerns' no paper 'On the Role of Scientific Thought' (1974). CITAÇÃO LITERAL: 'Let me try to explain to you, what to my taste is characteristic for all intelligent thinking. It is, that one is willing to study in depth an aspect of one's subject matter in isolation for the sake of its own consistency, all the time knowing that one is occupying oneself only with one of the aspects. We know that a program must be correct and we can study it from that viewpoint only; we also know that it should be efficient and we can study its efficiency on another day, so to speak. In another mood we may ask ourselves whether, and if so: why, the program is desirable. But nothing is gained — on the contrary! — by tackling these various aspects simultaneously. It is what I sometimes have called the separation of concerns, which, even if not perfectly possible, is yet the only available technique for effective ordering of one's thoughts, that I know of'. CONSEQUÊNCIA prática: cada DECISÃO importante (validar, persistir, notificar, calcular) vira módulo próprio. Cada módulo tem UMA razão pra mudar = localidade de mudança. Princípio que sustenta SOLID, Clean Arch, DDD, Hexagonal — TODOS derivam disso."
+  },
+  {
+    "id": "arq-03",
+    "enunciado": "Quem introduziu formalmente os conceitos de COUPLING e COHESION em software?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth nos anos 70",
+      "Larry Constantine no final dos anos 60. Publicação canônica: paper 'Structured Design' de Stevens, Myers e Constantine (IBM Systems Journal Vol. 13 No. 2, junho 1974, pp. 115-139) — paper que mais recebeu pedidos de reimpressão na história do journal. Constantine foi o pai dos conceitos; Stevens e Myers co-autores. Livro Yourdon & Constantine (1979) consolidou. Conceitos válidos 50+ anos depois",
+      "Edsger Dijkstra em 1974",
+      "Robert C. Martin em 2000"
+    ],
+    "resposta": 1,
+    "explicacao": "Larry L. Constantine desenvolveu coupling e cohesion no MEIO dos anos 1960, em pesquisa sobre métricas de manutenibilidade. Primeira publicação foi em 1968. CANONIZAÇÃO: paper 'Structured Design' de Wayne P. Stevens, Glenford J. Myers e Larry L. Constantine, publicado em IBM Systems Journal Vol. 13 No. 2 (junho 1974), pp. 115-139. Foi o paper que MAIS RECEBEU pedidos de reimpressão na história do journal. EM 1979: Constantine + Edward Yourdon publicaram o livro 'Structured Design: Fundamentals of a Discipline of Program and Systems Design' — referência canônica. CONCEITOS centrais: COUPLING (acoplamento) = grau de dependência entre módulos diferentes; COHESION (coesão) = grau de relação interna entre elementos dentro do mesmo módulo. REGRA MESTRA: LOW COUPLING + HIGH COHESION. Stevens, Myers, Constantine classificaram coupling em 6 níveis (Content, Common, Control, Stamp, Data, Message) e cohesion em 7 níveis (Coincidental, Logical, Temporal, Procedural, Communicational, Sequential, Functional). NOTÁVEL: depois de 50+ anos, esses conceitos continuam sendo a BASE de toda análise de qualidade arquitetural — em OOP, microservices, distributed systems, tudo. Constantine recebeu vários prêmios pela contribuição."
+  },
+  {
+    "id": "arq-04",
+    "enunciado": "O acrônimo SOLID foi proposto por Robert C. Martin (Uncle Bob)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sim, ele propôs os 5 princípios E o acrônimo SOLID em 2000",
+      "Os 5 PRINCÍPIOS foram formulados/consolidados por Robert C. Martin no paper 'Design Principles and Design Patterns' (2000). MAS o ACRÔNIMO SOLID foi cunhado por MICHAEL FEATHERS depois. Vários princípios têm origem anterior: OCP por Bertrand Meyer (1988), LSP por Barbara Liskov (1987). Martin sintetizou e popularizou",
+      "Sim, em 2017 no livro Clean Architecture",
+      "Não, foi proposto por Donald Knuth em 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Confusão comum. Robert C. Martin (Uncle Bob), americano, signatário do Manifesto Ágil, publicou em 2000 o paper 'Design Principles and Design Patterns' onde formulou/consolidou os 5 princípios SOLID. MAS o ACRÔNIMO 'SOLID' não foi proposto por ele — foi cunhado por MICHAEL FEATHERS (autor de 'Working Effectively with Legacy Code', 2004) posteriormente, organizando os princípios na ordem que produz a sigla memorável. ORIGENS DOS PRINCÍPIOS: S — Single Responsibility Principle: Robert C. Martin, paper 2000 (mas conceito vem de cohesion de Constantine); O — Open/Closed Principle: Bertrand Meyer, livro 'Object-Oriented Software Construction' (1988); L — Liskov Substitution Principle: Barbara Liskov, paper 'Data Abstraction and Hierarchy' (SIGPLAN Notices 23(5), 1987); I — Interface Segregation Principle: Robert C. Martin (anos 90); D — Dependency Inversion Principle: Robert C. Martin (1996). LISKOV especificamente é a única vencedora do Turing Award (2008) entre eles, pelo trabalho em linguagens, data abstraction e sistemas distribuídos no MIT. UNCLE BOB é influente como SINTETIZADOR — pegou princípios espalhados e organizou em framework usável. Seu paper original tinha 14 princípios; foram condensados nos 5 do SOLID. Em entrevistas técnicas, mencione as origens corretas — diferencial sobre quem só decora o acrônimo."
+  },
+  {
+    "id": "arq-05",
+    "enunciado": "Versão moderna do Single Responsibility Principle por Robert C. Martin (2014): qual a definição mais precisa?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Uma classe deve fazer só uma coisa",
+      "Uma classe deve ter apenas uma razão para mudar, e essa razão deve ser UM ATOR (um stakeholder, uma área da organização que pode pedir mudança). Se duas pessoas/áreas diferentes podem pedir mudanças naquela classe por razões diferentes, ela viola SRP. RH pode pedir mudança em cálculo de salário; Auditoria pode pedir mudança em relatório; DBA pode pedir mudança em persistência. Atores diferentes = SRP violado se tudo está numa classe",
+      "Uma classe deve ter no máximo 100 linhas",
+      "Uma classe deve ter no máximo 1 método público"
+    ],
+    "resposta": 1,
+    "explicacao": "Confusão clássica: 'SRP = uma classe faz uma coisa só' está SIMPLIFICADO ao ponto de ficar errado. Versão moderna do próprio Uncle Bob (2014, blog post): 'A class should have only one reason to change, and that reason should be one actor'. ATOR = stakeholder, pessoa ou área da organização que pode pedir mudança naquele código. EXEMPLO clássico de violação: classe Funcionario que tem (a) método calcularSalario() — pode mudar porque RH muda regras de pagamento; (b) método relatorioAuditoria() — pode mudar porque Auditoria muda templates; (c) método salvar() — pode mudar porque DBA muda banco/schema. 3 atores ≠ 1 ator = VIOLA SRP. SOLUÇÃO: separar em Funcionario (dados), CalculadoraSalario (RH), GeradorRelatorio (Auditoria), FuncionarioRepository (DBA). Cada classe tem UM ator que pode pedir mudança. RESULTADO PRÁTICO: (a) mudanças ficam LOCALIZADAS — RH pediu mudança em fórmula → mexe só em CalculadoraSalario; (b) TESTES ficam viáveis — testa CalculadoraSalario sem precisar de banco/email; (c) DEPLOYS ficam seguros — mudança em uma área não risca quebrar outras. CRITICAR violação SRP é mais útil que reescrever: olhar a classe e perguntar 'quais áreas diferentes podem pedir mudanças aqui?'. Se mais de uma, refatora."
+  },
+  {
+    "id": "arq-06",
+    "enunciado": "Qual é o problema do clássico exemplo Quadrado/Retângulo e qual princípio SOLID ele viola?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Viola SRP — quadrado e retângulo fazem coisas diferentes",
+      "Viola LSP (Liskov Substitution Principle). Quadrado herda de Retângulo, mas QUEBRA O CONTRATO: 'setLargura(5); setAltura(4); area() == 20' funciona pra Retângulo, FALHA pra Quadrado (área = 16, pois quadrado força largura = altura). Matematicamente quadrado É retângulo, mas em design de classes a HERANÇA quebra o comportamento esperado pelos clientes do tipo base",
+      "Viola DIP — depende de classe concreta",
+      "Viola OCP — modificar classe Retângulo"
+    ],
+    "resposta": 1,
+    "explicacao": "Caso clássico estudado em design OO. Quadrado herda de Retângulo (parece OK matematicamente: quadrado É um retângulo especial). PROBLEMA: Quadrado override setLargura/setAltura pra forçar 'largura == altura'. Resultado: código cliente 'r.setLargura(5); r.setAltura(4); assert r.area() == 20' funciona pra Retângulo, FALHA pra Quadrado (área == 16, não 20). VIOLA LSP — Barbara Liskov, paper 'Data Abstraction and Hierarchy' (SIGPLAN Notices 23(5), 1987): 'Se S é subtipo de T, objetos do tipo T podem ser substituídos por objetos do tipo S sem alterar a corretude do programa'. Aqui Quadrado substitui Retângulo MAS muda comportamento esperado. SOLUÇÕES: (a) NÃO usar herança — Quadrado e Retângulo viram entidades independentes que talvez implementem interface Forma; (b) tornar Retângulo imutável (sem setLargura/setAltura, valores no construtor) — então Quadrado pode herdar sem violar nada; (c) inverter hierarquia: Retângulo herda de Quadrado (mas igualmente problemático em prática); (d) usar COMPOSIÇÃO em vez de herança. LIÇÃO GERAL: 'É-um' linguístico ≠ 'É-um' em design. Pinguim É pássaro mas não voa — herdar de Pássaro com método voar() viola LSP. Caixa eletrônico É uma 'máquina' mas tem comportamentos próprios. Use herança APENAS quando o subtipo respeita TODOS os contratos do supertipo, sem surpresas. PREFIRA COMPOSIÇÃO."
+  },
+  {
+    "id": "arq-07",
+    "enunciado": "O que o Dependency Inversion Principle (DIP) está invertendo e qual sua relação com Dependency Injection (DI)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "DIP inverte o sentido das tabelas no banco",
+      "DIP inverte a DIREÇÃO DA DEPENDÊNCIA tradicional: em vez de 'alto nível → baixo nível' (serviço depende DIRETAMENTE de repositório SQL), passa a ser 'alto nível → abstração ← baixo nível' (serviço depende de INTERFACE; implementação de baixo nível IMPLEMENTA a interface). DI (Dependency Injection) é a TÉCNICA que implementa DIP — em Spring Boot, @Autowired ou construtor injetam a implementação. Você não sabe nem se importa qual",
+      "DIP inverte o sentido de quem chama quem",
+      "DIP e DI são conceitos não relacionados"
+    ],
+    "resposta": 1,
+    "explicacao": "DIP (Dependency Inversion Principle): 'Módulos de alto nível não devem depender de módulos de baixo nível. Ambos devem depender de ABSTRAÇÕES. Abstrações não devem depender de detalhes; detalhes devem depender de abstrações'. ANTES DE DIP (violação): 'Alto nível → Médio → Baixo' — PedidoService depende DIRETAMENTE de MySQLRepository. Problemas: testes precisam de MySQL real; trocar pra PostgreSQL = mudança em PedidoService; reuso impossível. DEPOIS DE DIP: 'Alto nível → ABSTRAÇÃO ← Baixo nível' — PedidoService depende de interface PedidoRepository; MySQLRepository IMPLEMENTA a interface. Resultado: PedidoService não conhece MySQL; pra teste injeta FakeRepository; pra produção injeta PostgreSQLRepository. PedidoService NUNCA MUDA. POR QUE 'INVERSION'? Antes a seta da dependência ia DE alto pra baixo (alto conhece o baixo). Depois, o baixo IMPLEMENTA o que o alto definiu — a seta inverteu (baixo 'serve' o alto). DI (Dependency Injection) é a TÉCNICA: como você ENTREGA a implementação concreta pra quem precisa da abstração? Resposta: pelo construtor, pelo setter, ou via container DI (Spring, Guice, Dagger). Em Spring Boot: @Autowired private PedidoRepository repo — Spring injeta MySQLRepository, PostgreSQLRepository ou TestRepository conforme @Configuration. CRÍTICO: DIP é o PRINCÍPIO (filosofia de design); DI é a TÉCNICA (implementação). Spring INVERSION OF CONTROL (IoC) Container = framework que implementa DI."
+  },
+  {
+    "id": "arq-08",
+    "enunciado": "Quais são os tipos de COUPLING do mais ruim ao melhor, segundo Stevens, Myers e Constantine (1974)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas 'forte' e 'fraco'",
+      "Do PIOR pro MELHOR: Content (acessa dados internos direto) → Common (compartilha globais) → Control (passa flags que controlam comportamento) → Stamp (passa estrutura quando precisa de parte) → Data (passa só dados necessários) → Message (invoca via interfaces sem expor implementação). ALMEJAR MESSAGE COUPLING — conhecer interface, não implementação. É exatamente o que OOP moderna habilita",
+      "Apenas 'alto' e 'baixo'",
+      "Coupling de hardware, software, rede e protocolo"
+    ],
+    "resposta": 1,
+    "explicacao": "Stevens, Myers e Constantine (1974) classificaram coupling em 6 níveis hierárquicos (alguns textos listam 7-8 com variações). DO PIOR AO MELHOR: (1) CONTENT (pathological coupling) — módulo A acessa/modifica DADOS INTERNOS de módulo B sem passar por interface. Bug imediato quando muda B. Ex: acessar campos privados via reflection ou friend declaration; (2) COMMON — A e B dependem de DADOS GLOBAIS COMPARTILHADOS (variáveis globais, singletons mutáveis). Mudança em qualquer um afeta todos imprevisivelmente; (3) EXTERNAL — A e B dependem de mesmo formato/protocolo/interface externa não negociável; (4) CONTROL — A passa parâmetros que CONTROLAM o fluxo interno de B (ex: 'flag = true' que muda algoritmo). Quebra encapsulamento; (5) STAMP (Data-structured) — A passa ESTRUTURA INTEIRA quando precisa só de parte. Acopla A ao schema completo da estrutura; (6) DATA — A passa APENAS OS DADOS NECESSÁRIOS pra B. Aceitável. A e B comunicam via parâmetros simples; (7) MESSAGE (MELHOR) — A invoca B via interface BEM DEFINIDA, sem expor implementação. Tipo de coupling que OOP moderna habilita: interfaces, mensagens, polimorfismo. ALMEJE MESSAGE COUPLING. SINTOMA de mau coupling: quando você muda um arquivo, vários testes em arquivos não-relacionados falham. SINTOMA de bom coupling: mudanças ficam isoladas, testes localizados."
+  },
+  {
+    "id": "arq-09",
+    "enunciado": "Por que 'functional cohesion' é o tipo IDEAL de coesão em um módulo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque funcional é mais rápido",
+      "Porque o módulo faz UMA COISA ÚNICA E BEM DEFINIDA — você consegue descrever em UMA FRASE SEM 'e' nem 'ou'. Ex: 'OrderValidator valida pedidos', 'TaxCalculator calcula impostos'. Heurística prática: se nome do módulo precisa de 'And/Or' (OrderAndCustomerService, UserAndAuthManager) → coesão BAIXA. Divida. Functional cohesion é o que SRP busca e o que torna testes/mudanças localizados",
+      "Porque tem só uma função",
+      "Porque é programação funcional"
+    ],
+    "resposta": 1,
+    "explicacao": "Stevens, Myers, Constantine (1974) classificaram cohesion em 7 níveis (pior → melhor): COINCIDENTAL (módulos agrupados sem relação — 'Utils.java' com 50 funções desconexas, péssimo); LOGICAL (agrupados por categoria — 'todas as funções de I/O' juntas, mesmo sendo I/O de coisas diferentes); TEMPORAL (agrupados por momento de execução — 'tudo que roda no startup'); PROCEDURAL (agrupados por sequência de passos de um procedimento); COMMUNICATIONAL (agrupados porque operam nos mesmos dados); SEQUENTIAL (saída de um é entrada do outro, formam pipeline); FUNCTIONAL (MELHOR) — módulo faz UMA COISA ÚNICA, bem definida, e somente ela. HEURÍSTICA PRÁTICA: descreva o módulo em UMA FRASE SEM 'e' nem 'ou'. 'OrderValidator valida pedidos' — functional cohesion ✓. 'OrderAndCustomerService' — necessita 'and', coesão baixa, divida. 'UserAndAuthManager' — necessita 'and', divida em UserService e AuthService. POR QUE IMPORTA: módulo com functional cohesion é (a) FÁCIL DE NOMEAR — 'TaxCalculator' óbvio; (b) FÁCIL DE TESTAR — só uma responsabilidade pra cobrir; (c) FÁCIL DE EVOLUIR — mudanças ficam localizadas; (d) FÁCIL DE REUSAR — pode ser usado em vários contextos. Functional cohesion é EXATAMENTE o que SRP (Single Responsibility Principle do SOLID) busca — não coincidência: SRP é manifestação moderna de cohesion. OBSERVE: nem toda função 'pequena' tem alta cohesion. Função de 5 linhas que faz 3 coisas distintas (validar + calcular + log) tem baixa cohesion mesmo sendo curta. ALTURA ≠ COESÃO."
+  },
+  {
+    "id": "arq-10",
+    "enunciado": "Verdadeiro ou falso: Dependency Injection (DI) é OBRIGATÓRIO para usar Dependency Inversion Principle (DIP).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. DIP é o PRINCÍPIO ARQUITETURAL: 'dependa de abstrações, não de implementações concretas'. DI é uma das TÉCNICAS pra implementar esse princípio — mas não a única. OUTRAS TÉCNICAS pra alcançar DIP sem DI framework: (1) FACTORY PATTERN — método estático ou classe Factory cria a implementação concreta; cliente recebe via abstração; (2) SERVICE LOCATOR — pattern onde cliente pede a implementação via locator global (variante de DI mas com IoC menos explícito); (3) ABSTRACT FACTORY — pattern do GoF; (4) STRATEGY PATTERN — cliente recebe estratégia (interface) e usa polimorficamente; (5) PASSING DEPENDENCIES MANUALMENTE — código que cria objetos no main() ou bootstrapper e passa pra quem precisa, sem framework. Você pode escrever Java puro sem Spring, criando objetos manualmente: 'PedidoRepository repo = new MySQLPedidoRepository(); PedidoService service = new PedidoService(repo);' — isso É DIP, sem usar nenhum DI framework. RELAÇÃO CORRETA: (a) DIP = O QUÊ (princípio: dependa de abstrações); (b) DI = COMO (técnica: receba dependências de fora em vez de criar internamente); (c) IoC (Inversion of Control) Container = FERRAMENTA (Spring, Guice, Dagger, Pico) que AUTOMATIZA DI. CONFUSÃO COMUM: dev pensa 'pra ter DIP preciso de Spring Boot' — errado. Spring TORNA MAIS FÁCIL, mas o princípio existe e pode ser aplicado em qualquer linguagem/contexto, incluindo C/C++ via function pointers, JavaScript via passing functions, Python via duck typing. Em sistemas pequenos, DI manual é frequentemente melhor — sem overhead de framework, mais explícito. Spring brilha em sistemas grandes onde grafo de dependências é complexo."
+  }
+]

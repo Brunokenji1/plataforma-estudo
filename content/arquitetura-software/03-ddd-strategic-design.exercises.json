@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a definição mais precisa de Bounded Context segundo Eric Evans (2003)?",
+      "opcoes": [
+        "Um diretório de pastas que organiza microservices independentes",
+        "Uma fronteira explícita dentro da qual um modelo é coeso e os termos têm significado único",
+        "Um esquema de banco de dados separado por equipe",
+        "Um pacote Java agrupando classes relacionadas por tema"
+      ],
+      "correta": 1,
+      "explicacao": "Bounded Context é uma fronteira CONCEITUAL, não física. Evans (2003, capítulo 14) define como o escopo dentro do qual um modelo se aplica e é consistente — termos têm significado único, regras de negócio formam um todo coerente. Frequentemente coincide com fronteiras físicas (microservice, pacote, schema), mas a essência é semântica. A opção A confunde com arquitetura de serviços; B é a definição correta; C reduz a uma decisão de infraestrutura; D confunde com Module (que é outro padrão DDD para organização interna)."
+    },
+    {
+      "id": "ex2",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a função do Translator dentro de uma Anticorruption Layer?",
+      "opcoes": [
+        "Converter chamadas síncronas em assíncronas usando filas",
+        "Expor uma interface no vocabulário do domínio cliente",
+        "Converter dados entre os dois modelos (cliente e sistema externo)",
+        "Validar autenticação e autorização nas chamadas externas"
+      ],
+      "correta": 2,
+      "explicacao": "Evans (2003, p. 365) descreve a ACL como combinação de três componentes: Facade (expõe interface no vocabulário do cliente), Adapter (traduz chamadas entre protocolos) e Translator (converte dados entre os esquemas dos dois modelos). A opção A descreve algo de messaging, não DDD; B é a função do Facade; C é a do Translator; D é uma preocupação de segurança transversal, não DDD."
+    },
+    {
+      "id": "ex3",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Em um Bounded Context, duas classes com o mesmo nome (ex: 'Cliente' em Vendas e 'Cliente' em Suporte) sempre indicam má modelagem e devem ser unificadas.",
+      "correta": false,
+      "explicacao": "Falso. Esse é justamente o ponto central do Bounded Context: a MESMA palavra pode (e frequentemente deve) ter significados diferentes em contextos diferentes. Martin Fowler (martinfowler.com/bliki/BoundedContext.html, 2014) usa exatamente o exemplo de Cliente em Vendas vs Suporte para ilustrar isso. Forçar unificação é o anti-pattern do 'contexto único', que produz classes com 80 atributos atendendo casos contraditórios. O correto é manter duas classes Cliente, uma em cada contexto, cada uma otimizada para seu uso."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre Customer/Supplier e Conformist?",
+      "opcoes": [
+        "Customer/Supplier usa REST e Conformist usa SOAP",
+        "Em Customer/Supplier o cliente tem voz nas decisões do fornecedor; em Conformist o cliente apenas adere ao modelo do fornecedor sem negociação",
+        "Customer/Supplier é síncrono e Conformist é assíncrono",
+        "Customer/Supplier exige Shared Kernel e Conformist não"
+      ],
+      "correta": 1,
+      "explicacao": "A diferença é organizacional, não técnica. Em Customer/Supplier (Evans, 2003, cap. 14), as duas equipes colaboram: o cliente expressa necessidades, escreve testes de aceitação que rodam na CI do fornecedor, e o fornecedor leva isso em conta no roadmap. Em Conformist, o fornecedor não tem motivação (ou interesse) em adaptar a interface ao cliente — pode ser uma equipe que ignora o cliente, uma API pública de terceiros, ou um sistema com clientes demais pra negociar com cada um. O cliente Conformist usa o modelo como vem. As demais opções confundem com aspectos técnicos que são ortogonais à classificação DDD."
+    },
+    {
+      "id": "ex5",
+      "tipo": "multipla-escolha",
+      "pergunta": "No Carbon Credit Compensation Platform (projeto Fatec), qual contexto seria classificado como Core Domain?",
+      "opcoes": [
+        "Notificações por e-mail aos emissores",
+        "Cadastro de Emissores (KYC, validação de CNPJ)",
+        "Compensação de Créditos (regras de matching, cálculo de preço, validade)",
+        "Geração de relatórios de auditoria e compliance"
+      ],
+      "correta": 2,
+      "explicacao": "A regra prática (Evans, 2003, cap. 15): pergunte 'se eu apagar esse contexto, o negócio sobrevive?'. Notificações: usa SendGrid, sobrevive trivialmente — GENERIC. Cadastro: qualquer SaaS faz, sobrevive com solução padrão — SUPPORTING. Compensação: se errar matching, validade ou preço, a plataforma deixa de funcionar como negócio — CORE. Relatórios: pode ser feito com Metabase/Superset, sobrevive com ferramenta pronta — GENERIC. O Core recebe os melhores devs e máximo cuidado de modelagem; o Generic compra pronto."
+    },
+    {
+      "id": "ex6",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Shared Kernel é o padrão recomendado por Evans para a maioria das integrações entre Bounded Contexts.",
+      "correta": false,
+      "explicacao": "Falso. Shared Kernel é deliberadamente um padrão RESTRITO. Evans (2003, cap. 14) é cauteloso porque o kernel só funciona quando duas equipes podem coordenar mudanças sem fricção — e o custo é alto: nada no kernel muda sem acordo das duas equipes. Para a maioria dos casos, padrões mais desacoplados (Customer/Supplier, Anticorruption Layer, Open Host Service) escalam melhor. Shared Kernel é apropriado em situações específicas: equipes próximas, modelo realmente compartilhado, e disposição de pagar o custo de coordenação."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "O que significam as marcações (U) e (D) em um Context Map?",
+      "opcoes": [
+        "(U) = Unidirecional, (D) = Bidirecional",
+        "(U) = Upstream (quem define o contrato), (D) = Downstream (quem se adapta)",
+        "(U) = Update, (D) = Delete (operações CRUD permitidas)",
+        "(U) = User-facing, (D) = Domain-only (camada de exposição)"
+      ],
+      "correta": 1,
+      "explicacao": "Upstream/Downstream é a convenção do Context Map (Evans, 2003, cap. 14; Vernon, 2013). O Upstream manda na relação: define o contrato, evolui no seu ritmo, e qualquer mudança propaga rio abaixo. O Downstream se adapta: depende do Upstream e absorve mudanças. Saber quem é U e quem é D em cada par é o que distingue, por exemplo, uma Customer/Supplier balanceada de uma Conformist forçada. As outras opções inventam significados que não existem na literatura DDD."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual é a principal armadilha do padrão Separate Ways?",
+      "opcoes": [
+        "Exige licenciamento de produto comercial",
+        "Não funciona com microservices, apenas com monólitos",
+        "É a decisão mais difícil de reverter: modelos independentes ficam caros de integrar depois",
+        "Requer Shared Kernel obrigatório entre os contextos"
+      ],
+      "correta": 2,
+      "explicacao": "Evans (2003, cap. 14) avisa explicitamente: Separate Ways é a escolha mais difícil de reverter no Context Map. Quando você decide que dois contextos não se integram, eles evoluem completamente independentes, sem nenhuma compatibilidade planejada. Se daqui a dois anos uma necessidade de integração aparecer, o custo é alto — porque você terá que construir Anticorruption Layers ou refatorar modelos inteiros. A decisão é apropriada quando o custo da integração HOJE supera claramente o benefício, mas exige confiança de que isso não vai mudar."
+    },
+    {
+      "id": "ex9",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Open Host Service e Published Language são padrões distintos mas geralmente usados juntos.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Open Host Service (Evans, 2003) é quando um contexto expõe serviço público pra múltiplos clientes; Published Language é o formato estável e documentado de troca (JSON Schema, Protocol Buffers, OpenAPI). Tecnicamente são padrões separados, mas na prática um sem o outro não funciona: um Open Host Service sem Published Language vira spaghetti de integrações ad-hoc; uma Published Language sem Open Host Service não tem onde ser publicada. A combinação é o que permite escalar integração para muitos clientes sem virar caos."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Vaughn Vernon, em 'Implementing Domain-Driven Design' (2013), alertou sobre uma armadilha comum em projetos que adotam DDD. Qual é?",
+      "opcoes": [
+        "Usar Spring Boot em vez de Java EE puro",
+        "Achar que DDD é só os padrões táticos (Entity, Value Object, Aggregate) e pular o design estratégico",
+        "Modelar com UML em vez de diagramas C4",
+        "Não usar Event Sourcing em todos os agregados"
+      ],
+      "correta": 1,
+      "explicacao": "Vernon (2013, Addison-Wesley) observou que muitos times pegavam os padrões táticos do DDD (Entity, Value Object, Aggregate, Repository, Factory) e ignoravam o estratégico (Bounded Context, Context Map, Ubiquitous Language). O resultado: código com aparência de DDD mas sem o valor real, porque o estratégico é o que organiza o sistema em escala. Vernon dedicou tanto espaço a isso que em 2016 publicou 'Domain-Driven Design Distilled' (Addison-Wesley), começando o livro pelos padrões estratégicos justamente para corrigir essa tendência. As outras opções não têm relação com a crítica de Vernon."
+    }
+  ]
+}

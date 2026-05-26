@@ -1,0 +1,127 @@
+[
+  {
+    "id": "bdrel-01",
+    "enunciado": "Quem inventou o modelo relacional, e quando o paper fundador foi publicado?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Larry Ellison, 1977, com o lançamento do Oracle",
+      "Edgar F. 'Ted' Codd (1923-2003), matemático britânico no IBM San Jose Research Lab, publicou em JUNHO DE 1970 o paper 'A Relational Model of Data for Large Shared Data Banks' em Communications of the ACM 13(6), pp. 377-387. Ganhou o Turing Award em 1981. Foi piloto da RAF na 2ª Guerra Mundial e estudou matemática em Oxford",
+      "Peter Chen, 1976, no MIT",
+      "Donald Chamberlin, 1974, com o SEQUEL"
+    ],
+    "resposta": 1,
+    "explicacao": "Edgar F. 'Ted' Codd, matemático britânico, publicou em junho de 1970 o paper 'A Relational Model of Data for Large Shared Data Banks' em Communications of the ACM 13(6), pp. 377-387. Codd trabalhava no IBM San Jose Research Lab desde 1968. CURIOSIDADES: foi piloto da Royal Air Force na 2ª Guerra Mundial; estudou matemática em Oxford; obteve doutorado em Michigan na década de 1960; ganhou o Turing Award em 1981 ('Nobel da computação'); a Forbes em 2002 listou o modelo relacional como uma das maiores inovações dos 85 anos anteriores; morreu em 2003 aos 79 anos. O paper tem apenas 17 páginas. No abstract, Codd não anuncia revolução — apenas diz que vai usar 'a noção matemática de relação' para resolver problemas dos modelos hierárquico e em rede da época."
+  },
+  {
+    "id": "bdrel-02",
+    "enunciado": "Qual era o PROBLEMA central que Codd identificou nos modelos hierárquico (IBM IMS, 1966) e em rede (CODASYL, 1969) que existiam antes dele?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Eram muito lentos para volumes grandes",
+      "DEPENDÊNCIA entre aplicação e armazenamento físico — o programador precisava saber FISICAMENTE onde o dado estava. Mudar o esquema, índices ou layout quebrava as aplicações. Codd promoveu o conceito de INDEPENDÊNCIA DE DADOS: separar O QUE está armazenado de COMO é armazenado",
+      "Não suportavam mais de 1000 registros",
+      "Eram protegidos por patente da IBM"
+    ],
+    "resposta": 1,
+    "explicacao": "O problema central era DEPENDÊNCIA física. No modelo hierárquico (IBM IMS), dados eram organizados como árvores rígidas com caminhos pai-filho. Trocar produto entre categorias = refatorar banco inteiro. No modelo em rede (CODASYL DBTG), cada nó podia ter múltiplos pais — mais flexível, mas caminhos ainda explícitos. Programador precisava saber FISICAMENTE onde dado estava. Mudar esquema = recompilar todas as aplicações. Codd, no abstract do paper de 1970: 'Future users of large data banks must be protected from having to know how the data is organized in the machine'. A palavra-chave do paper é DATA INDEPENDENCE — separar O QUE está armazenado (modelo lógico) de COMO é armazenado (modelo físico). O programador declara o que quer saber via consulta de alto nível; o SGBD descobre como buscar."
+  },
+  {
+    "id": "bdrel-03",
+    "enunciado": "Qual a CORRESPONDÊNCIA correta entre vocabulário formal de Codd e vocabulário SQL informal?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Relação = banco de dados, tupla = tabela, atributo = linha",
+      "Relação = tabela, tupla = linha (row), atributo = coluna (column), domínio = tipo de dado. Em produção ninguém fala 'relação' ou 'tupla' — usa tabela e linha. Mas saber o vocabulário formal ajuda a entender papers acadêmicos",
+      "Relação = índice, tupla = chave, atributo = valor",
+      "Os termos são intercambiáveis sem distinção"
+    ],
+    "resposta": 1,
+    "explicacao": "Mapeamento Codd → SQL: RELAÇÃO = tabela; TUPLA = linha (row); ATRIBUTO = coluna (column); DOMÍNIO = tipo de dado; CARDINALIDADE = quantidade de linhas; GRAU = quantidade de colunas. Codd usava o vocabulário formal porque uma relação matemática é literalmente um subconjunto do produto cartesiano de domínios — cada elemento é uma tupla ordenada. Em produção, ninguém fala 'tupla' — usa 'linha'. Mas saber o vocabulário formal é útil pra ler papers acadêmicos e documentação histórica. A teoria formal tem propriedades que diferenciam de planilhas casuais: (1) sem linhas duplicadas; (2) ordem das linhas não importa; (3) ordem das colunas não importa na teoria (em SQL importa); (4) valores ATÔMICOS — sem listas/JSON aninhado em células (primeira forma normal, 1NF)."
+  },
+  {
+    "id": "bdrel-04",
+    "enunciado": "Por que cada valor numa célula de uma relação precisa ser ATÔMICO (regra da 1NF)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por questão de performance",
+      "Porque a teoria de Codd EXIGE valores atômicos (não estruturados) para que a álgebra relacional funcione. Listas, JSON aninhado, subtabelas dentro de células quebram as garantias do modelo. Em SQL clássico isso é obrigatório; em SGBDs modernos (PostgreSQL, MySQL) há tipos compostos (JSON, arrays) que VIOLAM 1NF mas são tolerados por conveniência prática",
+      "Para economizar memória",
+      "Por convenção de naming"
+    ],
+    "resposta": 1,
+    "explicacao": "1NF (Primeira Forma Normal) é a regra fundacional do modelo relacional, exige valores ATÔMICOS — sem listas, sem JSON aninhado, sem subtabelas dentro de células. Razão teórica: a álgebra relacional (operações como JOIN, projeção, seleção) depende disso. Se uma célula contém '[1, 2, 3]', como você faz JOIN com isso? Como projeta? A semântica quebra. Por isso atributos multivalorados (ex: 'telefones de um aluno') viram tabela separada, não array dentro de Aluno. Em SGBDs MODERNOS: PostgreSQL e MySQL suportam JSON e arrays nativos — tecnicamente VIOLAM 1NF. Mas isso é tolerado por conveniência (caches, configurações, dados semi-estruturados). Boa prática: use JSON pra dados realmente não-relacionais; se for tabular, normalize. Documentos no PostgreSQL via JSONB são poderosos mas perdem garantias relacionais (integridade referencial dentro do JSON, queries menos eficientes em filtros)."
+  },
+  {
+    "id": "bdrel-05",
+    "enunciado": "Qual a diferença entre CHAVE PRIMÁRIA (PK) e CHAVE ESTRANGEIRA (FK)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "PK e FK são a mesma coisa com nomes diferentes",
+      "PK = conjunto MÍNIMO de atributos que identifica UNICAMENTE cada tupla da própria tabela (único, não-nulo, idealmente imutável). FK = atributo que REFERENCIA a PK de outra tabela (ou da mesma). PK identifica DENTRO da tabela; FK conecta ENTRE tabelas, garantindo integridade referencial",
+      "PK é só pra inteiros, FK é pra strings",
+      "PK é obsoleto, hoje só usa FK"
+    ],
+    "resposta": 1,
+    "explicacao": "PRIMARY KEY (PK): conjunto MÍNIMO de atributos que identifica unicamente cada tupla DENTRO da tabela. Propriedades: ÚNICO (dois alunos diferentes nunca têm mesmo id); NÃO-NULO (PK nunca aceita NULL); IDEALMENTE IMUTÁVEL (não muda ao longo do tempo). Pode ser SIMPLES (Aluno.id) ou COMPOSTA (Matricula.(aluno_id, disciplina_id)). FOREIGN KEY (FK): atributo (ou conjunto) que REFERENCIA a PK de outra tabela (ou da mesma — auto-referência). Representa RELACIONAMENTO entre tabelas. Garantia (integridade referencial): toda FK válida aponta pra uma PK existente OU é NULL; não pode deletar uma tupla cuja PK é referenciada em FKs ativas (a menos que ON DELETE seja CASCADE ou SET NULL). SURROGATE vs NATURAL KEY: surrogate é PK artificial (auto-incremento, UUID); natural é PK do mundo real (CPF, email). Spring Boot/JPA convenciona surrogate: @Id @GeneratedValue Long id — mais simples, performance melhor em joins, evita problemas se natural mudar."
+  },
+  {
+    "id": "bdrel-06",
+    "enunciado": "Como o modelo relacional REPRESENTA um relacionamento N:M (many-to-many)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Usando arrays nativos do banco",
+      "Usando uma coluna com vírgulas",
+      "O modelo relacional NÃO tem N:M nativo — sempre se resolve criando uma TABELA INTERMEDIÁRIA (tabela de junção/associativa) com FKs para os dois lados. Ex: Aluno N:M Disciplina vira tabela Matricula(aluno_id FK, disciplina_id FK, nota, data)",
+      "Não é possível representar N:M"
+    ],
+    "resposta": 2,
+    "explicacao": "Modelo relacional não suporta N:M diretamente — sempre via tabela intermediária (tabela de junção, tabela associativa, junction table, link table). Ex: 'vários Alunos cursam várias Disciplinas': cria-se Matricula(aluno_id BIGINT REFERENCES Aluno(id), disciplina_id BIGINT REFERENCES Disciplina(id), nota DECIMAL, data DATE, PRIMARY KEY (aluno_id, disciplina_id)). Vantagens: (1) cada N:M também CARREGA dados próprios (nota, data, status) — atributos do relacionamento; (2) integridade referencial dos dois lados; (3) eficiência via índices nas FKs. Em JPA/Hibernate isso é @ManyToMany com @JoinTable, ou modelado como Entity própria (mais flexível). OUTROS RELACIONAMENTOS: 1:1 (FK em qualquer lado + UNIQUE), 1:N (FK no lado N — ex: cada Matricula tem 1 Aluno, mas Aluno tem várias Matriculas → FK em Matricula.aluno_id)."
+  },
+  {
+    "id": "bdrel-07",
+    "enunciado": "Quem inventou o Modelo Entidade-Relacionamento (ER), e qual sua principal contribuição?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Codd, junto com o modelo relacional em 1970",
+      "Peter Chen (n. 1947), taiwanês-americano, então professor no MIT, publicou em 1976 o paper 'The Entity-Relationship Model—Toward a Unified View of Data' (ACM Transactions on Database Systems Vol. 1 No. 1) — um dos papers mais citados em ciência da computação. Forneceu um MODELO CONCEITUAL para PROJETAR bancos relacionais a partir de requisitos do mundo real, com notação visual (retângulos = entidades, losangos = relacionamentos, elipses = atributos)",
+      "Tim Berners-Lee, na década de 1990",
+      "Donald Knuth, em 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Peter P. Chen, taiwanês-americano nascido em Taichung em 1947, publicou em 1976 no primeiro volume do ACM Transactions on Database Systems (TODS Vol. 1, No. 1, pp. 9-36) o paper 'The Entity-Relationship Model—Toward a Unified View of Data'. CONTEXTO: Chen era então professor no MIT; depois foi pra Louisiana State University e Carnegie Mellon. CONTRIBUIÇÃO: Codd deu o modelo FORMAL/teórico das relações. Chen deu o modelo CONCEITUAL pra PROJETAR um banco a partir de requisitos de negócio. Em vez de pensar diretamente em tabelas, primeiro modela o mundo real em termos de ENTIDADES (coisas: Aluno, Disciplina), ATRIBUTOS (propriedades: Aluno.nome) e RELACIONAMENTOS (ligações: Aluno cursa Disciplina). Depois converte mecanicamente pro modelo relacional. NOTAÇÃO CHEN: retângulos = entidades, losangos = relacionamentos, elipses = atributos. Hoje notações mais usadas são IE/Crow's Foot (em brModelo, dbdiagram.io, drawSQL). É um dos papers mais citados em CS."
+  },
+  {
+    "id": "bdrel-08",
+    "enunciado": "Quais são as REGRAS DE CONVERSÃO de um modelo ER para o modelo relacional?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Cada relacionamento vira uma tabela, cada entidade vira uma coluna",
+      "(1) Cada ENTIDADE vira uma tabela com PK; (2) Cada ATRIBUTO simples vira uma coluna; (3) Relacionamento 1:N → FK no lado N; (4) Relacionamento N:M → tabela INTERMEDIÁRIA com FKs pros dois lados; (5) Relacionamento 1:1 → FK em qualquer lado; (6) Atributos MULTIVALORADOS viram tabela separada",
+      "Apenas entidades viram tabelas; relacionamentos são opcionais",
+      "Não existe conversão sistemática — é arte do modelador"
+    ],
+    "resposta": 1,
+    "explicacao": "Conversão sistemática ER → relacional: (1) CADA ENTIDADE VIRA UMA TABELA com PK (geralmente surrogate via auto-incremento ou UUID); (2) CADA ATRIBUTO SIMPLES vira uma coluna com tipo apropriado; (3) ATRIBUTOS COMPOSTOS (ex: endereço = rua + cidade + cep) — pode achatar como colunas separadas (endereco_rua, endereco_cidade) ou criar tabela Endereco separada; (4) RELACIONAMENTO 1:N → FK no lado N (ex: Aluno tem várias Matriculas → FK em Matricula.aluno_id); (5) RELACIONAMENTO N:M → cria TABELA INTERMEDIÁRIA com FKs pros dois lados (Aluno N:M Disciplina → Matricula(aluno_id, disciplina_id)); (6) RELACIONAMENTO 1:1 → FK em qualquer lado, escolha por bom senso (ex: Pessoa tem um CPF — FK em CPF.pessoa_id ou Pessoa.cpf_id, dependendo de qual entidade é 'principal'); (7) ATRIBUTOS MULTIVALORADOS (ex: telefones de um aluno) viram tabela separada (Telefone(aluno_id FK, numero)). O processo é mecânico, mas exige bom julgamento — modelar BEM é a parte difícil."
+  },
+  {
+    "id": "bdrel-09",
+    "enunciado": "Por que Oracle se tornou o primeiro RDBMS COMERCIAL antes da IBM (que criou o conceito)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Oracle inventou primeiro, IBM copiou",
+      "A IBM resistiu INICIALMENTE ao modelo relacional porque vendia o IMS (hierárquico) e não queria canibalizar próprio produto. Iniciou o System R em 1974 mas só lançou DB2 em 1983. Larry Ellison, Bob Miner e Ed Oates fundaram Software Development Laboratories em 1977, LERAM OS PAPERS PUBLICADOS de Codd e do System R, e EXECUTARAM MAIS RÁPIDO — lançaram Oracle V2 em 1979",
+      "Oracle subornou os engenheiros da IBM",
+      "Não é verdade — IBM lançou primeiro"
+    ],
+    "resposta": 1,
+    "explicacao": "Caso clássico de 'first-mover advantage perdida'. A IBM RESISTIU INICIALMENTE ao modelo relacional — afinal, ela vendia o IMS (modelo hierárquico, 1966) e não queria canibalizar próprio produto. Codd teve que convencer a empresa internamente por anos. Em 1974, finalmente iniciou-se o projeto System R no laboratório de San Jose, liderado por Donald Chamberlin e Raymond Boyce (mesmo Boyce que morreu aos 26 anos por aneurisma, antes de ver o impacto — BCNF leva o nome dele). System R desenvolveu o SEQUEL (depois renomeado SQL por questões de marca). Em 1977, LARRY ELLISON, BOB MINER e ED OATES fundam a Software Development Laboratories na Califórnia. ELES LÊEM os papers acadêmicos de Codd E os papers do System R (a IBM publicava resultados acadêmicos!) e DECIDEM IMPLEMENTAR PRIMEIRO. Em 1979 lançam Oracle V2 — primeiro RDBMS comercial, 2 ANOS ANTES do IBM SQL/DS (1981) e do DB2 (1983). Larry Ellison virou um dos homens mais ricos do mundo essencialmente lendo papers acadêmicos e executando mais rápido."
+  },
+  {
+    "id": "bdrel-10",
+    "enunciado": "Verdadeiro ou falso: O modelo relacional foi 'morto' pelo NoSQL nos anos 2010, e hoje a maior parte dos sistemas corporativos novos usa MongoDB, Cassandra ou similares.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Apesar do hype de NoSQL nos anos 2010 ('o relacional morreu'), em 2025 o modelo relacional continua DOMINANDO em sistemas corporativos. PostgreSQL é o banco mais usado em sistemas corporativos novos (Stack Overflow Developer Survey lista PostgreSQL como o banco mais admirado e mais usado por desenvolvedores profissionais há vários anos consecutivos). Stack Overflow, Reddit, Wikipedia, Instagram — todos rodam sobre relacional (Postgres, MySQL ou variantes). Razões: (1) INDEPENDÊNCIA DE DADOS — princípio central de Codd; (2) ACID — transações atômicas, consistentes, isoladas, duráveis. NoSQL geralmente troca isso por performance ('eventual consistency'); (3) SQL declarativo — você diz O QUÊ, o otimizador descobre COMO; (4) Joins poderosos sem precisar denormalizar; (5) MATURIDADE — 55 anos de otimização. Postgres e Oracle são software extremamente sofisticado; (6) TOOLING — BI, ORMs, migrations, monitoring. NoSQL tem seu lugar (caches Redis, dados muito grandes com queries simples, dados não-estruturados), mas pra MAIOR PARTE dos sistemas corporativos relacional segue padrão. Toda a stack Java/Spring Boot é construída em cima dele."
+  }
+]

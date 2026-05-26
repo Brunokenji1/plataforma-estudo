@@ -1,0 +1,127 @@
+[
+  {
+    "id": "str-01",
+    "enunciado": "Quem inventou o algoritmo Knuth-Morris-Pratt (KMP) e em que ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth sozinho, em 1968",
+      "Donald Knuth, James H. Morris Jr. e Vaughan R. Pratt, em 1977, no paper 'Fast Pattern Matching in Strings' (SIAM Journal on Computing 6(2))",
+      "Vladimir Levenshtein, em 1965",
+      "Robert Tarjan e John Hopcroft, em 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Donald Knuth, James H. Morris Jr. e Vaughan R. Pratt, em 1977, no paper 'Fast Pattern Matching in Strings' (SIAM Journal on Computing 6(2), pp. 323-350). Os três tinham derivado versões independentes do algoritmo: Knuth chegou ao algoritmo via prova teórica sobre autômatos de pilha de duas vias (Cook 1972); Pratt derivou independentemente; Morris tinha o precursor 'Morris-Pratt' (sem a otimização final do Knuth). O paper de 1977 unificou as três contribuições. 1977 foi o 'ano mágico' de string matching: Boyer-Moore foi publicado no mesmo ano no Communications of the ACM 20(10). Knuth ganhou Turing Award em 1974 pela análise de algoritmos."
+  },
+  {
+    "id": "str-02",
+    "enunciado": "Qual a IDEIA CENTRAL do algoritmo KMP?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Comparar o padrão da direita para a esquerda",
+      "Usar hashing para comparar janelas do texto",
+      "Quando ocorre mismatch após casar vários caracteres, o próprio padrão contém informação para evitar recomparar caracteres — uma 'failure function' diz quanto pular sem voltar pra trás no texto",
+      "Dividir o texto em pedaços menores recursivamente"
+    ],
+    "resposta": 2,
+    "explicacao": "A ideia central é a FAILURE FUNCTION: pra cada posição i do padrão, computa o maior PREFIXO PRÓPRIO de P[0..i] que também é SUFIXO de P[0..i]. Quando ocorre mismatch após casar vários caracteres, em vez de voltar pro início do padrão (brute force), pula pra posição dada pela failure function — economizando recomparações. Resultado: O(n+m) garantido, linear no total de caracteres envolvidos. KMP NUNCA volta atrás no texto — só no padrão. Já Boyer-Moore compara da direita pra esquerda, e Rabin-Karp usa hashing. As 3 abordagens são diferentes."
+  },
+  {
+    "id": "str-03",
+    "enunciado": "Qual algoritmo de string matching COMPARA O PADRÃO DA DIREITA PARA A ESQUERDA?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "KMP (Knuth-Morris-Pratt)",
+      "Rabin-Karp",
+      "Boyer-Moore — também usa duas heurísticas (bad character e good suffix) para dar saltos grandes",
+      "Brute force"
+    ],
+    "resposta": 2,
+    "explicacao": "Boyer-Moore, criado por Robert S. Boyer e J Strother Moore em 1977 ('A Fast String Searching Algorithm', CACM 20(10)). Compara o padrão da DIREITA PARA A ESQUERDA quando alinhado sobre o texto. Quando ocorre mismatch, usa duas heurísticas pra pular o máximo possível: BAD CHARACTER (se o caractere do texto que falhou nem está no padrão, pula o padrão inteiro; se está, alinha com a última ocorrência); GOOD SUFFIX (se um sufixo do padrão já casou, procura essa subseq em outro lugar do padrão). Combina os dois saltos pegando o MAIOR. Resultado: SUB-LINEAR em média — pula caracteres do texto sem nem olhar. É o motor do grep há quase 50 anos."
+  },
+  {
+    "id": "str-04",
+    "enunciado": "Qual a complexidade média do Boyer-Moore para buscar um padrão de tamanho m em um texto de tamanho n?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(n × m)",
+      "O(n + m)",
+      "O(n/m) — sub-linear (pode pular grandes porções do texto sem ler)",
+      "O(log n)"
+    ],
+    "resposta": 2,
+    "explicacao": "O(n/m) em média — sub-linear no texto! É a propriedade que torna Boyer-Moore especial: pode literalmente PULAR caracteres do texto sem comparar. Quanto maior o padrão e maior o alfabeto, maiores os saltos possíveis. Pior caso teórico é O(n × m), mas raríssimo em texto natural. Por isso é a escolha padrão para grep, vim, browsers em padrões longos. Padrões muito curtos (1-3 chars) ou alfabetos pequenos (DNA = 4 chars) podem fazer BM perder pra KMP, pois as heurísticas dependem de ter espaço pra pular."
+  },
+  {
+    "id": "str-05",
+    "enunciado": "O que é BOYER-MOORE-HORSPOOL, mencionado na lição?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Uma versão paralela do Boyer-Moore",
+      "Uma SIMPLIFICAÇÃO do Boyer-Moore (Nigel Horspool, 1980) que usa apenas a heurística bad character — descarta good suffix. Quase tão rápido quanto BM original em prática, mas MUITO mais simples de implementar",
+      "Uma combinação de Boyer-Moore com KMP",
+      "Uma versão para alfabetos infinitos"
+    ],
+    "resposta": 1,
+    "explicacao": "Boyer-Moore-Horspool (BMH), publicado por Nigel Horspool em 1980, é a simplificação mais usada em produção. Descarta a heurística complexa 'good suffix' e usa apenas 'bad character'. A tabela de skip é muito mais simples de construir (basta uma passada pelo padrão registrando a última ocorrência de cada caractere). Em prática, é quase tão rápido quanto Boyer-Moore completo. Por ser muito mais simples (~30 linhas de código), virou o algoritmo padrão em implementações de produção quando queremos algo como Boyer-Moore sem a complexidade. Variantes como Sunday's algorithm (1990) e BMH simplificado aparecem em muitas bibliotecas."
+  },
+  {
+    "id": "str-06",
+    "enunciado": "Qual é a IDEIA CENTRAL do algoritmo Rabin-Karp?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Comparar caracteres da direita pra esquerda",
+      "Usar HASHING ROLANTE: calcular o hash do padrão e o hash de cada janela do texto incrementalmente em O(1). Comparar hashes em vez de caracteres (e confirmar com comparação só quando hashes batem)",
+      "Computar uma failure function como KMP",
+      "Dividir o padrão em metades recursivamente"
+    ],
+    "resposta": 1,
+    "explicacao": "Rabin-Karp usa HASHING ROLANTE. Em vez de comparar caracteres, compara HASHES das janelas. O rolling hash permite atualizar o hash da janela ao avançar uma posição em O(1): basta 'remover' o caractere mais à esquerda e 'adicionar' o novo à direita. Quando os hashes batem, confirma com comparação caractere por caractere (pra evitar falsos positivos por colisão de hash). Complexidade O(n+m) em média. A GRANDE vantagem: generaliza naturalmente pra MÚLTIPLOS PADRÕES — calcula hash de todos os padrões, coloca num set, e pra cada janela do texto verifica se o hash está no set. KMP e BM não fazem isso facilmente. Aplicações: deduplicação (rsync), detecção de plágio (Turnitin), fingerprinting em sistemas distribuídos."
+  },
+  {
+    "id": "str-07",
+    "enunciado": "Qual é a ÚNICA propriedade NEGATIVA do Rabin-Karp comparado aos outros dois algoritmos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Tem complexidade pior",
+      "Não funciona com strings binárias",
+      "Pode dar FALSOS POSITIVOS (hashes diferentes mas substring igual nunca; mas hashes iguais podem ser FALSO MATCH — por isso precisa confirmar com comparação direta)",
+      "Não funciona para padrões pequenos"
+    ],
+    "resposta": 2,
+    "explicacao": "Rabin-Karp pode dar FALSOS POSITIVOS (colisões de hash). Quando hash do padrão bate com hash da janela, NÃO É GARANTIA de que as strings são iguais — pode ser colisão. Por isso a implementação SEMPRE confirma com comparação direta caractere por caractere quando hashes batem. Pior caso teórico O(n×m) acontece se todas as janelas colidirem com o padrão (absurdamente improvável com hash bem escolhido + primo grande no módulo). KMP e Boyer-Moore NÃO têm esse problema — comparam caracteres direto, sem indireção via hash. Pra mitigar, escolha-se primos grandes (10⁹+7) e às vezes hashes duplos (dois primos diferentes, comparar os dois) — falso positivo só com colisão SIMULTÂNEA em dois hashes independentes, virtualmente impossível."
+  },
+  {
+    "id": "str-08",
+    "enunciado": "Qual algoritmo `String.indexOf` em Java usa por baixo dos panos (JDK)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "KMP, com failure function pré-calculada",
+      "Boyer-Moore, igual o grep",
+      "BRUTE FORCE — porque pra padrões curtos (caso comum em código de aplicação), a constante oculta dos algoritmos espertos torna brute force MAIS RÁPIDO",
+      "Rabin-Karp com hash duplo"
+    ],
+    "resposta": 2,
+    "explicacao": "Brute force. Surpreendente, mas certo: Java desde o JDK 1.0 implementa String.indexOf com algoritmo ingênuo. A razão: a CONSTANTE OCULTA dos algoritmos espertos é grande o suficiente que pra strings curtas (caso comum em código de aplicação, logs, JSON), brute force vence. Padrão típico tem 5-20 caracteres — domínio do brute force. Já grep e vim usam Boyer-Moore porque processam textos muito grandes onde o overhead vale a pena. Python str.find usa Two-Way (Crochemore-Perrin 1991), uma variante mais sofisticada. Lição mais ampla: algoritmos ÓTIMOS no papel nem sempre vencem benchmarks reais. Engenheiros de bibliotecas testam com workloads reais."
+  },
+  {
+    "id": "str-09",
+    "enunciado": "Em qual cenário Rabin-Karp tem VANTAGEM CLARA sobre KMP e Boyer-Moore?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando o padrão é muito curto (1-2 caracteres)",
+      "Quando você precisa buscar MÚLTIPLOS PADRÕES simultaneamente — basta colocar todos os hashes num set e verificar cada janela com 1 lookup",
+      "Quando o alfabeto é muito pequeno (binário)",
+      "Quando você quer comparar do final pro início"
+    ],
+    "resposta": 1,
+    "explicacao": "Múltiplos padrões. Rabin-Karp se generaliza NATURALMENTE: hash todos os k padrões, coloque num HashSet, e pra cada janela do texto calcule o hash (O(1) com rolling) e verifique se está no set (O(1) amortizado). Custo total: O(n + k×m). KMP e Boyer-Moore precisariam ser rodados k vezes, ou substituídos por Aho-Corasick (que é mais complicado de implementar). RK é a escolha pragmática: implementação simples + funciona pra múltiplos padrões + bom desempenho médio. Aplicações: rsync (rolling hash em chunks de arquivo), Turnitin/plágio (hashes de fragmentos), DNA matching com múltiplos motivos."
+  },
+  {
+    "id": "str-10",
+    "enunciado": "Verdadeiro ou falso: KMP, Boyer-Moore e Rabin-Karp foram todos publicados no mesmo ano (1977).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. KMP e Boyer-Moore foram publicados em 1977 (KMP no SIAM Journal on Computing 6(2), Boyer-Moore no Communications of the ACM 20(10)). MAS Rabin-Karp veio depois — Karp e Rabin formalizaram em 1981 (technical report Harvard), e o paper definitivo foi 'Efficient randomized pattern-matching algorithms' no IBM Journal of Research and Development 31(2), 1987. Apesar disso, 1977 foi um ano REALMENTE MÁGICO — dois algoritmos clássicos rivais saíram juntos resolvendo o mesmo problema com abordagens completamente diferentes. Aho-Corasick (lição anterior) também é de 1975, então a década de 70 inteira foi de ouro para algoritmos de string matching."
+  }
+]

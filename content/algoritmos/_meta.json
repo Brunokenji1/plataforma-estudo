@@ -5,6 +5,26 @@
     { "slug": "01-big-o", "ordem": 1 },
     { "slug": "02-arrays-vs-listas-ligadas", "ordem": 2, "prerequisitos": ["01-big-o"] },
     { "slug": "03-pilhas-e-filas", "ordem": 3, "prerequisitos": ["02-arrays-vs-listas-ligadas"] },
-    { "slug": "04-pilhas-e-filas-avancado", "ordem": 4, "prerequisitos": ["03-pilhas-e-filas"] }
+    { "slug": "04-pilhas-e-filas-avancado", "ordem": 4, "prerequisitos": ["03-pilhas-e-filas"] },
+    { "slug": "05-hash-tables", "ordem": 5, "prerequisitos": ["02-arrays-vs-listas-ligadas"] },
+    { "slug": "06-recursao-e-backtracking","ordem": 6, "prerequisitos": ["03-pilhas-e-filas"]},
+    { "slug": "07-ordenacao","ordem": 7,"prerequisitos": ["06-recursao-e-backtracking"]},
+    { "slug": "08-busca-binaria", "ordem": 8, "prerequisitos": ["07-ordenacao"]},
+    { "slug": "09-arvores-binarias-bst", "ordem": 9, "prerequisitos": ["06-recursao-e-backtracking", "08-busca-binaria"]},
+    { "slug": "10-heap-priority-queue", "ordem": 10, "prerequisitos": ["09-arvores-binarias-bst"]},
+    { "slug": "11-grafos-bfs-dfs", "ordem": 11, "prerequisitos": ["03-pilhas-e-filas", "06-recursao-e-backtracking"]},
+    { "slug": "12-dijkstra", "ordem": 12, "prerequisitos": ["10-heap-priority-queue", "11-grafos-bfs-dfs"]},
+    { "slug": "13-programacao-dinamica", "ordem": 13, "prerequisitos": ["06-recursao-e-backtracking"]},
+    { "slug": "14-greedy", "ordem": 14, "prerequisitos": ["10-heap-priority-queue", "11-grafos-bfs-dfs", "13-programacao-dinamica"]},
+    { "slug": "15-union-find", "ordem": 15, "prerequisitos": ["11-grafos-bfs-dfs", "14-greedy"]},
+    { "slug": "16-tries", "ordem": 16, "prerequisitos": ["05-hash-tables", "09-arvores-binarias-bst"]},
+    { "slug": "17-string-matching", "ordem": 17, "prerequisitos": ["05-hash-tables", "16-tries"]},
+    { "slug": "18-estruturas-probabilisticas", "ordem": 18, "prerequisitos": ["05-hash-tables"]},
+    { "slug": "19-bellman-ford-floyd-warshall", "ordem": 19, "prerequisitos": ["11-grafos-bfs-dfs", "12-dijkstra", "13-programacao-dinamica"]},
+    { "slug": "20-segment-tree-fenwick", "ordem": 20, "prerequisitos": ["02-arrays-vs-listas-ligadas", "09-arvores-binarias-bst"]},
+    { "slug": "21-dp-avancada", "ordem": 21, "prerequisitos": ["11-grafos-bfs-dfs", "13-programacao-dinamica"]},
+    { "slug": "22-fluxo-em-redes", "ordem": 22, "prerequisitos": ["11-grafos-bfs-dfs", "19-bellman-ford-floyd-warshall"]},
+    { "slug": "23-geometria-computacional", "ordem": 23, "prerequisitos": ["04-pilhas-e-filas-avancado", "07-ordenacao", "10-heap-priority-queue"]},
+    { "slug": "24-number-theory", "ordem": 24, "prerequisitos": ["01-big-o", "06-recursao-e-backtracking"]}
   ]
 }

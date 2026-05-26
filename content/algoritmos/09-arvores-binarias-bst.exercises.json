@@ -1,0 +1,122 @@
+[
+  {
+    "id": "tree-01",
+    "enunciado": "Em uma Binary Search Tree (BST), qual é a propriedade que TODO nó deve satisfazer?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Tem exatamente dois filhos",
+      "Todos os valores na subárvore esquerda são menores que o nó, e todos na direita são maiores",
+      "A altura é sempre log n",
+      "Cada nó tem uma cor (vermelha ou preta)"
+    ],
+    "resposta": 1,
+    "explicacao": "A propriedade fundamental da BST: para todo nó N, todos os valores na subárvore esquerda são menores que N, e todos na direita são maiores. Aplicada recursivamente, cada subárvore também é uma BST. Essa propriedade garante que a busca segue um caminho da raiz até alguma folha — daí a complexidade O(h), onde h é a altura. Note que BST NÃO requer dois filhos (folhas têm zero) e NÃO requer balanceamento (essa é a regra adicional do AVL/Red-Black)."
+  },
+  {
+    "id": "tree-02",
+    "enunciado": "Qual traversal de uma BST produz os elementos em ORDEM CRESCENTE?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["Pre-order", "In-order", "Post-order", "Level-order (BFS)"],
+    "resposta": 1,
+    "explicacao": "In-order (esquerda → raiz → direita). Como em uma BST tudo da esquerda é menor que a raiz e tudo da direita é maior, visitar a esquerda primeiro produz os menores, depois a raiz, depois os maiores. Aplicado recursivamente, sai tudo em ordem crescente. Por isso `TreeMap` e `std::map` iteram suas chaves em ordem — eles usam in-order traversal internamente. Para ordem decrescente, basta inverter: direita → raiz → esquerda."
+  },
+  {
+    "id": "tree-03",
+    "enunciado": "Qual a complexidade de busca em uma BST?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(1) sempre",
+      "O(log n) sempre",
+      "O(h), onde h é a altura — pode ser O(log n) se balanceada ou O(n) se degenerada",
+      "O(n) sempre"
+    ],
+    "resposta": 2,
+    "explicacao": "Busca em BST é O(h), onde h é a altura. Em uma árvore bem balanceada, h ≈ log n, então O(log n). Mas se a árvore degenera (ex: insere [1,2,3,4,5] em ordem), vira essencialmente uma lista ligada com h = n, e busca cai pra O(n). É por isso que árvores auto-balanceadas (AVL, Red-Black) existem: elas garantem h = O(log n) MESMO no pior caso, eliminando o risco da degeneração."
+  },
+  {
+    "id": "tree-04",
+    "enunciado": "Quando uma BST simples pode DEGENERAR para complexidade O(n) por operação?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando tem mais de 1000 elementos",
+      "Quando os elementos são inseridos em ordem crescente ou decrescente",
+      "Quando usa muitos números negativos",
+      "Quando a árvore tem mais de 30 níveis"
+    ],
+    "resposta": 1,
+    "explicacao": "Inserir elementos em ordem crescente faz cada novo elemento ir sempre pra direita (porque é maior que todos os anteriores), e a árvore vira uma lista ligada com altura n. Inserir em ordem decrescente faz o mesmo pela esquerda. Em produção isso é um problema real: se chega um stream de dados já ordenados, sua BST simples vira lenta. Por isso bibliotecas-padrão (TreeMap, std::map) usam variantes auto-balanceadas como Red-Black Tree, que garantem O(log n) independente da ordem de inserção."
+  },
+  {
+    "id": "tree-05",
+    "enunciado": "Qual estrutura é usada por TreeMap em Java e std::map em C++?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Hash table",
+      "Árvore AVL",
+      "Red-Black Tree (árvore vermelho-preta)",
+      "B-Tree"
+    ],
+    "resposta": 2,
+    "explicacao": "Red-Black Tree. Foi inventada por Rudolf Bayer em 1972 (com o nome 'symmetric binary B-trees') e popularizada por Guibas e Sedgewick em 1978. Garante altura no máximo 2·log(n+1), portanto todas as operações em O(log n) garantido. A escolha pela Red-Black em vez de AVL é histórica: Red-Black faz menos rotações em operações mistas (insert + delete), vencendo na prática em workloads reais. Também usada no agendador do Linux Kernel (Completely Fair Scheduler), no mmap do Linux, e dentro do próprio HashMap do Java 8+ pra tratar colisões."
+  },
+  {
+    "id": "tree-06",
+    "enunciado": "Por que as cores VERMELHO e PRETO foram escolhidas no nome 'Red-Black Tree'?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque vermelho é maior e preto é menor",
+      "Porque são as cores das impressoras a laser do Xerox PARC que produziam o melhor contraste",
+      "Por homenagem ao MIT (cores oficiais da universidade)",
+      "Porque vermelho representa overflow e preto representa underflow"
+    ],
+    "resposta": 1,
+    "explicacao": "A escolha de vermelho e preto veio das IMPRESSORAS A LASER COLORIDAS do Xerox PARC, onde Leo Guibas e Robert Sedgewick trabalhavam em 1978. Essas cores eram as que produziam melhor contraste e qualidade visual nas ilustrações do paper deles. Outra versão da história (também atribuída a Guibas): foram simplesmente as cores das canetas que eles tinham à mão pra desenhar as árvores no whiteboard. Fato curioso: o algoritmo não tem nada a ver com cores — elas são apenas um marcador binário (true/false) renomeado para ilustrações ficarem visuais."
+  },
+  {
+    "id": "tree-07",
+    "enunciado": "Qual operação está disponível em TreeMap MAS NÃO em HashMap?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "containsKey",
+      "put",
+      "subMap(low, high) — range query",
+      "remove"
+    ],
+    "resposta": 2,
+    "explicacao": "Range queries (subMap em Java, lower_bound + upper_bound em C++) são exclusivas de árvores ordenadas. HashMap não tem ordem entre chaves, então não consegue responder eficientemente 'me dê todas as chaves entre A e B'. Outras operações exclusivas de TreeMap: firstKey/lastKey (mínimo/máximo), floorKey/ceilingKey (maior <= X / menor >= X). Para essas funcionalidades, HashMap precisa iterar toda a estrutura — O(n) — enquanto TreeMap faz tudo em O(log n + k), onde k é o tamanho do resultado."
+  },
+  {
+    "id": "tree-08",
+    "enunciado": "O que é uma ROTAÇÃO em uma árvore balanceada, e qual sua complexidade?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Trocar dois nós distantes, O(log n)",
+      "Reorganizar localmente alguns nós sem violar a propriedade de BST, O(1)",
+      "Reconstruir toda a árvore do zero, O(n log n)",
+      "Inverter a ordem dos filhos de todos os nós, O(n)"
+    ],
+    "resposta": 1,
+    "explicacao": "Rotação é uma operação local que reorganiza 2-3 nós ajustando alguns ponteiros, em O(1). Crucialmente, ela PRESERVA a propriedade de BST (in-order traversal continua produzindo a mesma sequência). É a primitiva que torna auto-balanceamento eficiente: durante insert/delete, a árvore pode aplicar O(log n) rotações no caminho até a raiz pra restaurar as propriedades de Red-Black ou AVL, mas cada rotação custa só O(1). Resultado: insert/delete em O(log n) total, mesmo restaurando o balanceamento."
+  },
+  {
+    "id": "tree-09",
+    "enunciado": "Para qual cenário você prefere TreeMap sobre HashMap?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Você precisa apenas de busca rápida por chave exata, sem se importar com ordem",
+      "Performance pura é a única prioridade, e você quer O(1) por operação",
+      "Você precisa iterar em ordem, fazer range queries, ou encontrar mínimo/máximo frequentemente",
+      "Quando os valores são strings curtas"
+    ],
+    "resposta": 2,
+    "explicacao": "TreeMap brilha quando ORDEM IMPORTA: iteração ordenada, range queries (subMap), min/max (firstKey/lastKey), floor/ceiling. HashMap é mais rápido pra busca pura (O(1) vs O(log n)) MAS NÃO consegue oferecer essas funcionalidades em tempo razoável. Outros bons casos pra TreeMap: sistemas de tempo real onde o O(log n) GARANTIDO é preferível ao O(1) amortizado do HashMap (que ocasionalmente custa O(n) no rehash), e quando precisa de ordem de iteração estável e previsível."
+  },
+  {
+    "id": "tree-10",
+    "enunciado": "Verdadeiro ou falso: o agendador de processos do kernel Linux (Completely Fair Scheduler) usa Red-Black Tree internamente.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. O Completely Fair Scheduler (CFS) do Linux mantém os processos prontos pra rodar em uma Red-Black Tree, ordenados por 'tempo virtual de CPU' (vruntime). A cada decisão de qual processo rodar a seguir, o CFS pega o nó mais à esquerda da árvore (menor vruntime) em O(log n). Bilhões de operações por dia em qualquer servidor Linux do mundo passam por essa estrutura. Red-Black também aparece em mmap/munmap (mapeamentos de memória virtual), em índices de bancos como MySQL, e dentro do HashMap do Java 8+ pra mitigar colisões. É uma das estruturas mais influentes da história da computação."
+  }
+]

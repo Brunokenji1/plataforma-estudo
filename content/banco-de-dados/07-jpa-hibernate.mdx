@@ -1,0 +1,792 @@
+---
+titulo: "JPA e Hibernate: O Mapeamento Objeto-Relacional que Domina o Mundo Java"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "Gavin King (2001) — primeira versão do Hibernate, criada com colegas da Cirrus Technologies como alternativa aos Entity Beans do EJB 2"
+  - "Christian Bauer, Gavin King (2004), 'Hibernate in Action', Manning Publications — livro influente que popularizou ORM em Java"
+  - "JSR 220 (2006) — Java Persistence API (JPA) 1.0, com Gavin King no expert group; JPA modelado a partir do Hibernate"
+  - "JSR 317 (2009) — JPA 2.0, introduz Criteria API, locks pessimistas, second-level cache padronizado"
+  - "JSR 338 (2013) — JPA 2.1, introduz @EntityGraph, Stored Procedures, AttributeConverter"
+  - "JSR 365 (2017) — JPA 2.2, suporte a Java 8 (Stream, Date/Time API)"
+  - "Jakarta Persistence 3.0+ (2020-) — JPA renomeado após transição Oracle → Eclipse Foundation"
+  - "Hibernate ORM 6.x Documentation — https://docs.hibernate.org/orm/current/"
+  - "Vlad Mihalcea, 'High-Performance Java Persistence', 2016 — referência sobre tuning de JPA"
+  - "Martin Fowler, 'Patterns of Enterprise Application Architecture', 2002 — patterns Unit of Work, Identity Map, Lazy Load"
+---
+
+## Por que toda aplicação Java corporativa usa JPA
+
+Em **2001**, **Gavin King** — desenvolvedor australiano trabalhando na **Cirrus Technologies** — estava frustrado com **Entity Beans do EJB 2**. EJB 2, padrão oficial da Sun pra persistência em Java, era um pesadelo: XML configuration explosivo, performance terrível, código boilerplate insano, **lock-in com servidor de aplicação**. Gavin escreveu uma alternativa open-source que mudaria o ecossistema Java pra sempre: **Hibernate**.
+
+O Hibernate provou que **mapeamento objeto-relacional poderia ser leve, performático e elegante**. Em 2004, Gavin e Christian Bauer foram contratados pela JBoss; em 2005, publicaram **"Hibernate in Action"** (Manning) — um dos livros técnicos mais influentes da década.
+
+Gavin foi convidado pra **expert group do EJB 3**, e **convenceu o grupo a deprecar Entity Beans** em favor de uma nova API modelada a partir do Hibernate. Em **2006**, nasceu o **JPA 1.0** (JSR 220) como padrão oficial.
+
+Hoje:
+
+- **JPA** (Java/Jakarta Persistence API) é o **padrão**
+- **Hibernate** é a **implementação dominante** (>80% market share em projetos Spring Boot)
+- Outras implementações: EclipseLink (Oracle TopLink), OpenJPA (Apache)
+- **Spring Data JPA** abstrai ainda mais — `@Repository`, query methods, paginação automática
+
+Toda startup, todo banco, toda empresa corporativa que usa Java/Kotlin com banco relacional usa **algum dialeto de JPA**. Saber JPA bem é **diferencial salarial concreto**.
+
+Esta lição cobre:
+
+1. **História** — de Hibernate (2001) a Jakarta Persistence atual
+2. **Conceitos centrais** — Entity, EntityManager, Persistence Context, ciclo de vida
+3. **Mapeamento básico** — `@Entity`, `@Id`, `@Column`, tipos
+4. **Relacionamentos** — `@OneToOne`, `@OneToMany`, `@ManyToOne`, `@ManyToMany`
+5. **Lazy vs Eager loading** — o trade-off central
+6. **N+1 problem** — o bug mais comum em Spring Boot, com 3 soluções práticas
+7. **JPQL e Criteria API**
+8. **Spring Data JPA** — repositories e query methods
+9. **Pitfalls reais** — coisas que pegam todo júnior
+
+No fim, você consegue **modelar entities corretamente**, **detectar e resolver N+1**, e **escolher entre as estratégias** de fetch sabendo o trade-off.
+
+---
+
+## ORM: o que é, qual o problema
+
+**ORM** = **Object-Relational Mapping**. O problema fundamental:
+
+- Em Java, você tem **objetos**: `Aluno`, `Matricula`, com herança, polimorfismo, referências
+- No banco, você tem **tabelas**: `aluno`, `matricula`, com FKs, sem polimorfismo
+- Os dois mundos não casam diretamente — é o **object-relational impedance mismatch**
+
+Sem ORM, todo CRUD vira JDBC manual:
+
+```java
+// Era JDBC pré-Hibernate (2000):
+Connection conn = DriverManager.getConnection(url, user, pwd);
+PreparedStatement ps = conn.prepareStatement(
+    "INSERT INTO aluno (nome, email, curso) VALUES (?, ?, ?)"
+);
+ps.setString(1, "Bruno Kenji");
+ps.setString(2, "bruno@email.com");
+ps.setString(3, "ADS");
+ps.executeUpdate();
+ps.close();
+conn.close();
+```
+
+Multiplica isso por 50 entidades, todas as operações CRUD, conversão de tipos, tratamento de exceções, controle de transação manual... vira **boilerplate insuportável**.
+
+Com JPA/Hibernate:
+
+```java
+Aluno a = new Aluno("Bruno Kenji", "bruno@email.com", "ADS");
+entityManager.persist(a);   // INSERT automático
+```
+
+O ORM **gera o SQL**, mapeia tipos, controla transação, gerencia conexões. Você foca na lógica de negócio.
+
+---
+
+## Conceitos centrais do JPA
+
+### Entity — objeto persistente
+
+Classe Java anotada com `@Entity`. Cada instância **representa uma linha de uma tabela**.
+
+```java
+import jakarta.persistence.*;
+// ou em projetos legados: import javax.persistence.*;
+
+@Entity
+@Table(name = "aluno")
+public class Aluno {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 100)
+    private String nome;
+
+    @Column(unique = true)
+    private String email;
+
+    @Enumerated(EnumType.STRING)
+    private Curso curso;
+
+    @Column(name = "criado_em")
+    private LocalDateTime criadoEm;
+
+    // construtor sem args obrigatório pra JPA
+    protected Aluno() {}
+
+    public Aluno(String nome, String email, Curso curso) {
+        this.nome = nome;
+        this.email = email;
+        this.curso = curso;
+    }
+
+    // getters e setters omitidos
+}
+```
+
+**Regras** pra ser uma entity válida:
+
+- Anotada com `@Entity`
+- Construtor sem argumentos (pode ser `protected` — Hibernate precisa pra criar via reflection)
+- Não pode ser `final` (Hibernate precisa criar proxies)
+- Atributos não-`final`
+- Pelo menos um campo anotado com `@Id`
+- Implementar `Serializable` é boa prática (não obrigatório)
+
+### EntityManager — a porta de entrada
+
+Interface central pra operar com entities. Em Spring Boot, geralmente você não usa direto — `@Repository` do Spring Data JPA abstrai. Mas debaixo do capô, é sempre EntityManager.
+
+```java
+@Autowired
+private EntityManager em;
+
+// Persistir (INSERT)
+em.persist(aluno);
+
+// Buscar por ID
+Aluno a = em.find(Aluno.class, 1L);
+
+// Remover
+em.remove(a);
+
+// Query JPQL
+List<Aluno> alunos = em.createQuery("SELECT a FROM Aluno a WHERE a.curso = :curso", Aluno.class)
+    .setParameter("curso", Curso.ADS)
+    .getResultList();
+```
+
+### Persistence Context — o cache da transação
+
+O **Persistence Context** é como um **cache + tracker** da transação. Todas as entities que você `find()` ou `persist()` ficam **gerenciadas** pelo EntityManager. Mudanças nelas são **automaticamente detectadas** e **sincronizadas no commit** — fenômeno chamado **dirty checking**.
+
+```java
+@Transactional
+public void atualizarEmail(Long alunoId, String novoEmail) {
+    Aluno a = em.find(Aluno.class, alunoId);  // managed
+    a.setEmail(novoEmail);                     // ALTEROU
+    // NÃO precisa chamar em.merge() nem em.persist()
+    // No fim da transação, Hibernate detecta mudança e faz UPDATE automático
+}
+```
+
+Esse comportamento — **transparent persistence** — é uma das ideias centrais do Gavin King no Hibernate original. Atribuído ao pattern **Unit of Work** de Martin Fowler.
+
+### Ciclo de vida da entity
+
+Toda entity passa por 4 estados:
+
+<svg width="100%" viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Ciclo de vida de uma entity JPA</title>
+<desc>Diagrama de estados mostrando transições entre Transient, Managed, Detached e Removed</desc>
+
+<rect x="40" y="70" width="140" height="60" fill="#1a1a1a" stroke="#888888" strokeWidth="2"/>
+<text x="110" y="100" fontFamily="monospace" fontSize="14" fill="#cccccc" fontWeight="bold" textAnchor="middle">TRANSIENT</text>
+<text x="110" y="118" fontFamily="sans-serif" fontSize="10" fill="#888888" textAnchor="middle">novo objeto, sem ID</text>
+
+<rect x="270" y="70" width="140" height="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2"/>
+<text x="340" y="100" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">MANAGED</text>
+<text x="340" y="118" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">no Persistence Context</text>
+
+<rect x="500" y="70" width="140" height="60" fill="#5c4a1a" stroke="#FFC857" strokeWidth="2"/>
+<text x="570" y="100" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">DETACHED</text>
+<text x="570" y="118" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">tx fechou; ID válido</text>
+
+<rect x="270" y="180" width="140" height="60" fill="#5c2b2b" stroke="#FF6B6B" strokeWidth="2"/>
+<text x="340" y="210" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">REMOVED</text>
+<text x="340" y="228" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">marcado pra DELETE</text>
+
+<line x1="180" y1="100" x2="265" y2="100" stroke="#7F77DD" strokeWidth="2" markerEnd="url(#arr)"/>
+<text x="222" y="92" fontFamily="monospace" fontSize="10" fill="#7F77DD" textAnchor="middle">persist()</text>
+
+<line x1="410" y1="100" x2="495" y2="100" stroke="#7F77DD" strokeWidth="2" markerEnd="url(#arr)"/>
+<text x="452" y="92" fontFamily="monospace" fontSize="10" fill="#7F77DD" textAnchor="middle">commit / close</text>
+
+<path d="M 500 115 Q 450 150 410 115" fill="none" stroke="#7F77DD" strokeWidth="2" markerEnd="url(#arr)"/>
+<text x="452" y="160" fontFamily="monospace" fontSize="10" fill="#7F77DD" textAnchor="middle">merge()</text>
+
+<line x1="340" y1="130" x2="340" y2="175" stroke="#FF6B6B" strokeWidth="2" markerEnd="url(#arr)"/>
+<text x="365" y="158" fontFamily="monospace" fontSize="10" fill="#FF6B6B">remove()</text>
+
+<defs>
+<marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+<path d="M0,0 L0,6 L9,3 z" fill="#7F77DD"/>
+</marker>
+</defs>
+
+<text x="380" y="32" fontFamily="sans-serif" fontSize="14" fill="#cccccc" fontWeight="bold" textAnchor="middle">Estados de uma Entity JPA</text>
+
+<text x="380" y="270" fontFamily="sans-serif" fontSize="11" fill="#888888" textAnchor="middle">Dirty checking acontece apenas em entities MANAGED</text>
+</svg>
+
+| Estado | Significado | Como sai dele |
+|---|---|---|
+| **Transient** | Novo objeto Java, sem `@Id`, sem conexão com banco | `persist()` → managed |
+| **Managed** | No Persistence Context, mudanças tracked | `commit/close` → detached, `remove()` → removed |
+| **Detached** | Fora do contexto (tx fechou), com ID válido | `merge()` → managed novamente |
+| **Removed** | Marcado pra DELETE no próximo flush | flush → linha sai do banco |
+
+**Pegadinha clássica**: passar entity **detached** pra View, alterar, tentar usar `em.persist()` — vai dar erro "detached entity passed to persist". Use `em.merge()` pra detached.
+
+---
+
+## Mapeamento básico de atributos
+
+```java
+@Entity
+@Table(name = "produto",
+       indexes = {@Index(name = "idx_produto_codigo", columnList = "codigo")})
+public class Produto {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // String
+    @Column(nullable = false, length = 100)
+    private String nome;
+
+    // String grande
+    @Column(columnDefinition = "TEXT")
+    private String descricao;
+
+    // Decimal (dinheiro)
+    @Column(precision = 10, scale = 2)
+    private BigDecimal preco;
+
+    // Enum como string (recomendado vs ORDINAL)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private Categoria categoria;
+
+    // Data/hora
+    @Column(name = "criado_em")
+    private LocalDateTime criadoEm;
+
+    // Boolean
+    private boolean ativo;
+
+    // UUID
+    private UUID externalId;
+
+    // JSON (PostgreSQL com Hibernate 6+)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata;
+
+    // Transient — NÃO persiste
+    @Transient
+    private int totalCalculado;
+}
+```
+
+### Estratégias de geração de ID
+
+```java
+@GeneratedValue(strategy = GenerationType.AUTO)        // Hibernate decide
+@GeneratedValue(strategy = GenerationType.IDENTITY)    // SERIAL/AUTO_INCREMENT do banco
+@GeneratedValue(strategy = GenerationType.SEQUENCE)    // Sequence (PostgreSQL/Oracle)
+@GeneratedValue(strategy = GenerationType.TABLE)       // tabela de IDs (raro)
+```
+
+**Recomendações**:
+
+- **PostgreSQL**: `SEQUENCE` ou `IDENTITY` (PostgreSQL 10+ tem IDENTITY nativo)
+- **MySQL**: `IDENTITY` (= AUTO_INCREMENT)
+- **UUID gerado pela aplicação**: usar `@GeneratedValue(strategy = GenerationType.UUID)` no JPA 3.1+
+
+### Auditoria automática
+
+Pra `criado_em` / `atualizado_em` automáticos, use **Spring Data JPA Auditing**:
+
+```java
+@EntityListeners(AuditingEntityListener.class)
+@MappedSuperclass
+public abstract class BaseEntity {
+    @CreatedDate
+    private LocalDateTime criadoEm;
+
+    @LastModifiedDate
+    private LocalDateTime atualizadoEm;
+}
+
+// No main:
+@SpringBootApplication
+@EnableJpaAuditing
+public class App { ... }
+```
+
+---
+
+## Relacionamentos: o coração do JPA
+
+Aqui que o JPA brilha — **expressar relacionamentos entre tabelas como referências entre objetos**.
+
+### @ManyToOne — o relacionamento mais comum
+
+Várias matrículas pertencem a um aluno.
+
+```java
+@Entity
+public class Matricula {
+    @Id @GeneratedValue private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "aluno_id")
+    private Aluno aluno;
+
+    private BigDecimal nota;
+}
+```
+
+SQL gerado:
+
+```sql
+CREATE TABLE matricula (
+    id BIGSERIAL PRIMARY KEY,
+    aluno_id BIGINT REFERENCES aluno(id),
+    nota NUMERIC
+);
+```
+
+**`fetch = LAZY`** (recomendado): aluno só é carregado quando você chamar `matricula.getAluno()`. Lá voltaremos.
+
+### @OneToMany — inverso do ManyToOne
+
+Um aluno tem várias matrículas. Aqui tem 2 abordagens:
+
+**Bidirecional** (com referência dos dois lados):
+
+```java
+@Entity
+public class Aluno {
+    @Id @GeneratedValue private Long id;
+
+    @OneToMany(mappedBy = "aluno", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Matricula> matriculas = new ArrayList<>();
+
+    // método helper pra manter consistência
+    public void adicionarMatricula(Matricula m) {
+        matriculas.add(m);
+        m.setAluno(this);
+    }
+}
+```
+
+`mappedBy = "aluno"` diz que o **outro lado** (`Matricula.aluno`) é quem **dona a relação** — o FK fica em `matricula.aluno_id`. **Sem `mappedBy`**, JPA cria tabela de junção desnecessária.
+
+**Unidirecional** (só um lado tem referência):
+
+```java
+@Entity
+public class Aluno {
+    // só Aluno conhece Matricula; Matricula não tem campo aluno
+    @OneToMany(cascade = CascadeType.ALL)
+    @JoinColumn(name = "aluno_id")
+    private List<Matricula> matriculas = new ArrayList<>();
+}
+```
+
+Recomendação: **prefira bidirecional com `mappedBy`** — mais flexível, gera SQL melhor.
+
+### @ManyToMany — N:N
+
+Aluno está matriculado em várias disciplinas; cada disciplina tem vários alunos.
+
+```java
+@Entity
+public class Aluno {
+    @ManyToMany
+    @JoinTable(name = "matricula",
+               joinColumns = @JoinColumn(name = "aluno_id"),
+               inverseJoinColumns = @JoinColumn(name = "disciplina_id"))
+    private Set<Disciplina> disciplinas = new HashSet<>();
+}
+
+@Entity
+public class Disciplina {
+    @ManyToMany(mappedBy = "disciplinas")
+    private Set<Aluno> alunos = new HashSet<>();
+}
+```
+
+<Aviso>
+**Anti-pattern frequente**: usar `@ManyToMany` puro quando a tabela de junção **tem atributos próprios** (nota, data, status). Nesse caso, **modele explicitamente** com entity `Matricula` e dois `@ManyToOne`s, não `@ManyToMany`. O `@ManyToMany` puro **só funciona** se a tabela de junção tem **apenas as 2 FKs**, sem outras colunas.
+</Aviso>
+
+### @OneToOne — 1:1
+
+Pessoa tem um CPF.
+
+```java
+@Entity
+public class Pessoa {
+    @Id @GeneratedValue private Long id;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "cpf_id")
+    private CPF cpf;
+}
+```
+
+---
+
+## Lazy vs Eager: o trade-off central
+
+**Estratégias de fetch**:
+
+- **`FetchType.LAZY`** — entity relacionada **NÃO carrega junto**. Só quando você acessa o campo, dispara nova query
+- **`FetchType.EAGER`** — entity relacionada **carrega junto** com a principal (JOIN automático)
+
+**Defaults do JPA** (memorize, isso pega muita gente):
+
+| Anotação | Default fetch |
+|---|---|
+| `@OneToOne` | **EAGER** |
+| `@ManyToOne` | **EAGER** |
+| `@OneToMany` | **LAZY** |
+| `@ManyToMany` | **LAZY** |
+
+**Problema**: defaults eager dos to-one criam **JOINs implícitos em toda query**. Você busca um Aluno, vem junto Departamento, Curso, etc. — mesmo se não precisar. **Performance horrível em telas que mostram listas**.
+
+**Solução universal**: **sempre declare `fetch = FetchType.LAZY`** em TODOS os relacionamentos.
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+private Aluno aluno;
+
+@OneToOne(fetch = FetchType.LAZY)
+private CPF cpf;
+```
+
+Vlad Mihalcea (autor de "High-Performance Java Persistence") repete em vários artigos: **"sempre LAZY"**. Carrega o que precisa explicitamente via fetch join ou EntityGraph.
+
+### LazyInitializationException — o terror do iniciante
+
+Acessar atributo lazy **fora da transação** gera exceção:
+
+```java
+@Transactional(readOnly = true)
+public Aluno buscar(Long id) {
+    return alunoRepo.findById(id).orElseThrow();
+}
+
+// Em outro lugar, fora de @Transactional:
+Aluno a = service.buscar(1L);
+a.getMatriculas().size();
+// org.hibernate.LazyInitializationException: could not initialize proxy - no Session
+```
+
+A sessão Hibernate (Persistence Context) **fechou** quando a transação terminou. O proxy lazy não tem mais conexão pra buscar. **Boom**.
+
+**Soluções**:
+
+1. **Acessar dentro da transação** — adicionar `@Transactional` no método que vai acessar
+2. **Fetch join** ou `@EntityGraph` — trazer pré-carregado
+3. **DTO Projection** — não retornar entity, retornar DTO com dados já preenchidos
+4. **`Open Session in View`** (anti-pattern, não use) — Spring Boot tem isso ligado por default, **DESLIGUE**: `spring.jpa.open-in-view=false`
+
+---
+
+## N+1: o bug mais comum em Spring Boot
+
+O bug mais frequente que **destrói performance** em apps JPA. Acontece quando:
+
+1. Carrega lista de N entities (1 query)
+2. Pra cada entity, acessa relação lazy → 1 query adicional
+3. Total: **N+1 queries**
+
+### Exemplo concreto
+
+```java
+@Entity
+public class Article {
+    @Id @GeneratedValue private Long id;
+    private String titulo;
+
+    @OneToMany(mappedBy = "article", fetch = FetchType.LAZY)
+    private List<Comentario> comentarios;
+}
+
+// Código que parece inocente:
+List<Article> articles = articleRepo.findAll();   // 1 query SELECT * FROM article;
+for (Article a : articles) {
+    int count = a.getComentarios().size();          // 1 query POR article!
+    System.out.println(a.getTitulo() + ": " + count + " comentários");
+}
+```
+
+SQL gerado pra 100 articles:
+
+```sql
+SELECT * FROM article;                              -- 1 query
+SELECT * FROM comentario WHERE article_id = 1;     -- 2ª query
+SELECT * FROM comentario WHERE article_id = 2;     -- 3ª
+...
+SELECT * FROM comentario WHERE article_id = 100;   -- 101ª
+```
+
+**101 queries pra mostrar 100 articles**. Endpoint passou de 10ms a 500ms. **Em produção, é o tipo de bug que derruba sistemas em horário de pico**.
+
+### Detectando N+1
+
+```yaml
+# application.yml — desenvolvimento
+spring:
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        generate_statistics: true
+```
+
+Habilite, rode o endpoint, **conte as queries no log**. Se vê padrão repetido, é N+1.
+
+Ferramentas mais sérias: **Hibernate Statistics**, **p6spy**, **datasource-proxy**, **Hibernate plugin do IntelliJ Ultimate**.
+
+### Solução 1: JOIN FETCH (JPQL)
+
+```java
+public interface ArticleRepository extends JpaRepository<Article, Long> {
+
+    @Query("SELECT a FROM Article a LEFT JOIN FETCH a.comentarios")
+    List<Article> findAllWithComentarios();
+}
+```
+
+SQL: **1 query só**, com LEFT JOIN.
+
+**Problema**: gera **produto cartesiano** se article tem múltiplas relações coleções. Pra coleções, use `DISTINCT` ou `Set` em vez de `List`.
+
+### Solução 2: @EntityGraph (JPA 2.1+)
+
+Mais elegante — declara o grafo de fetch sem JPQL custom:
+
+```java
+public interface ArticleRepository extends JpaRepository<Article, Long> {
+
+    @EntityGraph(attributePaths = {"comentarios"})
+    List<Article> findAll();
+}
+```
+
+Hibernate constrói LEFT JOIN automaticamente baseado no grafo.
+
+**Vantagem sobre fetch join**: dá pra ter múltiplas variantes (com/sem comentários) no mesmo repository sem custom JPQL.
+
+### Solução 3: Batch fetching
+
+Em vez de eliminar N+1, **reduz pra N/k + 1** — Hibernate busca em lotes:
+
+```java
+@Entity
+public class Article {
+    @OneToMany(mappedBy = "article")
+    @BatchSize(size = 25)   // busca em lotes de 25
+    private List<Comentario> comentarios;
+}
+
+// OU global:
+// spring.jpa.properties.hibernate.default_batch_fetch_size=25
+```
+
+100 articles → não vira 101 queries; vira **5 queries** (1 pra articles + 4 batches de 25 IDs).
+
+**Trade-off**: cada batch tem `WHERE article_id IN (...)` com IDs do batch — funciona bem mas gera plano de query diferente.
+
+### Solução 4: DTO Projection
+
+Não traz entity completa, só os campos necessários:
+
+```java
+public interface ArticleSummary {
+    Long getId();
+    String getTitulo();
+    Long getComentariosCount();
+}
+
+@Query("SELECT a.id AS id, a.titulo AS titulo, COUNT(c) AS comentariosCount " +
+       "FROM Article a LEFT JOIN a.comentarios c GROUP BY a.id, a.titulo")
+List<ArticleSummary> findAllSummary();
+```
+
+Quando você só precisa de **resumo**, não da entity inteira, **DTO é mais eficiente** que qualquer fetch strategy.
+
+<Insight>
+**Regra prática pra cada query problemática**: pergunte "**eu preciso da entity inteira pro caller, ou só de alguns campos?**". Se inteira → fetch join / @EntityGraph. Se só alguns → DTO projection. DTO geralmente é mais rápido **e** mais limpo. Em endpoints REST públicos, prefira DTO sempre — protege contra serialização acidental de campos sensíveis.
+</Insight>
+
+---
+
+## JPQL e queries personalizadas
+
+**JPQL** = **Java Persistence Query Language**. Sintaxe **parecida com SQL** mas operando em **entities e atributos**, não tabelas e colunas.
+
+```sql
+-- SQL nativo
+SELECT * FROM aluno WHERE curso = 'ADS' AND semestre > 4;
+
+-- JPQL
+SELECT a FROM Aluno a WHERE a.curso = 'ADS' AND a.semestre > 4
+```
+
+Hibernate traduz JPQL pra SQL do dialeto específico.
+
+### Em Spring Data JPA
+
+```java
+public interface AlunoRepository extends JpaRepository<Aluno, Long> {
+
+    // Query Methods — Spring deriva SQL pelo NOME do método
+    List<Aluno> findByCurso(Curso curso);
+    List<Aluno> findByCursoAndSemestreGreaterThan(Curso curso, int semestre);
+    Optional<Aluno> findFirstByEmailIgnoreCase(String email);
+    long countByCurso(Curso curso);
+    List<Aluno> findByNomeContainingIgnoreCase(String termo);
+
+    // @Query com JPQL
+    @Query("SELECT a FROM Aluno a WHERE a.curso = :curso AND SIZE(a.matriculas) > :min")
+    List<Aluno> alunosComMaisMatriculas(@Param("curso") Curso curso, @Param("min") int min);
+
+    // @Query com SQL nativo
+    @Query(value = "SELECT * FROM aluno WHERE EXTRACT(YEAR FROM criado_em) = :ano",
+           nativeQuery = true)
+    List<Aluno> findByAnoCriacao(@Param("ano") int ano);
+
+    // Modificações: @Modifying obrigatório
+    @Modifying
+    @Query("UPDATE Aluno a SET a.semestre = a.semestre + 1 WHERE a.curso = :curso")
+    int incrementarSemestre(@Param("curso") Curso curso);
+}
+```
+
+### Quando usar cada tipo
+
+| Caso | Opção |
+|---|---|
+| Filtros simples por atributos | Query Methods (`findByX`) |
+| Lógica que não cabe em método | `@Query` com JPQL |
+| Features específicas do banco (PostgreSQL JSONB, window functions) | `@Query` nativo (`nativeQuery = true`) |
+| Queries dinâmicas (filtros opcionais) | Criteria API ou Specifications |
+
+---
+
+## Pitfalls reais
+
+### 1. Equals/HashCode em entities
+
+**Errado**: usar `@Id` no equals/hashCode antes da entity ser persistida (ID é `null` no transient).
+
+**Certo**: usar `equals` baseado em **identidade business** (CPF, email, UUID externo). Ou implementar com cuidado:
+
+```java
+@Override
+public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Aluno aluno)) return false;
+    return id != null && Objects.equals(id, aluno.id);
+}
+
+@Override
+public int hashCode() {
+    return getClass().hashCode();   // constante, evita problemas em Set
+}
+```
+
+### 2. Toda entity em ToString gera N+1 ou stack overflow
+
+Lombok `@Data` gera `toString` com **todos os campos**, incluindo relacionamentos. Em entities bidirecionais, vira **loop infinito** ou dispara queries em cascata.
+
+**Use** `@Getter @Setter` separados, **NÃO** `@Data`. Ou `@ToString(exclude = {"matriculas", "comentarios"})`.
+
+### 3. open-session-in-view = anti-pattern
+
+Spring Boot default `true`. Mantém Persistence Context **aberto durante toda a request HTTP** pra evitar LazyInitializationException no controller.
+
+**Problema**: queries lazy disparadas em template/serialização, sem visibilidade no service layer. Bug N+1 oculto.
+
+**Sempre** ponha no `application.yml`:
+
+```yaml
+spring:
+  jpa:
+    open-in-view: false
+```
+
+Vai forçar você a **carregar tudo no service** — explícito e debugável.
+
+### 4. Cascade ALL com OneToMany de coleção grande
+
+```java
+@OneToMany(cascade = CascadeType.ALL)
+private List<Pedido> pedidos;   // 10000 pedidos
+```
+
+Ao salvar/deletar o pai, Hibernate **cascateia em cada filho** individualmente. **10000 queries**. Use **bulk operations** explícitas pra coleções grandes.
+
+### 5. `findAll()` em tabela grande
+
+`alunoRepo.findAll()` em tabela com 1M de linhas carrega **todos em memória**. **Out of memory** garantido. Sempre paginate:
+
+```java
+Page<Aluno> page = alunoRepo.findAll(PageRequest.of(0, 50));
+```
+
+---
+
+## Recap
+
+**Hibernate** começou em **2001** com **Gavin King** (Cirrus Technologies), como alternativa aos Entity Beans do EJB 2. Inspirou o **JPA 1.0 em 2006** (JSR 220) — Gavin foi membro do expert group. Hoje Jakarta Persistence 3.0+ é o padrão; Hibernate é a implementação dominante (>80% Spring Boot).
+
+**ORM** resolve o **object-relational impedance mismatch** — gap entre objetos Java e tabelas SQL.
+
+**Conceitos centrais**:
+- **Entity** — classe anotada com `@Entity`, representa linha de tabela. Precisa de construtor sem args, `@Id`, ser não-final.
+- **EntityManager** — porta de entrada pra operar com entities. Em Spring, abstraído por `@Repository`.
+- **Persistence Context** — cache da transação com dirty checking automático. Pattern Unit of Work do Martin Fowler.
+- **Ciclo de vida**: Transient → Managed → Detached / Removed.
+
+**Relacionamentos**:
+- `@ManyToOne` — mais comum, FK no lado "many"
+- `@OneToMany` com `mappedBy` — inverso bidirecional
+- `@ManyToMany` — N:N via tabela de junção sem atributos
+- `@OneToOne` — raramente útil; prefira `@ManyToOne` com `UNIQUE`
+- **Quando a tabela de junção tem atributos próprios**, modele como entity separada, NÃO `@ManyToMany`
+
+**Fetch strategies**:
+- Defaults: `@OneToOne` e `@ManyToOne` = **EAGER** (perigo); `@OneToMany` e `@ManyToMany` = LAZY
+- **Sempre declare `fetch = FetchType.LAZY` em todos** — Vlad Mihalcea repete isso constantemente
+- Carregue explicitamente o que precisa via **JOIN FETCH** ou **`@EntityGraph`**
+
+**N+1 problem** — bug mais comum em Spring Boot. Lista de N entities + 1 query por entity ao acessar relação lazy. Endpoint de 10ms vira 500ms. Soluções:
+
+1. **JOIN FETCH** em JPQL (`LEFT JOIN FETCH a.comentarios`)
+2. **`@EntityGraph(attributePaths = {...})`** em Spring Data
+3. **`@BatchSize` ou `default_batch_fetch_size`** — N/k+1 queries
+4. **DTO Projection** — só carrega campos necessários
+
+**Pitfalls a evitar**:
+- `equals/hashCode` em entities — não use `@Id` direto; prefira business identity ou hashCode constante
+- Lombok `@Data` em entity — gera toString recursivo, N+1 ou stack overflow. Use `@Getter @Setter` separados.
+- **`open-in-view = false`** sempre (Spring Boot default é `true` — anti-pattern)
+- `CascadeType.ALL` em `@OneToMany` com coleção grande — vira N queries
+- `findAll()` em tabela grande — out of memory. Sempre paginate.
+
+**Em produção real (sua trilha Spring Boot)**: foque em (1) sempre LAZY; (2) detectar N+1 com logs SQL ligados em dev; (3) carregar com `@EntityGraph` ou DTO projection conforme caso; (4) `open-in-view=false`; (5) testar performance com **dados reais**, não 10 linhas locais.
+
+A trilha de **Bancos de Dados** está agora com 7 lições — cobertura sólida desde modelo relacional até JPA real.
+
+Próximas direções possíveis:
+
+- **Modelagem prática** — pegar requisitos reais e modelar do zero com brModelo/dbdiagram aplicando tudo das 7 lições
+- **NoSQL básico** — quando NÃO usar relacional; key-value, document, column, graph; CAP theorem
+- **Performance avançada** — query rewriting, particionamento, replicação, connection pooling, read replicas
+- **Mudar de trilha** — Sistemas Operacionais, Redes, Arquitetura de Software (Clean Arch, DDD avançado)
+
+Manda qual.

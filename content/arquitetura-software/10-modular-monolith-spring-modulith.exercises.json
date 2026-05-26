@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre ArchUnit e Spring Modulith, e como se relacionam?",
+      "opcoes": [
+        "São alternativas mutuamente exclusivas — você escolhe um ou outro",
+        "ArchUnit é proprietário, Spring Modulith é open source",
+        "ArchUnit é biblioteca GENÉRICA de testes arquiteturais em Java (criada por Peter Gafert na TNG Technology, open sourced em maio/2018, v1.0.0 em outubro/2022); Spring Modulith é camada OPINATIVA do Spring que usa ArchUnit por baixo + adiciona eventos entre módulos, Event Publication Registry (Outbox built-in), testes por módulo e documentação automática. Não são alternativas — Spring Modulith COMPLEMENTA ArchUnit",
+        "Ambos foram criados pelo mesmo autor e fazem exatamente a mesma coisa"
+      ],
+      "correta": 2,
+      "explicacao": "ArchUnit (criado por Peter Gafert na consultoria alemã TNG Technology Consulting, open sourced em maio/2018 sob Apache 2.0, versão 1.0.0 em outubro/2022, archunit.org, groupId com.tngtech.archunit) é uma biblioteca GENÉRICA de testes arquiteturais em Java — funciona em qualquer projeto Java/Kotlin, sem precisar de Spring. Verifica regras como dependências entre pacotes, ciclos, naming conventions, layered/onion architecture analisando o BYTECODE Java em testes JUnit. Spring Modulith (criado por Oliver Drotbohm) é uma camada OPINATIVA Spring-específica que USA ArchUnit por baixo dos panos para enforcement de fronteiras de módulos, mas ADICIONA: eventos entre módulos via @ApplicationModuleListener, Event Publication Registry (Outbox built-in), @ApplicationModuleTest para testes de integração por módulo, geração automática de documentação (PlantUML + Module Canvas). Não são alternativas — você usa ArchUnit pra regras customizadas e Spring Modulith pra obter tudo automaticamente em projetos Spring."
+    },
+    {
+      "id": "ex2",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quem criou o Spring Modulith e qual a cronologia do projeto?",
+      "opcoes": [
+        "Martin Fowler criou em 2015 junto com o post MonolithFirst",
+        "Oliver Drotbohm (Spring engineering team, foco em arquitetura/DDD/persistência), com predecessor 'Moduliths' (R&D side project ~2018), anunciado oficialmente como Spring Modulith em outubro/2022 como projeto experimental, atingiu 1.0 GA em 21 de agosto de 2023",
+        "Simon Brown criou em 2018 junto com o C4 Model",
+        "Pivotal Labs criou em 2014 como parte do Spring Cloud"
+      ],
+      "correta": 1,
+      "explicacao": "Spring Modulith foi criado por Oliver Drotbohm, engenheiro do time Spring por 15 anos com foco em arquitetura de software, DDD, REST e persistência. Cronologia: (1) O projeto começou como 'Moduliths' (R&D side project) em torno de 2018; (2) Foi anunciado oficialmente como Spring Modulith em outubro/2022 como projeto EXPERIMENTAL; (3) Atingiu versão 1.0 GA em 21 de agosto de 2023 — anúncio em spring.io/blog/2023/08/21/spring-modulith-1-0-ga-released. Versão 2.0 lançada posteriormente. Documentação oficial: docs.spring.io/spring-modulith. Drotbohm também é criador do jMolecules (projeto irmão, versão 2.0 disponível) que fornece anotações declarativas para conceitos DDD (@AggregateRoot, @ValueObject, @DomainEvent, etc). As outras opções confundem com Fowler (que escreveu sobre 'MonolithFirst' em 2015 mas não criou Spring Modulith), Simon Brown (criou C4 Model, não Spring Modulith) e Pivotal Labs (que criou Spring Boot, não Modulith especificamente)."
+    },
+    {
+      "id": "ex3",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "ArchUnit funciona analisando o código-fonte Java (arquivos .java) usando parsers customizados, e por isso requer recompilação especial e configuração complexa.",
+      "correta": false,
+      "explicacao": "Falso — em todos os pontos. ArchUnit funciona analisando o BYTECODE Java (arquivos .class compilados), NÃO o código-fonte. Usa o ClassFileImporter pra carregar todas as classes em memória e roda asserções sobre o grafo de dependências. Vantagens dessa abordagem: (1) não precisa de recompilação especial — usa as classes que JÁ foram compiladas pelo build normal; (2) não precisa de agente de runtime, plugin de compilador ou processador de anotações; (3) configuração é trivial — adiciona dependency e escreve testes JUnit normais; (4) funciona com qualquer JVM (Java, Kotlin, Scala, Groovy); (5) é rápido — análise de projeto grande leva 1-3 segundos. Tudo que você precisa: 'com.tngtech.archunit:archunit-junit5' como dependência de teste, e classes de teste com @Test usando a fluent API ('noClasses().that()...should()...'). Mesmo o ClassFileImporter.importPackages('com.empresa') executa em segundos. A análise é puramente estática (não em runtime), o que mantém a velocidade alta."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a estrutura de pacotes que Spring Modulith espera por convenção, e como ele determina o que é 'API pública' vs 'interno' de um módulo?",
+      "opcoes": [
+        "Cada módulo precisa ser um JAR Maven separado com pom.xml próprio",
+        "Cada módulo é um pacote Java diretamente abaixo do pacote principal da aplicação (ex: com.empresa.app.pedido). Classes TOP-LEVEL (diretamente no pacote do módulo, fora de qualquer sub-pacote) são API PÚBLICA — outros módulos podem importar. Classes em sub-pacotes (como 'interno/' ou 'impl/') são INTERNAS — outros módulos NÃO podem importar. Customizável via configuração",
+        "Spring Modulith usa Java Platform Module System (JPMS) com module-info.java",
+        "Toda classe pública (public) é acessível por qualquer módulo, sem distinção"
+      ],
+      "correta": 1,
+      "explicacao": "Convenção fundamental de Spring Modulith: um MÓDULO é um pacote Java diretamente abaixo do pacote principal da aplicação. Ex: se sua app está em 'com.carbon.compensacaocredito' (onde fica CompensacaoCreditoApplication.java com @SpringBootApplication), então 'com.carbon.compensacaocredito.compensacao', '.inventario', '.cadastro', '.auditoria' são os módulos. REGRA DE ACESSO: Classes TOP-LEVEL (diretamente em 'compensacao/' fora de qualquer sub-pacote) são API PÚBLICA — qualquer outro módulo pode importar. Classes em 'compensacao/interno/' ou qualquer sub-pacote são INTERNAS — outros módulos NÃO podem importar. Você customiza nomes (pode ser 'interno', 'internal', 'impl') via configuração. É verificado automaticamente por 'ApplicationModules.of(SuaApp.class).verify()' em UM ÚNICO teste — detecta automaticamente os módulos, verifica que nenhum importa classes internas de outro, detecta ciclos. As outras opções confundem com Maven multi-module (que é overhead), JPMS (que Spring Modulith poderia usar mas não exige) e visibilidade Java tradicional (que NÃO basta — toda classe public é acessível em qualquer pacote, sem fronteira de módulo)."
+    },
+    {
+      "id": "ex5",
+      "tipo": "multipla-escolha",
+      "pergunta": "O que a anotação @ApplicationModuleListener faz, e por que ela é o ponto central de comunicação entre módulos no Spring Modulith?",
+      "opcoes": [
+        "É apenas um marcador documental, sem efeito em runtime",
+        "Faz chamada síncrona bloqueante entre módulos via REST interno",
+        "Combina três anotações Spring em um shortcut canônico: @Async (execução assíncrona em outra thread) + @Transactional(propagation = REQUIRES_NEW) (nova transação isolada) + @TransactionalEventListener (só recebe se a transação de origem commitou). Garante: (a) handler só executa se a transação de origem commitou; (b) roda em nova transação isolada (falha no handler NÃO faz rollback do origem); (c) execução assíncrona, não bloqueia",
+        "É equivalente a @EventListener clássico do Spring, sem diferença prática"
+      ],
+      "correta": 2,
+      "explicacao": "@ApplicationModuleListener é o shortcut canônico do Spring Modulith para receber eventos entre módulos. Por baixo dos panos, combina TRÊS anotações Spring que você teria que escrever manualmente: (1) @Async — execução assíncrona em outra thread; (2) @Transactional(propagation = Propagation.REQUIRES_NEW) — nova transação, isolada da que originou o evento; (3) @TransactionalEventListener — só recebe se a transação de origem COMMITOU (não recebe em rollback). Implicações fundamentais: (A) o handler só executa SE a transação de origem terminou com sucesso — você não tem inconsistência entre 'agregado salvo' e 'handler nunca executou' por erro; (B) o handler roda em nova transação ISOLADA — se ele falha, o rollback dele NÃO faz rollback do agregado original (que já commitou); (C) execução assíncrona — não bloqueia a transação principal. Isso resolve simultaneamente os problemas de Domain Events (Lição 6) e desacoplamento real entre módulos. As outras opções confundem com marcadores sem semântica (A), padrão de comunicação errado (B — REST interno é absurdo num monolito) ou subestimam a diferença em relação ao @EventListener simples (D — que é síncrono e na mesma transação)."
+    },
+    {
+      "id": "ex6",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "O Event Publication Registry do Spring Modulith implementa automaticamente o Transactional Outbox Pattern (Lição 6) — quando você adiciona o starter JPA/JDBC/MongoDB, todo evento publicado dentro de uma transação é AUTOMATICAMENTE persistido numa tabela 'event_publication' como parte da mesma transação, sem você precisar escrever a tabela, repositório ou worker de relay.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Essa é uma das features mais poderosas do Spring Modulith. Quando você adiciona um dos starters de persistência ('spring-modulith-starter-jpa', 'spring-modulith-starter-jdbc' ou 'spring-modulith-starter-mongodb'), o comportamento muda automaticamente: TODO evento publicado dentro de uma transação que tem @TransactionalEventListener ou @ApplicationModuleListener é AUTOMATICAMENTE persistido. Fluxo interno: (1) publicador.publishEvent(new CompensacaoEfetivada(...)) é chamado dentro da transação; (2) Spring Modulith descobre quais listeners estão registrados pra esse evento; (3) Pra cada listener, cria uma entrada na tabela event_publication DENTRO da mesma transação do agregado; (4) Quando o handler executa com sucesso, a entrada é marcada como completa; (5) Se o handler falha ou a app reinicia antes dele executar, a entrada fica pendente e pode ser reprocessada. Isso é EXATAMENTE o Transactional Outbox Pattern de Chris Richardson (microservices.io). A tabela 'event_publication' tem schema definido pelo Spring Modulith (id, listener_id, event_type, serialized_event, publication_date, completion_date) — criada automaticamente via 'spring.modulith.events.jdbc.schema-initialization.enabled=true'. Eliminação MASSIVA de código boilerplate: você não precisa de tabela manual, repositório, worker scheduled, locks para multi-instância, retry — tudo built-in."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença entre @SpringBootTest e @ApplicationModuleTest, e quando usar cada um?",
+      "opcoes": [
+        "@SpringBootTest é mais novo e substitui @ApplicationModuleTest",
+        "@SpringBootTest carrega o ApplicationContext INTEIRO (todos os módulos, todos os beans) — bom pra teste end-to-end mas LENTO; @ApplicationModuleTest carrega APENAS os beans do módulo testado (+ módulos declarados como dependência via allowedDependencies) — testa módulo em ISOLAMENTO mas com Spring real. Use @SpringBootTest pra integração end-to-end; use @ApplicationModuleTest pra integração de um módulo específico (testes mais rápidos)",
+        "@ApplicationModuleTest é para testes unitários, @SpringBootTest para testes de aceitação",
+        "Não há diferença real, são sinônimos"
+      ],
+      "correta": 1,
+      "explicacao": "Diferença fundamental: @SpringBootTest carrega TODO o ApplicationContext — todos os módulos, todos os beans, toda a configuração. É bom pra teste END-TO-END do sistema completo, mas é LENTO em projetos grandes (pode levar 30s+ pra subir uma vez). @ApplicationModuleTest (do Spring Modulith) carrega APENAS os beans do módulo testado, MAIS módulos declarados como dependência via 'allowedDependencies' no @ApplicationModule do package-info. Vantagens: (1) testa um módulo em ISOLAMENTO conceitual — confirma que ele funciona sozinho dentro das suas fronteiras; (2) sobe Spring real (transações, AOP, eventos funcionam) mas mais rápido — só carrega o necessário; (3) força você a manter o módulo realmente isolado — se acidentalmente importou algo de outro módulo não declarado, o teste falha. Quando usar cada um: @SpringBootTest pra testes E2E críticos (ex: fluxo completo de compensação que atravessa todos os módulos); @ApplicationModuleTest pra testes de integração de um módulo específico (ex: testar que Compensação funciona com Inventário declarado como dependência, sem subir Auditoria). Spring Modulith também fornece classe 'Scenario' que facilita testar publicação/consumo de eventos: scenario.stimulate(...).andWaitForEventOfType(...).toArrive(). As outras opções confundem com sucessão temporal incorreta (A), distinção unitário vs aceitação (C — ambos são integração) ou negam a diferença existente (D)."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "O que a feature de Documentação Automática do Spring Modulith gera, e como isso se conecta com o C4 Model (Lição 9)?",
+      "opcoes": [
+        "Gera apenas comentários Javadoc nas classes",
+        "A classe Documenter, executada num teste, gera em target/spring-modulith-docs/: (1) components.puml — diagrama PlantUML estilo Component Diagram do C4 mostrando módulos e suas dependências; (2) module-<nome>.puml — diagrama individual por módulo com classes internas; (3) module-<nome>.adoc — 'Module Canvas' em AsciiDoc com descrição, API pública, eventos publicados, eventos consumidos, dependências, beans Spring. Isso fecha o ciclo da Lição 9: você GERA o Component Diagram a partir do código, em vez de desenhar à mão",
+        "Gera diagramas UML completos no formato XMI",
+        "Gera documentação Swagger/OpenAPI dos endpoints REST"
+      ],
+      "correta": 1,
+      "explicacao": "Spring Modulith fornece a classe Documenter que, executada num teste simples, gera documentação automática a partir do código real. O teste típico: 'new Documenter(ApplicationModules.of(MinhaApp.class)).writeModulesAsPlantUml().writeIndividualModulesAsPlantUml().writeModuleCanvases()'. Saídas em target/spring-modulith-docs/: (1) components.puml — diagrama PlantUML estilo Component Diagram do C4 (Lição 9) mostrando módulos e suas dependências; (2) module-compensacao.puml — diagrama individual do módulo Compensação com classes internas; (3) module-compensacao.adoc — 'Module Canvas': documento estruturado em AsciiDoc com descrição (vinda do package-info.java), API pública (Facades), eventos publicados, eventos consumidos, dependências, beans Spring. Isso FECHA o ciclo da Lição 9 (C4 Model): em vez de desenhar Component Diagrams à mão, você GERA a partir do código. A documentação é SEMPRE fiel ao código real — nunca desincroniza. Pull Requests podem incluir o diagrama atualizado da arquitetura. Se alguém adicionar dependência cross-module, aparece imediatamente no diagrama gerado. As outras opções subestimam (A — Javadoc não tem nada disso), pioram (C — XMI é UML legado, ninguém usa) ou confundem com domínio diferente (D — Swagger é doc de API, não de arquitetura)."
+    },
+    {
+      "id": "ex9",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "jMolecules é projeto irmão do Spring Modulith (também mantido por Oliver Drotbohm) e fornece anotações Java declarativas para conceitos do DDD tático como @AggregateRoot, @ValueObject, @DomainEvent, @Repository. Combinado com ArchUnit ou Spring Modulith, permite enforcement automatizado de regras DDD (ex: @ValueObject deve ser imutável, @AggregateRoot não pode importar @Service).",
+      "correta": true,
+      "explicacao": "Verdadeiro em todos os pontos. jMolecules é projeto irmão do Spring Modulith, também mantido por Oliver Drotbohm. Versão 2.0 disponível atualmente. Fornece um conjunto de anotações Java declarativas para os conceitos do DDD tático (Lição 4): @AggregateRoot (marca agregados), @Identity (identidade do agregado), @ValueObject (marca Value Objects), @Repository (marca repositórios), @DomainEvent (marca eventos de domínio), @Entity (entidades dentro de agregados), @DomainService. Exemplo: '@AggregateRoot public class CompensacaoEmissao { @Identity private CompensacaoId id; ... }'. Por que importa: quando você COMBINA jMolecules + ArchUnit + Spring Modulith, consegue enforcement automatizado de regras DDD que seriam apenas convenção verbal: (1) @AggregateRoot não pode importar @Service da camada aplicação; (2) @ValueObject deve ser imutável (todos os campos final); (3) @Repository deve ser interface, não classe concreta; (4) @DomainEvent não pode referenciar @Entity (deve ser imutável e com tipos primitivos/Value Objects). Essas regras viram FITNESS FUNCTIONS automatizadas — se alguém violar, build falha. Fecha o ciclo: design conceitual (DDD lições 3-4) → código real verificado automaticamente. Conceito de fitness functions vem de Neal Ford e Rebecca Parsons, 'Building Evolutionary Architectures' (O'Reilly, setembro de 2017)."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Pro projeto Carbon Credit Compensation Platform, qual o roteiro PRÁTICO recomendado de adoção de Spring Modulith?",
+      "opcoes": [
+        "Reescrever o projeto inteiro como microservices primeiro, depois adicionar Spring Modulith em cada serviço",
+        "(1) Setup mínimo: adicionar spring-modulith-bom + starter-core + starter-test; (2) Reestruturar pacotes conforme convenção (compensacao/, inventario/, cadastro/, auditoria/, compartilhado/); (3) Teste de fronteira: ApplicationModules.of(App.class).verify() em UM único teste; (4) Declarar dependências entre módulos via @ApplicationModule no package-info.java; (5) Migrar Domain Events da Lição 6 pra @ApplicationModuleListener; (6) Gerar documentação automática (PlantUML + Module Canvas) pra incluir no README e na apresentação final",
+        "Não vale o esforço — projeto educacional não precisa de tooling avançado",
+        "Adotar tudo de uma vez sem etapas — Spring Modulith resolve tudo automaticamente"
+      ],
+      "correta": 1,
+      "explicacao": "Roteiro pragmático e incremental, com benefícios claros em cada etapa: ETAPA 1 (1-2h) — Setup mínimo: adicionar spring-modulith-bom no dependencyManagement do pom.xml + spring-modulith-starter-core + spring-modulith-starter-test (scope test). ETAPA 2 — Reestruturar pacotes conforme convenção do Spring Modulith: cada Bounded Context vira pacote top-level (compensacao/, inventario/, cadastro/, auditoria/, compartilhado/), com sub-pacotes 'interno/' para classes não-públicas. ETAPA 3 (10min) — Teste de fronteira: criar ModularidadeTest com 'ApplicationModules.of(CompensacaoCreditoApplication.class).verify()'. A partir desse momento, qualquer violação de fronteira no código resulta em build VERMELHO. ETAPA 4 (30min) — Em cada pacote-módulo, adicionar package-info.java com @ApplicationModule(allowedDependencies = {...}) declarando dependências explícitas. Documenta intenção do design. ETAPA 5 (1h) — Migrar Domain Events da Lição 6 (publisher in-memory simples) pra @ApplicationModuleListener com ApplicationEventPublisher do Spring. Ganhos imediatos: handlers automaticamente assíncronos, em nova transação, e quando o grupo adicionar banco no futuro, Event Publication Registry vira Outbox automaticamente. ETAPA 6 (10min) — Gerar documentação automática (Documenter) pra incluir no README do GitHub e na apresentação da avaliação final. Benefícios concretos: portfólio profissional (maturidade arquitetural raríssima entre estudantes), preparação pra evolução futura (quando adicionar banco, Outbox é automático), comunicação clara com avaliador. As outras opções pecam por: (A) microservices é descartado consistentemente como over-engineering pro contexto; (C) descarta benefício real de portfólio e preparação pra evolução; (D) adoção sem etapas geralmente trava — incremental é mais seguro."
+    }
+  ]
+}

@@ -1,0 +1,836 @@
+---
+titulo: "Arquitetura de Software: Princípios que Separam Código Decente de Código Sustentável"
+trilha: "arquitetura-software"
+duracaoMin: 70
+dificuldade: "intermediario"
+referencias:
+  - "Edsger W. Dijkstra (1974), 'On the Role of Scientific Thought' — paper que cunhou o termo 'separation of concerns'"
+  - "Wayne P. Stevens, Glenford J. Myers, Larry L. Constantine (1974), 'Structured Design', IBM Systems Journal Vol. 13 No. 2, pp. 115-139 — introduziu coupling e cohesion como métricas formais"
+  - "Edward Yourdon, Larry Constantine (1979), 'Structured Design: Fundamentals of a Discipline of Program and Systems Design' — livro fundador"
+  - "Barbara Liskov (1987), 'Data Abstraction and Hierarchy', SIGPLAN Notices 23(5) — Liskov Substitution Principle (LSP)"
+  - "Bertrand Meyer (1988), 'Object-Oriented Software Construction', Prentice Hall — Open/Closed Principle (OCP)"
+  - "Robert C. Martin (2000), 'Design Principles and Design Patterns' — formulação moderna dos 5 princípios SOLID; o acrônimo 'SOLID' foi cunhado por Michael Feathers posteriormente"
+  - "Robert C. Martin (2017), 'Clean Architecture: A Craftsman's Guide to Software Structure and Design', Prentice Hall"
+  - "Martin Fowler (2003), 'Patterns of Enterprise Application Architecture', Addison-Wesley"
+  - "Eric Evans (2003), 'Domain-Driven Design: Tackling Complexity in the Heart of Software', Addison-Wesley"
+  - "Frederick Brooks (1986), 'No Silver Bullet — Essence and Accident in Software Engineering' — distinção essential vs accidental complexity"
+---
+
+## Por que arquitetura existe
+
+Você já programou o suficiente pra perceber: **o código fácil de escrever no início vira pesadelo depois**. Funcionalidade pequena leva 2 horas no mês 1, leva 2 semanas no mês 18 — não porque você ficou pior, mas porque o **acoplamento entre as partes do sistema** virou uma teia que prende qualquer mudança.
+
+Esse é o problema que **arquitetura de software** resolve: **manter o custo de mudança constante** ao longo da vida do sistema. Um sistema bem arquitetado adiciona feature 50 no mesmo tempo da feature 1. Um sistema mal arquitetado morre por **dívida técnica**.
+
+Em **1986**, **Frederick Brooks** (autor do clássico "The Mythical Man-Month") publicou *"No Silver Bullet"* — paper que distingue dois tipos de complexidade em software:
+
+- **Essential complexity**: complexidade inerente ao problema (folha de pagamento É complicada porque legislação trabalhista É complicada)
+- **Accidental complexity**: complexidade que **nós próprios introduzimos** com decisões ruins (frameworks errados, código mal organizado, abstrações que não cabem)
+
+**Arquitetura de software é, fundamentalmente, a disciplina de minimizar accidental complexity** sem fingir que essential complexity não existe.
+
+Esta lição cobre os **princípios fundamentais** que toda arquitetura — Clean, Hexagonal, DDD, Layered — assume como base:
+
+1. **Separation of Concerns** (Dijkstra, 1974)
+2. **Coupling e Cohesion** (Constantine et al., 1974)
+3. **SOLID** (Martin, 2000)
+4. **Abstração e encapsulamento**
+5. **Dependency Injection / Inversion of Control**
+
+Depois desta lição, você tem fundação pra entender Clean Architecture, DDD, Hexagonal — todos derivam desses princípios. **Não tem como pular**.
+
+---
+
+## Separation of Concerns: a base de tudo
+
+Em **agosto de 1974**, **Edsger W. Dijkstra** — um dos pais da computação, conhecido pelo algoritmo do caminho mais curto e pelo paper "Go To Considered Harmful" — publicou *"On the Role of Scientific Thought"*. Nesse ensaio curto, ele cunhou um termo que dominaria engenharia de software pelos 50 anos seguintes:
+
+> *"It is what I sometimes have called the **separation of concerns**, which, even if not perfectly possible, is yet the only available technique for effective ordering of one's thoughts."*
+
+Tradução do que Dijkstra quis dizer: **lide com um aspecto do problema de cada vez**. Não tente garantir correção, eficiência E manutenibilidade no mesmo momento. Isole as preocupações.
+
+### Aplicação prática
+
+Quando você escreve uma classe `OrderService` que **valida pedido + calcula imposto + persiste no banco + envia email + atualiza estoque + emite nota fiscal**, você está violando separação de concerns. **6 razões diferentes pra essa classe mudar**:
+
+- Política de validação muda → mudar `OrderService`
+- Regra de imposto muda → mudar `OrderService`
+- Mudou de PostgreSQL pra MongoDB → mudar `OrderService`
+- Template de email muda → mudar `OrderService`
+- API de estoque externo muda → mudar `OrderService`
+- SEFAZ mudou layout da NF → mudar `OrderService`
+
+Resultado: classe gigante, teste impossível, deploy de qualquer mudança traz risco em tudo. Bug clássico que sabotou inúmeros sistemas.
+
+**Separação de concerns dizia**: cada uma dessas **concerns** vira módulo próprio. `OrderValidator`, `TaxCalculator`, `OrderRepository`, `EmailNotifier`, `StockService`, `FiscalService`. Cada uma tem **uma razão pra mudar**. Bugs ficam localizados, testes ficam viáveis.
+
+<Insight>
+**A separation of concerns é mais que organizar arquivos** — é organizar **decisões**. Cada módulo encapsula uma decisão: "como validar?", "como calcular imposto?", "como persistir?". Quando uma decisão muda, apenas um módulo é afetado. Isso é o que **separation of concerns dá**: localidade de mudança.
+</Insight>
+
+---
+
+## Coupling e Cohesion: as métricas que importam
+
+Em **junho de 1974**, **Wayne P. Stevens**, **Glenford J. Myers** e **Larry L. Constantine** publicaram no **IBM Systems Journal** (Vol. 13, No. 2, pp. 115-139) o paper *"Structured Design"*. Foi o paper que **mais recebeu pedidos de reimpressão** na história do journal. Eles **formalizaram dois conceitos** que se tornaram a base de toda análise de qualidade de software:
+
+- **Coupling** (acoplamento): grau de **dependência entre módulos**
+- **Cohesion** (coesão): grau de **relação interna** dos elementos dentro de um módulo
+
+Larry Constantine já vinha trabalhando nesses conceitos desde os anos 60 — o paper de 1974 trouxe pra mainstream. Em **1979**, com Yourdon, publicou o livro *"Structured Design: Fundamentals of a Discipline of Program and Systems Design"* — referência canônica.
+
+### A regra mestra
+
+> **Low coupling, high cohesion.** Acoplamento baixo entre módulos, coesão alta dentro de cada módulo.
+
+<svg width="100%" viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Coupling vs Cohesion — bom vs ruim</title>
+<desc>Diagrama comparando dois cenários: à esquerda, módulos mal projetados com alto acoplamento e baixa coesão; à direita, módulos bem projetados com baixo acoplamento e alta coesão</desc>
+
+<text x="190" y="30" fontFamily="sans-serif" fontSize="14" fill="#FF6B6B" fontWeight="bold" textAnchor="middle">RUIM: alto coupling, baixa cohesion</text>
+
+<rect x="40" y="60" width="100" height="60" fill="#5c2b2b" stroke="#FF6B6B" strokeWidth="2"/>
+<text x="90" y="85" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Modulo A</text>
+<text x="90" y="100" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">validar+salvar</text>
+<text x="90" y="112" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">+email+log</text>
+
+<rect x="240" y="60" width="100" height="60" fill="#5c2b2b" stroke="#FF6B6B" strokeWidth="2"/>
+<text x="290" y="85" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Modulo B</text>
+<text x="290" y="100" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">UI+lógica+</text>
+<text x="290" y="112" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">persistência</text>
+
+<rect x="40" y="180" width="100" height="60" fill="#5c2b2b" stroke="#FF6B6B" strokeWidth="2"/>
+<text x="90" y="205" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Modulo C</text>
+<text x="90" y="220" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">cache+queue</text>
+<text x="90" y="232" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">+API+regras</text>
+
+<rect x="240" y="180" width="100" height="60" fill="#5c2b2b" stroke="#FF6B6B" strokeWidth="2"/>
+<text x="290" y="205" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Modulo D</text>
+<text x="290" y="220" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">db+cache+log</text>
+<text x="290" y="232" fontFamily="monospace" fontSize="9" fill="#888888" textAnchor="middle">+auth+stats</text>
+
+<line x1="140" y1="90" x2="240" y2="90" stroke="#FF6B6B" strokeWidth="2"/>
+<line x1="140" y1="90" x2="240" y2="200" stroke="#FF6B6B" strokeWidth="2"/>
+<line x1="140" y1="90" x2="40" y2="200" stroke="#FF6B6B" strokeWidth="1.5"/>
+<line x1="340" y1="90" x2="340" y2="180" stroke="#FF6B6B" strokeWidth="2"/>
+<line x1="340" y1="120" x2="140" y2="210" stroke="#FF6B6B" strokeWidth="1.5"/>
+<line x1="240" y1="210" x2="40" y2="210" stroke="#FF6B6B" strokeWidth="2"/>
+
+<text x="190" y="290" fontFamily="sans-serif" fontSize="11" fill="#FF6B6B" textAnchor="middle" fontWeight="bold">Cada módulo faz N coisas, depende de N outros</text>
+<text x="190" y="308" fontFamily="sans-serif" fontSize="10" fill="#888888" textAnchor="middle">Mudar 1 quebra os outros 3</text>
+
+<line x1="380" y1="60" x2="380" y2="340" stroke="#444444" strokeWidth="1" strokeDasharray="4,4"/>
+
+<text x="570" y="30" fontFamily="sans-serif" fontSize="14" fill="#1d9e75" fontWeight="bold" textAnchor="middle">BOM: low coupling, high cohesion</text>
+
+<rect x="420" y="60" width="100" height="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2"/>
+<text x="470" y="85" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Validator</text>
+<text x="470" y="105" fontFamily="monospace" fontSize="9" fill="#cccccc" textAnchor="middle">só valida</text>
+
+<rect x="620" y="60" width="100" height="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2"/>
+<text x="670" y="85" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Repository</text>
+<text x="670" y="105" fontFamily="monospace" fontSize="9" fill="#cccccc" textAnchor="middle">só persiste</text>
+
+<rect x="420" y="180" width="100" height="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2"/>
+<text x="470" y="205" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Calculator</text>
+<text x="470" y="225" fontFamily="monospace" fontSize="9" fill="#cccccc" textAnchor="middle">só calcula</text>
+
+<rect x="620" y="180" width="100" height="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2"/>
+<text x="670" y="205" fontFamily="monospace" fontSize="11" fill="#ffffff" textAnchor="middle">Notifier</text>
+<text x="670" y="225" fontFamily="monospace" fontSize="9" fill="#cccccc" textAnchor="middle">só notifica</text>
+
+<line x1="520" y1="90" x2="620" y2="90" stroke="#1d9e75" strokeWidth="1.5"/>
+<line x1="520" y1="210" x2="620" y2="210" stroke="#1d9e75" strokeWidth="1.5"/>
+
+<text x="570" y="290" fontFamily="sans-serif" fontSize="11" fill="#1d9e75" textAnchor="middle" fontWeight="bold">Cada módulo faz UMA coisa, conexões mínimas</text>
+<text x="570" y="308" fontFamily="sans-serif" fontSize="10" fill="#888888" textAnchor="middle">Mudar Validator não afeta Repository nem Calculator</text>
+</svg>
+
+### Coupling: tipos do mais ruim ao melhor
+
+O paper de 1974 classifica acoplamento em **níveis**, do pior pro melhor:
+
+1. **Content coupling** (PIOR): módulo A acessa **dados internos** de módulo B diretamente. Bug se você muda B
+2. **Common coupling**: dependem de **dados globais compartilhados** (variáveis globais, singletons mutáveis). Mudança em qualquer um afeta todos
+3. **Control coupling**: A passa **flags** que controlam comportamento interno de B. Quebra encapsulamento
+4. **Stamp coupling**: A passa **estrutura inteira** quando precisa só de parte dela
+5. **Data coupling**: A passa **só os dados necessários** pra B. Aceitável
+6. **Message coupling** (MELHOR): A invoca B via interfaces bem definidas, sem expor implementação
+
+Em OOP moderna, almeje **message coupling** — A conhece **interface** de B, não implementação.
+
+### Cohesion: tipos do pior pro melhor
+
+Coesão mede **o quão relacionado é o conteúdo do módulo**:
+
+1. **Coincidental** (PIOR): módulo agrupa coisas sem relação ("Utils.java" com 50 funções desconexas)
+2. **Logical**: agrupa por categoria mas não por relação (ex: "todas as funções de I/O")
+3. **Temporal**: agrupa por momento (ex: "tudo que roda no startup")
+4. **Procedural**: agrupa por sequência de passos
+5. **Communicational**: agrupa funções que operam nos mesmos dados
+6. **Sequential**: saída de uma é entrada da outra
+7. **Functional** (MELHOR): módulo faz **uma coisa única e bem definida**
+
+Almeje **functional cohesion**. Sintoma: você consegue descrever o módulo em **uma frase sem "e" nem "ou"**: "OrderValidator valida pedidos", "TaxCalculator calcula impostos".
+
+<Insight>
+**Heurística prática**: se o nome do módulo precisa de "And" ou "Or" pra fazer sentido (`OrderAndCustomerService`, `UserAndAuthManager`), **a coesão está baixa**. Divida.
+</Insight>
+
+---
+
+## SOLID: 5 princípios que dominaram a OOP
+
+Em **2000**, **Robert C. Martin** ("Uncle Bob") — desenvolvedor americano, um dos signatários do Manifesto Ágil — publicou o paper *"Design Principles and Design Patterns"*. Nele, formulou (consolidando trabalhos anteriores) **5 princípios** para design orientado a objetos. **Michael Feathers** depois cunhou o **acrônimo SOLID**.
+
+Cada letra é um princípio:
+
+- **S** — Single Responsibility Principle (SRP)
+- **O** — Open/Closed Principle (OCP)
+- **L** — Liskov Substitution Principle (LSP)
+- **I** — Interface Segregation Principle (ISP)
+- **D** — Dependency Inversion Principle (DIP)
+
+### S — Single Responsibility Principle (SRP)
+
+> *"Uma classe deve ter **apenas uma razão pra mudar**."* — Robert C. Martin
+
+**Não significa** "uma classe faz uma coisa só" — significa que **uma classe deve servir a um stakeholder único**. Se duas pessoas/áreas diferentes podem pedir mudança naquela classe por razões diferentes, ela viola SRP.
+
+Versão moderna do próprio Uncle Bob (2014):
+
+> *"A class should have only one reason to change, and that reason should be one actor."*
+
+**Exemplo de violação**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+// VIOLA SRP — 3 atores podem pedir mudança
+public class Funcionario {
+    private String nome;
+    private BigDecimal salarioBase;
+
+    // Pedido por: RH (regras de pagamento)
+    public BigDecimal calcularSalario() {
+        return salarioBase.multiply(new BigDecimal("1.0"));
+    }
+
+    // Pedido por: Auditoria (relatórios)
+    public String relatorioParaAuditoria() {
+        return "Funcionario: " + nome + ", Salário: " + calcularSalario();
+    }
+
+    // Pedido por: DBA (persistência)
+    public void salvar(Connection conn) {
+        // SQL direto na entidade
+    }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// VIOLA SRP — 3 atores podem pedir mudança
+class Funcionario {
+private:
+    std::string nome;
+    double salarioBase;
+
+public:
+    // Pedido por: RH (regras de pagamento)
+    double calcularSalario() {
+        return salarioBase * 1.0;
+    }
+
+    // Pedido por: Auditoria (relatórios)
+    std::string relatorioParaAuditoria() {
+        return "Funcionario: " + nome + ", Salario: " + std::to_string(calcularSalario());
+    }
+
+    // Pedido por: DBA (persistência)
+    void salvar(sql::Connection& conn) {
+        // SQL direto na entidade
+    }
+};
+```
+</Code>
+</CodeSwap>
+
+3 razões pra mudar (RH, Auditoria, DBA) = 3 atores ≠ 1 ator. **Separe**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+public class Funcionario {                       // só os dados
+    private String nome;
+    private BigDecimal salarioBase;
+}
+
+public class CalculadoraSalario {                // RH
+    public BigDecimal calcular(Funcionario f) { ... }
+}
+
+public class GeradorRelatorio {                  // Auditoria
+    public String gerar(Funcionario f) { ... }
+}
+
+public class FuncionarioRepository {             // DBA
+    public void salvar(Funcionario f) { ... }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+class Funcionario {                              // só os dados
+    std::string nome;
+    double salarioBase;
+};
+
+class CalculadoraSalario {                       // RH
+public:
+    double calcular(const Funcionario& f) { /* ... */ }
+};
+
+class GeradorRelatorio {                         // Auditoria
+public:
+    std::string gerar(const Funcionario& f) { /* ... */ }
+};
+
+class FuncionarioRepository {                    // DBA
+public:
+    void salvar(const Funcionario& f) { /* ... */ }
+};
+```
+</Code>
+</CodeSwap>
+
+### O — Open/Closed Principle (OCP)
+
+> *"Entidades de software devem estar **abertas para extensão**, mas **fechadas para modificação**."* — Bertrand Meyer (1988), formalizado por Martin
+
+Originalmente formulado por **Bertrand Meyer** no livro *"Object-Oriented Software Construction"* (1988). Significa: adicionar funcionalidade nova deve ser por **adicionar código novo**, não por **modificar código existente**.
+
+**Violação típica**: classe com `switch case` que cresce a cada nova feature.
+
+<CodeSwap>
+<Code lang="java">
+```java
+// VIOLA OCP — a cada novo tipo, modifica o método
+public class CalculadoraDesconto {
+    public BigDecimal calcular(Pedido p) {
+        if (p.getTipo() == TipoPedido.NORMAL) {
+            return p.getValor().multiply(new BigDecimal("0.05"));
+        } else if (p.getTipo() == TipoPedido.VIP) {
+            return p.getValor().multiply(new BigDecimal("0.10"));
+        } else if (p.getTipo() == TipoPedido.CORPORATIVO) {
+            return p.getValor().multiply(new BigDecimal("0.15"));
+        }
+        // Adicionou tipo novo? MODIFICA o código aqui
+        return BigDecimal.ZERO;
+    }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// VIOLA OCP — a cada novo tipo, modifica o método
+enum class TipoPedido { NORMAL, VIP, CORPORATIVO };
+
+class CalculadoraDesconto {
+public:
+    double calcular(const Pedido& p) {
+        if (p.getTipo() == TipoPedido::NORMAL) {
+            return p.getValor() * 0.05;
+        } else if (p.getTipo() == TipoPedido::VIP) {
+            return p.getValor() * 0.10;
+        } else if (p.getTipo() == TipoPedido::CORPORATIVO) {
+            return p.getValor() * 0.15;
+        }
+        // Adicionou tipo novo? MODIFICA o código aqui
+        return 0.0;
+    }
+};
+```
+</Code>
+</CodeSwap>
+
+**Solução com OCP**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+public interface PoliticaDesconto {
+    BigDecimal calcular(Pedido p);
+}
+
+public class DescontoNormal implements PoliticaDesconto { ... }
+public class DescontoVIP implements PoliticaDesconto { ... }
+public class DescontoCorporativo implements PoliticaDesconto { ... }
+
+// Pra adicionar tipo novo: cria CLASSE nova, sem modificar nada existente
+public class DescontoGovernamental implements PoliticaDesconto { ... }
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+class PoliticaDesconto {
+public:
+    virtual ~PoliticaDesconto() = default;
+    virtual double calcular(const Pedido& p) const = 0;
+};
+
+class DescontoNormal : public PoliticaDesconto {
+public:
+    double calcular(const Pedido& p) const override {
+        return p.getValor() * 0.05;
+    }
+};
+
+class DescontoVIP : public PoliticaDesconto {
+public:
+    double calcular(const Pedido& p) const override {
+        return p.getValor() * 0.10;
+    }
+};
+
+// Pra adicionar tipo novo: cria CLASSE nova, sem modificar nada existente
+class DescontoGovernamental : public PoliticaDesconto { /* ... */ };
+```
+</Code>
+</CodeSwap>
+
+A `CalculadoraDesconto` agora recebe `PoliticaDesconto` injetada — **fechada pra modificação, aberta pra extensão**.
+
+### L — Liskov Substitution Principle (LSP)
+
+> *"Se S é subtipo de T, então objetos do tipo T podem ser substituídos por objetos do tipo S sem alterar a corretude do programa."* — Barbara Liskov (1987)
+
+Formulado por **Barbara Liskov** (vencedora do Turing Award 2008, MIT) no paper *"Data Abstraction and Hierarchy"* publicado em **SIGPLAN Notices 23(5), 1987**. É o princípio **mais formal** do SOLID — tem definição matemática rigorosa.
+
+**Exemplo clássico de violação — Quadrado/Retângulo**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+public class Retangulo {
+    protected int largura, altura;
+    public void setLargura(int l) { this.largura = l; }
+    public void setAltura(int a) { this.altura = a; }
+    public int area() { return largura * altura; }
+}
+
+public class Quadrado extends Retangulo {
+    @Override
+    public void setLargura(int l) {
+        this.largura = l;
+        this.altura = l;          // força quadrado
+    }
+    @Override
+    public void setAltura(int a) {
+        this.altura = a;
+        this.largura = a;
+    }
+}
+
+// Código cliente
+public void teste(Retangulo r) {
+    r.setLargura(5);
+    r.setAltura(4);
+    assert r.area() == 20;        // FALHA se r for Quadrado (área == 16)
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+class Retangulo {
+protected:
+    int largura, altura;
+public:
+    virtual void setLargura(int l) { largura = l; }
+    virtual void setAltura(int a) { altura = a; }
+    int area() const { return largura * altura; }
+};
+
+class Quadrado : public Retangulo {
+public:
+    void setLargura(int l) override {
+        largura = l;
+        altura = l;               // força quadrado
+    }
+    void setAltura(int a) override {
+        altura = a;
+        largura = a;
+    }
+};
+
+// Código cliente
+void teste(Retangulo& r) {
+    r.setLargura(5);
+    r.setAltura(4);
+    assert(r.area() == 20);       // FALHA se r for Quadrado (área == 16)
+}
+```
+</Code>
+</CodeSwap>
+
+`Quadrado` quebra o **contrato** de `Retangulo`. **Matematicamente quadrado É retângulo, mas em design de classes não funciona**. Use composição, não herança, ou pense melhor a hierarquia.
+
+### I — Interface Segregation Principle (ISP)
+
+> *"Clientes não devem ser forçados a depender de interfaces que não usam."* — Robert C. Martin
+
+**Violação típica**: "god interface" com 50 métodos. Clientes pequenos têm que conhecer/mockar tudo, mesmo usando 2 métodos.
+
+<CodeSwap>
+<Code lang="java">
+```java
+// VIOLA ISP — interface gigante força todo cliente a saber tudo
+public interface ServicoBanco {
+    void abrirConta(...);
+    void fecharConta(...);
+    void transferir(...);
+    void emitirCartao(...);
+    void cancelarCartao(...);
+    void gerarRelatorioMensal(...);
+    void calcularJuros(...);
+    void aplicarTaxas(...);
+    // ... mais 30 métodos
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// VIOLA ISP — interface gigante força todo cliente a saber tudo
+class ServicoBanco {
+public:
+    virtual ~ServicoBanco() = default;
+    virtual void abrirConta(/*...*/) = 0;
+    virtual void fecharConta(/*...*/) = 0;
+    virtual void transferir(/*...*/) = 0;
+    virtual void emitirCartao(/*...*/) = 0;
+    virtual void cancelarCartao(/*...*/) = 0;
+    virtual void gerarRelatorioMensal(/*...*/) = 0;
+    virtual void calcularJuros(/*...*/) = 0;
+    virtual void aplicarTaxas(/*...*/) = 0;
+    // ... mais 30 métodos
+};
+```
+</Code>
+</CodeSwap>
+
+**Solução ISP**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+public interface GerenciadorConta { ... }
+public interface ServicoTransferencia { ... }
+public interface GerenciadorCartao { ... }
+public interface GeradorRelatorio { ... }
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+class GerenciadorConta {
+public:
+    virtual ~GerenciadorConta() = default;
+    virtual void abrir(/*...*/) = 0;
+    virtual void fechar(/*...*/) = 0;
+};
+
+class ServicoTransferencia { /* ... */ };
+class GerenciadorCartao { /* ... */ };
+class GeradorRelatorio { /* ... */ };
+```
+</Code>
+</CodeSwap>
+
+Cliente que só faz transferência depende apenas de `ServicoTransferencia`. Mock fica trivial.
+
+### D — Dependency Inversion Principle (DIP)
+
+> *"Módulos de alto nível não devem depender de módulos de baixo nível. Ambos devem depender de **abstrações**. Abstrações não devem depender de detalhes; detalhes devem depender de abstrações."* — Robert C. Martin
+
+**O princípio mais transformador** do SOLID — inverte como você organiza dependências.
+
+**Violação — dependência direta de implementação**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+public class PedidoService {
+    private MySQLPedidoRepository repo;     // depende DIRETO da implementação concreta
+
+    public PedidoService() {
+        this.repo = new MySQLPedidoRepository();  // acoplamento total
+    }
+
+    public void criar(Pedido p) {
+        repo.salvar(p);
+    }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+class PedidoService {
+private:
+    MySQLPedidoRepository repo;             // depende DIRETO da implementação concreta
+
+public:
+    PedidoService() : repo() {}             // acoplamento total
+
+    void criar(const Pedido& p) {
+        repo.salvar(p);
+    }
+};
+```
+</Code>
+</CodeSwap>
+
+Problemas: testes precisam de MySQL real; trocar pra PostgreSQL = mudança brutal; reuso impossível.
+
+**Solução DIP**:
+
+<CodeSwap>
+<Code lang="java">
+```java
+// Abstração no MESMO nível que o serviço
+public interface PedidoRepository {
+    void salvar(Pedido p);
+}
+
+// Implementação NO BAIXO NÍVEL (detalhe)
+public class MySQLPedidoRepository implements PedidoRepository {
+    public void salvar(Pedido p) { /* SQL */ }
+}
+
+// Alto nível depende da abstração
+public class PedidoService {
+    private final PedidoRepository repo;
+
+    public PedidoService(PedidoRepository repo) {   // injeção
+        this.repo = repo;
+    }
+
+    public void criar(Pedido p) {
+        repo.salvar(p);
+    }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// Abstração no MESMO nível que o serviço
+class PedidoRepository {
+public:
+    virtual ~PedidoRepository() = default;
+    virtual void salvar(const Pedido& p) = 0;
+};
+
+// Implementação NO BAIXO NÍVEL (detalhe)
+class MySQLPedidoRepository : public PedidoRepository {
+public:
+    void salvar(const Pedido& p) override { /* SQL */ }
+};
+
+// Alto nível depende da abstração
+class PedidoService {
+private:
+    PedidoRepository& repo;
+
+public:
+    explicit PedidoService(PedidoRepository& r) : repo(r) {}   // injeção
+
+    void criar(const Pedido& p) {
+        repo.salvar(p);
+    }
+};
+```
+</Code>
+</CodeSwap>
+
+Agora: pra teste, injeta `FakePedidoRepository`. Pra produção, injeta `PostgreSQLPedidoRepository`. **`PedidoService` não muda**.
+
+### A imagem da inversão
+
+Antes de DIP:
+
+```
+Alto nível → Médio nível → Baixo nível
+(serviço)   (regra)         (banco)
+```
+
+Depois de DIP:
+
+```
+Alto nível ─→ Abstração ←─ Baixo nível
+(serviço)    (interface)   (banco implementa)
+```
+
+**A seta da dependência inverteu**: agora o baixo nível é quem **implementa** a abstração. Por isso "inversion".
+
+<Insight>
+**Dependency Injection (DI)** é a **técnica** que implementa **Dependency Inversion (DIP)**. Spring Boot, com `@Autowired` ou injeção via construtor, **automatiza DI**. Quando você escreve `public PedidoService(PedidoRepository repo)`, o Spring resolve qual implementação injetar baseado na configuração — **você não sabe nem se importa**. Isso é DIP em ação.
+</Insight>
+
+---
+
+## Abstração e Encapsulamento
+
+Dois conceitos da OOP que sustentam tudo:
+
+**Abstração** = expor **o que** um módulo faz, esconder **como** faz.
+
+**Encapsulamento** = manter o **estado interno protegido**, expor operações que mudam esse estado de forma controlada.
+
+<CodeSwap>
+<Code lang="java">
+```java
+// MAU — sem encapsulamento, estado exposto
+public class ContaBancaria {
+    public BigDecimal saldo;  // qualquer um pode setar saldo = -10000
+}
+
+// BOM — encapsulamento, abstração
+public class ContaBancaria {
+    private BigDecimal saldo;
+
+    public void debitar(BigDecimal valor) {
+        if (valor.compareTo(saldo) > 0) {
+            throw new SaldoInsuficienteException();
+        }
+        this.saldo = saldo.subtract(valor);
+    }
+
+    public void creditar(BigDecimal valor) {
+        if (valor.signum() <= 0) {
+            throw new IllegalArgumentException("Valor deve ser positivo");
+        }
+        this.saldo = saldo.add(valor);
+    }
+
+    public BigDecimal getSaldo() { return saldo; }  // getter sim, setter NÃO
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// MAU — sem encapsulamento, estado exposto
+class ContaBancaria {
+public:
+    double saldo;             // qualquer um pode setar saldo = -10000
+};
+
+// BOM — encapsulamento, abstração
+class ContaBancaria {
+private:
+    double saldo;
+
+public:
+    explicit ContaBancaria(double saldoInicial) : saldo(saldoInicial) {}
+
+    void debitar(double valor) {
+        if (valor > saldo) {
+            throw std::runtime_error("Saldo insuficiente");
+        }
+        saldo -= valor;
+    }
+
+    void creditar(double valor) {
+        if (valor <= 0) {
+            throw std::invalid_argument("Valor deve ser positivo");
+        }
+        saldo += valor;
+    }
+
+    double getSaldo() const { return saldo; }     // getter sim, setter NÃO
+};
+```
+</Code>
+</CodeSwap>
+
+A classe **garante invariantes**: saldo nunca negativo (sem cheque especial), créditos sempre positivos. **Cliente não consegue quebrar essas regras** mesmo querendo.
+
+Isso é a **fundação de DDD**: ao criar uma `Entity` ou `Value Object` que **encapsula regras de domínio**, você impede que o resto do sistema viole essas regras. Veremos isso em profundidade nas próximas lições.
+
+---
+
+## Camadas: a arquitetura mais comum
+
+A arquitetura mais usada em sistemas corporativos é a **Layered Architecture** (arquitetura em camadas), formalizada por Martin Fowler em *"Patterns of Enterprise Application Architecture"* (2003).
+
+**4 camadas clássicas**:
+
+| Camada | Responsabilidade |
+|---|---|
+| **Apresentação** (UI / API / Controllers) | Receber input do usuário, retornar resposta. Sem lógica de negócio. |
+| **Aplicação** (Application Service) | Coordenar casos de uso, transações. Sem lógica de negócio. |
+| **Domínio** (Domain) | Coração do sistema — regras de negócio, invariantes, entidades. |
+| **Infraestrutura** (Infrastructure) | Persistência (banco), integração externa (HTTP, queue), bibliotecas |
+
+**Regra de dependência**: **camada superior depende da inferior, nunca o contrário**.
+
+Em Spring Boot, isso se traduz em:
+
+```
+@RestController        ← Apresentação
+    ↓
+@Service              ← Aplicação
+    ↓
+[Entity, ValueObject] ← Domínio
+    ↓
+@Repository           ← Infraestrutura
+```
+
+Já é a separação que o **DDD adota como base** — vamos detalhar nas próximas lições.
+
+<Aviso>
+**Nota sobre os exemplos em C++**: usei `double` pra simplicidade pedagógica nos exemplos com dinheiro, mas em produção real **nunca use `double` pra valores monetários** — perda de precisão por ponto flutuante (a soma `0.1 + 0.2` não dá exatamente `0.3` em IEEE 754). Em Java existe `BigDecimal`. Em C++ não há equivalente nativo — use bibliotecas como `boost::multiprecision::cpp_dec_float` ou implemente uma classe `Money` própria armazenando centavos em `int64_t`. Os exemplos focam em **arquitetura**, não em tipos de dados.
+</Aviso>
+
+---
+
+## Recap
+
+**Frederick Brooks (1986)** — *"No Silver Bullet"*: distinguiu **essential complexity** (do problema) de **accidental complexity** (que nós introduzimos). **Arquitetura combate accidental complexity**.
+
+**Edsger W. Dijkstra (1974)** — paper *"On the Role of Scientific Thought"*: cunhou **separation of concerns**. Cada decisão importante isolada em um módulo próprio = **localidade de mudança**.
+
+**Stevens, Myers, Constantine (1974)** — paper *"Structured Design"* (IBM Systems Journal Vol. 13 No. 2): formalizaram **coupling e cohesion**. Regra mestre: **low coupling, high cohesion**. Larry Constantine vinha trabalhando nesses conceitos desde os anos 60.
+
+**Tipos de coupling** (pior → melhor): Content → Common → Control → Stamp → Data → Message. **Almeje message coupling** — invocar via interfaces.
+
+**Tipos de cohesion** (pior → melhor): Coincidental → Logical → Temporal → Procedural → Communicational → Sequential → Functional. **Almeje functional cohesion** — módulo descrito sem "e" nem "ou".
+
+**SOLID** — formulado por **Robert C. Martin (2000)** no paper *"Design Principles and Design Patterns"*; acrônimo cunhado por **Michael Feathers** depois:
+
+- **S — Single Responsibility**: uma classe, uma razão pra mudar (um ator)
+- **O — Open/Closed**: aberta pra extensão, fechada pra modificação. **Bertrand Meyer (1988)** originalmente
+- **L — Liskov Substitution**: subtipos devem ser substituíveis sem quebrar contrato. **Barbara Liskov (1987)**, Turing Award 2008
+- **I — Interface Segregation**: clientes não devem depender de interfaces que não usam
+- **D — Dependency Inversion**: dependa de abstrações, não de detalhes. **Dependency Injection é a técnica** que implementa DIP
+
+**Abstração + Encapsulamento**: expor "o que", esconder "como"; estado interno protegido, mudado só via operações controladas. Fundação pra Entities e Value Objects do DDD.
+
+**Layered Architecture** (Fowler, 2003): Apresentação → Aplicação → Domínio → Infraestrutura. Dependência de cima pra baixo. Base da arquitetura DDD que veremos a seguir.
+
+Próximas lições da trilha:
+
+- **Clean Architecture** (Uncle Bob, 2017) — círculos concêntricos, dependency rule, separação de detalhes técnicos
+- **DDD Strategic Design** — Ubiquitous Language, Bounded Contexts, Context Map (Eric Evans, 2003)
+- **DDD Tactical Design** — Entities, Value Objects, Aggregates, Repositories, Services, Factories
+- **Hexagonal / Ports & Adapters** (Alistair Cockburn, 2005)
+- **Event-Driven Architecture e CQRS** (Greg Young, Udi Dahan)
+
+Manda qual quer.

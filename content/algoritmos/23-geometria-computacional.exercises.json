@@ -1,0 +1,127 @@
+[
+  {
+    "id": "geo-01",
+    "enunciado": "Quem cunhou o termo 'Geometria Computacional' e quando a área nasceu formalmente?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, década de 1960",
+      "Michael Ian Shamos, em sua tese de PhD em Yale (1978); a área nasceu formalmente em 1975 com o paper 'Closest-point problems' de Shamos & Hoey no FOCS'75. Em 1985, Preparata & Shamos publicaram o primeiro livro-texto da área 'Computational Geometry: An Introduction' (Springer)",
+      "Edsger Dijkstra, 1965",
+      "Jon L. Bentley, 1972"
+    ],
+    "resposta": 1,
+    "explicacao": "Michael Ian Shamos cunhou o termo 'Computational Geometry' em sua tese de PhD em Yale (1978). A área nasceu formalmente em 1975 com o paper 'Closest-point problems' de Shamos & Hoey apresentado no FOCS'75 (16th Annual Symposium on Foundations of Computer Science). Antes disso, problemas geométricos eram tratados por matemáticos (síntese geométrica) ou engenheiros (CAD aplicado), mas raramente com a abordagem rigorosa de 'qual o algoritmo ótimo pra resolver isso em N pontos?'. Em 1985, Franco Preparata (Brown University) e Shamos publicaram 'Computational Geometry: An Introduction' (Springer) — o primeiro livro-texto da área, ainda referência hoje. Aplicações modernas: GIS (PostGIS, Google Maps), jogos, robótica, CAD, visão computacional, drug design, astronomia."
+  },
+  {
+    "id": "geo-02",
+    "enunciado": "Qual a PRIMITIVA FUNDAMENTAL usada em quase todo algoritmo de geometria computacional 2D?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Cálculo de distância euclidiana com sqrt",
+      "Orientação de 3 pontos via CROSS PRODUCT 2D: cross(AB, AC) = (B.x - A.x)·(C.y - A.y) - (B.y - A.y)·(C.x - A.x). Sinal positivo = CCW (esquerda), negativo = CW (direita), zero = colineares. Geometricamente é a área com sinal do paralelogramo, ou o determinante 2x2",
+      "Cálculo de ângulo com atan2",
+      "Multiplicação de matrizes de rotação"
+    ],
+    "resposta": 1,
+    "explicacao": "Orientação de 3 pontos via cross product 2D. A fórmula: cross(AB, AC) = (B.x - A.x)·(C.y - A.y) - (B.y - A.y)·(C.x - A.x). Sinal positivo = CCW, negativo = CW, zero = colineares. Por que funciona: o cross product 2D é o DETERMINANTE da matriz com vetores AB e AC como linhas — geometricamente, a ÁREA COM SINAL do paralelogramo formado por esses vetores. Operação O(1), super barata, mas BASE DE TUDO. Aplicações imediatas: ponto à esquerda/direita de reta, dois segmentos se cruzam, polígono é convexo, área via shoelace. Em ICPC: SEMPRE use coordenadas inteiras e long long, comparação exata com zero (evita erros de ponto flutuante). Cuidado com overflow: coords até 10^9 podem gerar cross até 4×10^18, próximo do limite de long long."
+  },
+  {
+    "id": "geo-03",
+    "enunciado": "O que é a CONVEX HULL (envoltória convexa) de um conjunto de pontos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O centro geométrico (centroide) dos pontos",
+      "O MENOR polígono CONVEXO que contém todos os pontos. Visualização intuitiva: pontos = pregos numa tábua, estica um elástico em volta deles, o formato do elástico = convex hull",
+      "A maior distância entre dois pontos",
+      "Uma triangulação dos pontos"
+    ],
+    "resposta": 1,
+    "explicacao": "Convex hull = menor polígono CONVEXO contendo todos os pontos. 'Convexo' significa: pra todo par de pontos do polígono, o segmento entre eles também está dentro. Visualização: pontos como pregos numa tábua, elástico em volta deles forma o convex hull. Os vértices do hull são pontos EXTREMOS — outros pontos ficam dentro. Aplicações práticas: (1) ROBÓTICA/COLISÃO — substitui robô complexo pela sua convex hull (mais simples); se hull não colide, robô não colide; (2) COMPUTER VISION — contornos de objetos; (3) GIS — menor área convexa cobrindo pontos; (4) OUTLIERS — ficam nos vértices do hull; (5) BOUNDING BOX — a menor caixa retangular tem ao menos um lado paralelo a uma aresta do hull. Algoritmos clássicos: Graham scan (1972), Jarvis march (1973), monotone chain (1979), QuickHull, Chan's algorithm."
+  },
+  {
+    "id": "geo-04",
+    "enunciado": "Quem inventou o Graham scan, e qual sua complexidade?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, em 1968, O(N²)",
+      "Ronald Graham, em 1972, publicado em 'An Efficient Algorithm for Determining the Convex Hull of a Finite Planar Set' (Information Processing Letters 1(4), pp. 132-133). Complexidade O(N log N) — ÓTIMA, dominada pela ordenação por ângulo polar. Graham também é conhecido pelo número de Graham (1935-2020)",
+      "Edsger Dijkstra, em 1965, O(N)",
+      "Jon Bentley, em 1977, O(N log² N)"
+    ],
+    "resposta": 1,
+    "explicacao": "Ronald Graham (1935-2020), em 1972, publicou um paper de DUAS PÁGINAS no Information Processing Letters 1(4), pp. 132-133, intitulado 'An Efficient Algorithm for Determining the Convex Hull of a Finite Planar Set'. Foi um dos primeiros algoritmos de tempo subquadrático pra convex hull. Complexidade O(N log N) — ótima pra esse problema (porque sorting de N reais reduz pra convex hull). Algoritmo: (1) acha ponto mais baixo (P0); (2) ordena outros pontos por ÂNGULO POLAR em relação a P0; (3) percorre os pontos mantendo pilha, removendo enquanto o topo + atual fazem virada à direita ou colinear. Graham também é famoso pelo NÚMERO DE GRAHAM — um número tão grande que precisou de notação especial (notação de setas de Knuth) pra ser representado, foi recorde de 'maior número usado em prova matemática séria'."
+  },
+  {
+    "id": "geo-05",
+    "enunciado": "Qual a VANTAGEM do Andrew's monotone chain (1979) sobre o Graham scan (1972)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Tem complexidade melhor",
+      "Funciona para mais dimensões",
+      "Mesma complexidade O(N log N), mas é mais SIMPLES de implementar: ordena por (x, y) LEXICOGRAFICAMENTE em vez de por ângulo polar (sem trigonometria), e constrói o hull em DUAS METADES (superior e inferior). Hoje é a versão PADRÃO em ICPC e produção",
+      "Funciona com pontos colineares"
+    ],
+    "resposta": 2,
+    "explicacao": "A.M. Andrew em 1979 publicou 'Another efficient algorithm for convex hulls in two dimensions' (Information Processing Letters 9(5), pp. 216-219). MESMA complexidade O(N log N), mas: (1) ordenação LEXICOGRÁFICA por (x, y) — sem trigonometria nem ângulo polar; (2) constrói o hull em DUAS METADES — superior e inferior — depois junta; (3) IMPLEMENTAÇÃO MAIS LIMPA, sem casos especiais pra ângulos colineares; (4) menos suscetível a erros numéricos. Por essas razões, monotone chain é a versão PADRÃO em ICPC e produção hoje — Graham scan é principalmente histórico. Implementação compacta: ~20 linhas. Variantes: Jarvis march (R.A. Jarvis 1973, O(N·H) onde H = pontos no hull), Chan's algorithm (Timothy Chan 1996, O(N log H) output-sensitive)."
+  },
+  {
+    "id": "geo-06",
+    "enunciado": "Qual a complexidade do problema CLOSEST PAIR OF POINTS, e como Shamos-Hoey atinge isso?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(N²) — testar todos os pares é o ótimo",
+      "O(N log N) usando DIVIDE-AND-CONQUER (Shamos-Hoey 1975): ordena por x, divide ao meio, recursivamente acha closest pair em cada metade (distância d). Então verifica pares ATRAVESSANDO a divisão usando o truque de que na faixa central |x-m| < d, cada ponto precisa comparar com no máximo 7 outros (prova geométrica)",
+      "O(N log² N) — não pode ser melhor",
+      "O(N · √N) — algoritmo de bucket"
+    ],
+    "resposta": 1,
+    "explicacao": "Shamos-Hoey 1975 ('Closest-point problems', FOCS'75, pp. 151-162). O(N log N) via divide-and-conquer. Algoritmo: (1) ordena pontos por coord x; (2) divide ao meio com reta vertical x=m; (3) recursivamente acha closest pair em cada metade (distâncias dL e dR); (4) d = min(dL, dR); (5) MAS o par mais próximo pode ATRAVESSAR a divisão! (6) Considera apenas pontos na faixa |x - m| < d; (7) TRUQUE GEOMÉTRICO: ordenando essa faixa por y, cada ponto precisa comparar com no MÁXIMO 7 outros (prova: geometricamente, num retângulo 2d × d só cabem ~6-7 pontos com distância mútua ≥ d). Resultado: verificação O(N) por nível, log N níveis = O(N log N) total. Brute force O(N²) é inviável pra N=10^5 (10^10 ops); Shamos-Hoey roda em milissegundos. Bentley & Shamos (1976, STOC'76) generalizaram pra dimensões arbitrárias. Aplicações: detecção de colisão em jogos, GIS, astronomia, clustering."
+  },
+  {
+    "id": "geo-07",
+    "enunciado": "Qual a relação entre CLOSEST PAIR (O(N log N)) e algoritmos modernos de VECTOR DATABASES (Pinecone, Weaviate, Qdrant)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Nenhuma — são problemas completamente diferentes",
+      "Closest pair é problema 'one-shot' (calcula uma vez); vector databases resolvem o problema mais geral de NEAREST NEIGHBOR QUERIES — dado dataset, responder 'qual o ponto mais próximo de uma query Q?' em tempo sub-linear. Estruturas usadas: kd-tree (Bentley 1975), R-tree (Guttman 1984), HNSW — esta última é a usada modernamente para busca semântica com embeddings de LLMs em alta dimensionalidade",
+      "São o mesmo algoritmo",
+      "Vector databases usam apenas brute force O(N) por query"
+    ],
+    "resposta": 1,
+    "explicacao": "Closest pair = problema 'one-shot' (calcula UMA VEZ a menor distância). Nearest neighbor queries = problema MAIS GERAL: construir estrutura que responda 'dado Q, qual o ponto mais próximo?' em tempo sub-linear, para MUITAS queries. Estruturas históricas: kd-tree (Bentley 1975 — sim, o mesmo Jon Bentley do Bentley-Ottmann e Segment Tree), R-tree (Guttman 1984, usado em PostGIS e MongoDB geospatial), Ball-tree, M-tree, X-tree. PROBLEMA: em alta dimensão (>20), todas essas estruturas degradam pra O(N) (curse of dimensionality). Solução moderna: APROXIMATE NEAREST NEIGHBOR via HNSW (Hierarchical Navigable Small World, Malkov & Yashunin 2016) — grafos navegáveis em camadas, retorna vizinhos com alta probabilidade em O(log N). É o que Pinecone, Weaviate, Qdrant, Milvus e a busca por embeddings em LLMs (OpenAI, Anthropic) usam. Lição: problemas algorítmicos clássicos de 1975 (closest pair) evoluíram pra infraestrutura crítica em IA moderna."
+  },
+  {
+    "id": "geo-08",
+    "enunciado": "O que é a técnica de LINE SWEEP em geometria computacional?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Algoritmo específico para uma única tarefa",
+      "Técnica GERAL onde uma linha vertical varre o plano da esquerda pra direita, processando EVENTOS em ordem de coordenada x, mantendo uma ESTRUTURA ATIVA (geralmente priority queue + BBST) que representa o 'estado atual' da varredura. Aplica-se a vários problemas: line segment intersection (Bentley-Ottmann), Voronoi (Fortune), skyline, união de retângulos",
+      "Forma de paralelizar algoritmos geométricos",
+      "Apenas otimização do convex hull"
+    ],
+    "resposta": 1,
+    "explicacao": "Line sweep (ou sweep line) é técnica GERAL e PARADIGMA em geometria computacional, equivalente ao 'divide and conquer' em algoritmos clássicos. Imagine uma linha vertical varrendo o plano da esquerda pra direita. Eventos (pontos encontrados, segmentos começam/terminam) são processados em ordem de coordenada x, geralmente armazenados em uma PRIORITY QUEUE (heap, Lição 10). A 'estrutura ativa' (geralmente BBST/TreeMap) mantém o estado atual da varredura, ordenado por coordenada y. APLICAÇÕES: (1) Line segment intersection (Bentley-Ottmann 1979, O((N+K) log N)); (2) Voronoi diagrams (Fortune's algorithm 1986); (3) Closest pair via sweep line (variante do Shamos-Hoey); (4) União/interseção/área de retângulos; (5) Skyline problem (clássico em entrevistas: silhueta de edifícios visíveis); (6) Event-driven simulation. Em produção: renderização gráfica, CAD, engines de jogos."
+  },
+  {
+    "id": "geo-09",
+    "enunciado": "Quem inventou o algoritmo de Bentley-Ottmann para encontrar interseções entre segmentos de reta?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ford & Fulkerson, 1956",
+      "Jon L. Bentley e Thomas A. Ottmann, em 1979, no paper 'Algorithms for reporting and counting geometric intersections' (IEEE Transactions on Computers C-28(9), pp. 643-647). Complexidade O((N + K) log N) onde K = número de interseções — muito melhor que brute force O(N²) quando K é pequeno",
+      "Shamos & Hoey, 1975",
+      "Donald Knuth, 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Jon L. Bentley e Thomas A. Ottmann, em 1979, IEEE Transactions on Computers C-28(9), pp. 643-647. Resolve o problema: dado N segmentos no plano, encontrar todas as K interseções entre pares de segmentos. Brute force testa todos os pares = O(N²). Bentley-Ottmann: O((N + K) log N) — muito melhor quando K é pequeno (caso comum). Ideia: line sweep com (1) eventos: cada segmento gera 2 eventos (início e fim em x); cada interseção descoberta gera novo evento; (2) estrutura ativa: BBST com segmentos 'abertos' ordenados pela coord y na posição atual; (3) ao processar início: insere no BBST, testa vizinhos imediatos; ao processar fim: remove do BBST, testa vizinhos que ficaram adjacentes; ao processar interseção: troca a ordem no BBST, testa novos vizinhos. Jon Bentley é figura central na história de algoritmos: também kd-tree (1975), Segment Tree (1977), Programming Pearls (livro clássico)."
+  },
+  {
+    "id": "geo-10",
+    "enunciado": "Verdadeiro ou falso: Em problemas de geometria computacional, é melhor usar coordenadas FLOAT/DOUBLE para flexibilidade.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. Em ICPC e em produção crítica, a REGRA É: USE COORDENADAS INTEIRAS sempre que possível, com long long (ou __int128 quando precisar). Razão: ponto flutuante introduz ERROS DE ARREDONDAMENTO. Pra cross product e orientação, comparar 'cross > 0' com floats requer tolerância ε, que pode dar falso positivo/negativo em casos degenerados. Com inteiros: comparação EXATA com zero, sem ε. Cuidado com OVERFLOW: coords até 10^9 podem gerar cross até 4×10^18, próximo do limite de long long (~9.2×10^18). Se coords forem maiores ou se houver multiplicação acumulada, use __int128 (GCC/Clang) ou BigInteger (Java). Quando floats são necessários (ex: rotações, raio de círculo): use tolerância adaptativa (ε relativo ao valor), evite operações que perdem precisão (subtrair valores próximos), e use bibliotecas como CGAL pra rigor numérico em geometria robusta."
+  }
+]

@@ -1,0 +1,655 @@
+---
+titulo: "Programação Dinâmica: A Técnica Que Parece Magia"
+trilha: "algoritmos"
+duracaoMin: 65
+dificuldade: "intermediario"
+referencias:
+  - "Richard E. Bellman (1953), 'An Introduction to the Theory of Dynamic Programming', RAND Corporation R-245 — paper que introduziu o termo"
+  - "Richard E. Bellman (1957), 'Dynamic Programming', Princeton University Press — livro canônico"
+  - "Richard E. Bellman (1984), 'Eye of the Hurricane: An Autobiography' — onde ele conta a história do nome"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulos 14-15 — Dynamic Programming"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Cap. 6 (Princeton)"
+  - "MIT OCW 6.006 (Spring 2020), Lectures 15-21 — Erik Demaine, Jason Ku"
+  - "Stanford CS 161 (2023) — Dynamic Programming lecture notes"
+  - "Vladimir I. Levenshtein (1965), 'Binary codes capable of correcting deletions, insertions, and reversals', Soviet Physics Doklady 10 (tradução de 1966)"
+  - "Robert A. Wagner, Michael J. Fischer (1974), 'The String-to-String Correction Problem', JACM — algoritmo formal de edit distance"
+  - "Antti Laaksonen, Competitive Programmer's Handbook, Cap. 7"
+---
+
+## A técnica com o nome mais bizarro da computação
+
+Programação dinâmica é uma das técnicas mais poderosas em algoritmos. Resolve problemas que parecem impossíveis em tempo razoável. Aparece em sistemas de produção, em ICPC, em entrevistas técnicas, em modelos de IA. Domina uma família inteira de problemas que vai de otimização clássica a análise de DNA.
+
+E tem o nome mais bizarro da computação. Programação dinâmica **não é programação** (no sentido de escrever código) **e nem dinâmica** (no sentido de mutável). O nome é puramente histórico — e a história é hilária.
+
+### Por que esse nome?
+
+Em 1950, **Richard Bellman**, matemático americano, estava trabalhando na **RAND Corporation** sob contrato da Força Aérea dos EUA. Estudava o que ele chamava de *"multistage decision processes"* — problemas onde você toma uma sequência de decisões e cada uma afeta as próximas.
+
+O problema: a RAND Corporation era contratada pelo Departamento de Defesa, e o Secretário de Defesa da época era **Charles Wilson** — um homem com, nas palavras do próprio Bellman, *"pathological fear and hatred of the word, research"*. Wilson ficava vermelho, irritado, e potencialmente violento quando alguém usava a palavra "pesquisa" perto dele. E "matemática", então... pior ainda.
+
+Bellman precisava nomear sua nova área. Não podia chamar de "pesquisa matemática". Tinha que soar **inofensivo** e ao mesmo tempo **importante**. Vamos pelas escolhas:
+
+- **"Programming"**: na época, "programming" significava **planejamento** (como em "linear programming" ou "TV programming"). Nada a ver com escrever código — esse uso só veio depois. Pareceu palavra técnica e neutra.
+- **"Dynamic"**: o problema envolvia tempo e ordem de operações. Mas o motivo real era diferente. Bellman conta na autobiografia: *"O 'dynamic' foi escolhido porque tem uma qualidade ativa, vigorosa. Você não pode usar a palavra 'dynamic' de forma pejorativa. Tente pensar numa combinação que faça isso parecer um trabalho ruim. Impossível."*
+
+Resultado: **"dynamic programming"** soava impressionante, sem mencionar matemática ou pesquisa. Wilson não podia se opor. Bellman teve seus recursos. A técnica nasceu em 1953 com o paper R-245 da RAND, *"An Introduction to the Theory of Dynamic Programming"*.
+
+A história está em *"Eye of the Hurricane: An Autobiography"* (Bellman, 1984). Algumas fontes históricas questionam alguns detalhes (Wilson só virou Secretário em 1953, mas Bellman já tinha publicado paper com o termo em 1952), mas o espírito da história é verdadeiro: o nome foi escolhido por **diplomacia política**, não por descrever a técnica.
+
+### O que DP realmente é
+
+Programação Dinâmica é uma técnica pra resolver problemas que têm **duas propriedades**:
+
+1. **Subproblemas sobrepostos** — o mesmo subproblema aparece várias vezes durante a recursão
+2. **Subestrutura ótima** — a solução ótima do problema grande pode ser construída a partir de soluções ótimas de subproblemas menores
+
+Quando essas duas propriedades estão presentes, DP funciona: você resolve cada subproblema **uma vez**, guarda a resposta, e reusa. Em vez de complexidade exponencial (típica de força bruta), você consegue polinomial.
+
+---
+
+## Fibonacci, de novo (e por que dessa vez é diferente)
+
+Na lição de Recursão vimos o Fibonacci ingênuo com complexidade O(2^n) e a memoização que cai pra O(n). **Esse é o exemplo canônico de DP** — vale revisitar agora com olhos novos.
+
+```
+fib(0) = 0
+fib(1) = 1
+fib(n) = fib(n-1) + fib(n-2)
+```
+
+A recursão direta tem subproblemas sobrepostos: pra calcular `fib(5)`, precisa de `fib(4)` e `fib(3)`. Pra `fib(4)`, precisa de `fib(3)` e `fib(2)`. **`fib(3)` é calculado várias vezes** — eis a sobreposição.
+
+A subestrutura ótima é trivial aqui: `fib(n)` é a soma de duas respostas menores. A solução final é uma combinação direta de duas soluções de subproblemas.
+
+DP entra dizendo: **calcule cada `fib(i)` apenas uma vez**.
+
+---
+
+## Os dois sabores de DP: top-down e bottom-up
+
+DP tem duas formas equivalentes mas com filosofias opostas.
+
+### Top-down (memoização)
+
+Você escreve o código recursivo natural e adiciona um **cache**. Antes de calcular um subproblema, verifica se já está no cache. Se está, devolve. Se não, calcula, salva, devolve.
+
+A direção é **de cima pra baixo**: começa pelo problema grande, vai descendo recursivamente até os casos-base.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+
+// Top-down: memoização
+public class FibTopDown {
+    private Map<Integer, Long> memo = new HashMap<>();
+
+    public long fib(int n) {
+        if (n <= 1) return n;
+        if (memo.containsKey(n)) return memo.get(n);
+        long resultado = fib(n - 1) + fib(n - 2);
+        memo.put(n, resultado);
+        return resultado;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <unordered_map>
+
+class FibTopDown {
+    std::unordered_map<int, long> memo;
+public:
+    long fib(int n) {
+        if (n <= 1) return n;
+        auto it = memo.find(n);
+        if (it != memo.end()) return it->second;
+        long resultado = fib(n - 1) + fib(n - 2);
+        memo[n] = resultado;
+        return resultado;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+### Bottom-up (tabulação)
+
+Você inverte a direção: **começa pelos casos-base** e vai construindo respostas maiores a partir das menores. Sem recursão. Loop simples preenchendo uma tabela.
+
+A direção é **de baixo pra cima**: dos subproblemas mais simples até o problema grande.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Bottom-up: tabulação
+public long fibBottomUp(int n) {
+    if (n <= 1) return n;
+    long[] dp = new long[n + 1];
+    dp[0] = 0;
+    dp[1] = 1;
+    for (int i = 2; i <= n; i++) {
+        dp[i] = dp[i - 1] + dp[i - 2];
+    }
+    return dp[n];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+long fibBottomUp(int n) {
+    if (n <= 1) return n;
+    std::vector<long> dp(n + 1);
+    dp[0] = 0;
+    dp[1] = 1;
+    for (int i = 2; i <= n; i++) {
+        dp[i] = dp[i - 1] + dp[i - 2];
+    }
+    return dp[n];
+}
+```
+
+</Code>
+</CodeSwap>
+
+### Qual usar?
+
+Ambos têm a **mesma complexidade** (O(n) tempo, O(n) memória nesse exemplo). A escolha vai por gosto e contexto:
+
+- **Top-down**: mais natural quando você já tem a recursão. Calcula só os subproblemas que precisa (lazy). Risco de stack overflow em problemas profundos.
+- **Bottom-up**: sem recursão (sem stack overflow). Calcula todos os subproblemas até o n (eager, pode fazer trabalho desnecessário). Geralmente mais rápido na prática por evitar overhead de chamadas de função.
+
+Em competições e produção, **bottom-up é o padrão**. Em entrevistas, top-down costuma ser mais fácil de explicar no quadro.
+
+---
+
+## Otimização de espaço: rolling array
+
+Olha o Fibonacci bottom-up: precisamos só dos **dois últimos valores** pra calcular o próximo. Não precisamos guardar a tabela inteira.
+
+```java
+public long fibOtimizado(int n) {
+    if (n <= 1) return n;
+    long anterior = 0, atual = 1;
+    for (int i = 2; i <= n; i++) {
+        long proximo = anterior + atual;
+        anterior = atual;
+        atual = proximo;
+    }
+    return atual;
+}
+```
+
+Memória cai de O(n) pra **O(1)**. Esse padrão é universal em DP: se sua recorrência depende só de poucos estados anteriores, dá pra reduzir a tabela inteira pra algumas variáveis. Em DP 2D, frequentemente dá pra reduzir pra uma única linha (O(n) em vez de O(n²)).
+
+<Insight>
+**Rolling array** é uma das otimizações mais importantes em DP. Em problemas com matrizes grandes (mil por mil ou mais), reduzir de O(n²) pra O(n) memória pode ser a diferença entre passar e dar TLE (Time Limit Exceeded) por estouro de memória em juiz online. Vale o esforço.
+</Insight>
+
+---
+
+## Padrão 1: Climbing Stairs
+
+**Problema**: você sobe uma escada de `n` degraus. A cada passo, pode subir 1 ou 2 degraus. Quantas maneiras diferentes existem de chegar no topo?
+
+**Análise**: pra chegar no degrau `n`, você ou estava no `n-1` (e subiu 1) ou no `n-2` (e subiu 2). Não há outra forma. Então:
+
+```
+f(n) = f(n-1) + f(n-2)
+```
+
+**É o Fibonacci**. Literalmente o mesmo problema com um casca diferente. `f(1) = 1`, `f(2) = 2`, e a partir daí Fibonacci.
+
+A lição importante aqui é que **reconhecer DP é uma habilidade de pattern matching**. Você vai ver centenas de problemas e perceber que muitos se reduzem a recorrências conhecidas. Climbing Stairs é Fibonacci. Pisar em pedras evitando inimigos? Também Fibonacci. Caminhos numa grade com obstáculos? Variação.
+
+---
+
+## Padrão 2: Coin Change
+
+**Problema**: dado um conjunto de moedas (`coins`) com valores arbitrários e quantidade ilimitada de cada, encontre o **menor número de moedas** necessárias pra fazer o valor `amount`. Se não for possível, retorne -1.
+
+Exemplo: `coins = [1, 2, 5]`, `amount = 11`. Resposta: 3 (5+5+1).
+
+**Análise**: pra fazer o valor `amount`, considere a última moeda usada. Pode ser qualquer uma das `coins`. Se a última foi a moeda de valor `c`, precisamos antes ter feito o valor `amount - c`, e a solução total é `1 + minMoedas(amount - c)`. Resposta: mínimo sobre todas as moedas possíveis.
+
+```
+minMoedas(amount) = 1 + min(minMoedas(amount - c)) para todo c em coins
+                    onde amount - c >= 0
+                    
+caso-base: minMoedas(0) = 0
+```
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public int coinChange(int[] coins, int amount) {
+    int[] dp = new int[amount + 1];
+    final int INFINITO = amount + 1;          // valor sentinel maior que qualquer resposta possível
+    Arrays.fill(dp, INFINITO);
+    dp[0] = 0;
+
+    for (int v = 1; v <= amount; v++) {
+        for (int c : coins) {
+            if (c <= v && dp[v - c] + 1 < dp[v]) {
+                dp[v] = dp[v - c] + 1;
+            }
+        }
+    }
+    return dp[amount] == INFINITO ? -1 : dp[amount];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+int coinChange(std::vector<int>& coins, int amount) {
+    const int INFINITO = amount + 1;
+    std::vector<int> dp(amount + 1, INFINITO);
+    dp[0] = 0;
+
+    for (int v = 1; v <= amount; v++) {
+        for (int c : coins) {
+            if (c <= v && dp[v - c] + 1 < dp[v]) {
+                dp[v] = dp[v - c] + 1;
+            }
+        }
+    }
+    return dp[amount] == INFINITO ? -1 : dp[amount];
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(amount × coins.length) tempo, O(amount) memória.
+
+<Aviso>
+**Cuidado com a tentação do greedy**: você pode pensar "pega sempre a maior moeda possível". Pra moedas convencionais (1, 5, 10, 25), greedy funciona. Pra moedas arbitrárias, não. Exemplo: `coins = [1, 3, 4]`, `amount = 6`. Greedy: 4 + 1 + 1 = 3 moedas. Ótimo: 3 + 3 = 2 moedas. Por isso DP, não greedy.
+</Aviso>
+
+---
+
+## Padrão 3: Knapsack 0/1
+
+**Problema**: você tem `n` itens, cada um com peso `w[i]` e valor `v[i]`, e uma mochila com capacidade `W`. Quer escolher um subconjunto de itens **que caiba na mochila** e **maximize o valor total**. Cada item pode ser pego no máximo uma vez (daí "0/1": pega ou não pega).
+
+**Análise**: pra cada item, duas escolhas — pega ou não pega. Brute force: 2^n combinações, exponencial. DP: define `dp[i][c]` como "máximo valor possível usando os primeiros `i` itens com capacidade restante `c`".
+
+Recorrência:
+
+```
+dp[i][c] = max(
+    dp[i-1][c],                              // não pega o item i
+    dp[i-1][c - w[i]] + v[i]   se c >= w[i]   // pega o item i
+)
+```
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public int knapsack01(int[] pesos, int[] valores, int W) {
+    int n = pesos.length;
+    int[][] dp = new int[n + 1][W + 1];
+
+    for (int i = 1; i <= n; i++) {
+        for (int c = 0; c <= W; c++) {
+            dp[i][c] = dp[i - 1][c];               // não pega item i
+            if (pesos[i - 1] <= c) {
+                int comItem = dp[i - 1][c - pesos[i - 1]] + valores[i - 1];
+                if (comItem > dp[i][c]) {
+                    dp[i][c] = comItem;
+                }
+            }
+        }
+    }
+    return dp[n][W];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+int knapsack01(std::vector<int>& pesos, std::vector<int>& valores, int W) {
+    int n = pesos.size();
+    std::vector<std::vector<int>> dp(n + 1, std::vector<int>(W + 1, 0));
+
+    for (int i = 1; i <= n; i++) {
+        for (int c = 0; c <= W; c++) {
+            dp[i][c] = dp[i - 1][c];
+            if (pesos[i - 1] <= c) {
+                dp[i][c] = std::max(dp[i][c],
+                                    dp[i - 1][c - pesos[i - 1]] + valores[i - 1]);
+            }
+        }
+    }
+    return dp[n][W];
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n × W) tempo, O(n × W) memória (otimizável pra O(W) com rolling array).
+
+<ComplexidadeBox melhor="O(nW)" media="O(nW)" pior="O(nW)" />
+
+**Nota importante sobre a complexidade**: Knapsack é **pseudo-polinomial**. A complexidade depende de **W (o valor numérico da capacidade)**, não do tamanho dos dados de entrada. Pra W muito grande (digamos, 10^9), DP não dá conta — o problema vira NP-difícil. Detalhe sutil mas importante em teoria da complexidade.
+
+---
+
+## Padrão 4: LIS (Longest Increasing Subsequence)
+
+**Problema**: dada uma sequência, encontre o comprimento da maior **subsequência estritamente crescente** (não precisa ser contígua). Pra `[10, 9, 2, 5, 3, 7, 101, 18]`, a resposta é 4 (a subsequência `[2, 3, 7, 101]`).
+
+**Análise** (versão O(n²) clássica): define `dp[i]` = comprimento da maior subsequência crescente terminando exatamente em `arr[i]`. Pra calcular `dp[i]`, olha todos os índices `j` antes de `i`: se `arr[j]` é menor que `arr[i]`, então pode estender a subsequência terminada em `j`. Pega o máximo.
+
+```
+dp[i] = 1 + max(dp[j]) para todo j em [0, i-1] tal que arr[j] menor que arr[i]
+```
+
+Resposta final: máximo do array `dp`.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public int lis(int[] arr) {
+    int n = arr.length;
+    int[] dp = new int[n];
+    Arrays.fill(dp, 1);                       // toda posição é uma subsequência de tamanho 1
+    int melhor = 1;
+
+    for (int i = 1; i < n; i++) {
+        for (int j = 0; j < i; j++) {
+            if (arr[j] < arr[i] && dp[j] + 1 > dp[i]) {
+                dp[i] = dp[j] + 1;
+            }
+        }
+        if (dp[i] > melhor) melhor = dp[i];
+    }
+    return melhor;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+int lis(const std::vector<int>& arr) {
+    int n = arr.size();
+    std::vector<int> dp(n, 1);
+    int melhor = 1;
+
+    for (int i = 1; i < n; i++) {
+        for (int j = 0; j < i; j++) {
+            if (arr[j] < arr[i]) {
+                dp[i] = std::max(dp[i], dp[j] + 1);
+            }
+        }
+        melhor = std::max(melhor, dp[i]);
+    }
+    return melhor;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n²). Existe uma versão O(n log n) usando busca binária com `lower_bound` — vale conhecer pra ICPC mas é menos intuitiva.
+
+---
+
+## Padrão 5: LCS (Longest Common Subsequence)
+
+**Problema**: dadas duas strings, encontre o comprimento da maior **subsequência comum** (caracteres na mesma ordem nas duas strings, não precisa ser contígua). Pra "ABCBDAB" e "BDCAB", a resposta é 4 (`BCAB` ou `BDAB`).
+
+LCS aparece em todo lugar: comando `diff` do Unix, comparação de versões de código, biologia computacional comparando sequências de DNA, autocorretores.
+
+**Análise**: define `dp[i][j]` = comprimento da LCS dos prefixos `s1[0..i]` e `s2[0..j]`.
+
+- Se `s1[i-1] == s2[j-1]` (os caracteres atuais são iguais), eles contribuem: `dp[i][j] = dp[i-1][j-1] + 1`
+- Caso contrário, pula um dos dois: `dp[i][j] = max(dp[i-1][j], dp[i][j-1])`
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public int lcs(String s1, String s2) {
+    int n = s1.length(), m = s2.length();
+    int[][] dp = new int[n + 1][m + 1];
+
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= m; j++) {
+            if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    return dp[n][m];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <string>
+#include <vector>
+#include <algorithm>
+
+int lcs(const std::string& s1, const std::string& s2) {
+    int n = s1.size(), m = s2.size();
+    std::vector<std::vector<int>> dp(n + 1, std::vector<int>(m + 1, 0));
+
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= m; j++) {
+            if (s1[i - 1] == s2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = std::max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    return dp[n][m];
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n × m) tempo e memória.
+
+---
+
+## Padrão 6: Edit Distance (Levenshtein)
+
+**Problema**: dadas duas strings, qual o menor número de **operações de edição** (inserir, remover, substituir) pra transformar uma na outra? Pra "kitten" e "sitting", a resposta é 3:
+
+```
+kitten → sitten   (substituir k por s)
+sitten → sittin   (substituir e por i)
+sittin → sitting  (inserir g)
+```
+
+Esse problema foi formalizado por **Vladimir Iosifovich Levenshtein** em 1965 no paper *"Двоичные коды с исправлением выпадений, вставок и замещений символов"* (Códigos binários capazes de corrigir deleções, inserções e reversões), publicado nos Anais da Academia de Ciências da URSS e traduzido pro inglês em 1966 como *"Binary codes capable of correcting deletions, insertions, and reversals"* na Soviet Physics Doklady. A motivação original era **teoria de códigos** (correção de erros em transmissão), não strings em geral.
+
+O algoritmo de DP eficiente foi formalizado depois por **Robert A. Wagner** e **Michael J. Fischer** em 1974 (*"The String-to-String Correction Problem"*, Journal of the ACM). Curiosidade: o conceito foi **redescoberto independentemente** várias vezes — Frederick J. Damerau (1964) com transposições, Taras Vintsyuk (1968) em reconhecimento de fala, Stanislaw Ulam (1972) em biologia. É um daqueles casos onde a ideia estava "no ar".
+
+### A recorrência
+
+`dp[i][j]` = edit distance entre os prefixos `s1[0..i]` e `s2[0..j]`.
+
+- Se `s1[i-1] == s2[j-1]`, sem operação necessária: `dp[i][j] = dp[i-1][j-1]`
+- Caso contrário, pega o mínimo das 3 operações + 1:
+  - Inserir: `dp[i][j-1] + 1`
+  - Remover: `dp[i-1][j] + 1`
+  - Substituir: `dp[i-1][j-1] + 1`
+
+Casos-base: `dp[0][j] = j` (precisa inserir j caracteres), `dp[i][0] = i` (precisa remover i caracteres).
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public int editDistance(String s1, String s2) {
+    int n = s1.length(), m = s2.length();
+    int[][] dp = new int[n + 1][m + 1];
+
+    for (int i = 0; i <= n; i++) dp[i][0] = i;
+    for (int j = 0; j <= m; j++) dp[0][j] = j;
+
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= m; j++) {
+            if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                dp[i][j] = dp[i - 1][j - 1];                            // sem operação
+            } else {
+                int inserir    = dp[i][j - 1] + 1;
+                int remover    = dp[i - 1][j] + 1;
+                int substituir = dp[i - 1][j - 1] + 1;
+                dp[i][j] = Math.min(inserir, Math.min(remover, substituir));
+            }
+        }
+    }
+    return dp[n][m];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <string>
+#include <vector>
+#include <algorithm>
+
+int editDistance(const std::string& s1, const std::string& s2) {
+    int n = s1.size(), m = s2.size();
+    std::vector<std::vector<int>> dp(n + 1, std::vector<int>(m + 1, 0));
+
+    for (int i = 0; i <= n; i++) dp[i][0] = i;
+    for (int j = 0; j <= m; j++) dp[0][j] = j;
+
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= m; j++) {
+            if (s1[i - 1] == s2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1];
+            } else {
+                dp[i][j] = 1 + std::min({dp[i][j - 1],         // inserir
+                                          dp[i - 1][j],         // remover
+                                          dp[i - 1][j - 1]});   // substituir
+            }
+        }
+    }
+    return dp[n][m];
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n × m).
+
+### Aplicações de Edit Distance
+
+- **Autocorretor de teclado** (iOS, Android, Google Keyboard): sugere palavras com baixa edit distance
+- **Spell-checkers** clássicos (Aspell, Hunspell)
+- **Comando `diff`** do Unix (variação de LCS + edit distance)
+- **Bioinformática** (BLAST, Needleman-Wunsch, Smith-Waterman) — alinhamento de sequências de DNA usa generalizações com pesos
+- **Pesquisa fuzzy** (Elasticsearch, MongoDB Atlas Search): "did you mean..."
+- **Plágio detection**
+
+---
+
+## Como reconhecer um problema de DP
+
+Depois de ver vários problemas, padrões emergem. Sinais de que um problema **pode** ser DP:
+
+1. **Pergunta sobre máximo, mínimo, contagem, ou existência** — palavras como "maior soma", "menor caminho", "quantas formas", "é possível"
+2. **Espaço de soluções exponencial** se atacado por força bruta
+3. **Decisões em estágios** com escolhas em cada estágio
+4. **Subestrutura ótima** visível: "se eu soubesse a resposta pra X, eu saberia a resposta pra Y"
+5. **Sobreposição clara** entre subproblemas (não apenas árvore de recursão profunda — precisa de **repetição**)
+
+Sinais de que **NÃO é DP**:
+- Saída requer **enumerar todas** as soluções (DP encontra o ótimo, não enumera)
+- Subproblemas todos diferentes (sem sobreposição → simples divide e conquista, como Merge Sort)
+- Estrutura greedy óbvia funciona (talvez seja problema greedy disfarçado)
+
+### O método dos 5 passos
+
+Pra atacar um problema novo:
+
+1. **Defina o estado**: o que precisa estar fixo pra você responder uma pergunta menor? (Frequentemente uma tupla de índices ou flags.)
+2. **Defina o significado de `dp[estado]`**: em palavras, o que esse número representa?
+3. **Escreva a recorrência**: como `dp[estado]` se relaciona com `dp[estado_menor]`?
+4. **Identifique os casos-base**: o que sabemos sem calcular nada?
+5. **Escolha a direção**: top-down ou bottom-up? Considere ordem de preenchimento e otimizações de espaço.
+
+Esse roteiro funciona pra 90% dos problemas de DP em entrevista e ICPC.
+
+---
+
+## DP em produção e pesquisa
+
+Programação dinâmica não é só ferramenta de competição. Está em:
+
+**Compiladores**: register allocation, code optimization, parsing de gramáticas ambíguas usa CYK (DP em strings).
+
+**Sistemas de busca**: ranking, fuzzy matching, "did you mean" — tudo em cima de variações de edit distance.
+
+**Bioinformática**: alinhamento de sequências de DNA/proteínas (Needleman-Wunsch 1970, Smith-Waterman 1981) é a aplicação mais bem-sucedida de DP da história. BLAST, ferramenta padrão de busca biológica, usa heurísticas baseadas em DP.
+
+**Speech recognition**: HMMs (Hidden Markov Models) e DTW (Dynamic Time Warping) são DP. O Viterbi algorithm (1967) é o "Dijkstra" do reconhecimento de fala — encontra a sequência mais provável de estados ocultos.
+
+**Reinforcement Learning**: Bellman equation é o coração de Q-learning, value iteration, policy iteration. **Toda a base teórica de RL moderna vem do trabalho de Bellman nos anos 50.** AlphaGo, AlphaFold, ChatGPT — todos têm DP em algum lugar da pipeline.
+
+**Robótica**: planejamento de movimento, controle ótimo.
+
+**Finanças**: precificação de opções (modelo de árvore binomial), gestão de portfólio dinâmica.
+
+---
+
+## Recap
+
+**Programação Dinâmica** foi inventada por **Richard Bellman** em 1953 na RAND Corporation. O nome bizarro veio da necessidade de proteger pesquisa matemática de cortes orçamentários — Bellman precisava algo que soasse técnico, neutro, e impossível de criticar.
+
+DP funciona quando o problema tem duas propriedades: **subproblemas sobrepostos** (a mesma subpergunta aparece várias vezes) e **subestrutura ótima** (solução do problema grande se constrói a partir de soluções de subproblemas).
+
+Duas formas equivalentes: **top-down** (memoização — recursão com cache) e **bottom-up** (tabulação — loop preenchendo tabela). Bottom-up costuma ser mais rápido na prática e elimina risco de stack overflow.
+
+**Rolling array** reduz memória quando a recorrência só depende de poucos estados anteriores. De O(n) pra O(1), de O(n²) pra O(n).
+
+Padrões clássicos: Fibonacci/Climbing Stairs (DP 1D simples), Coin Change (DP 1D com loop interno), Knapsack 0/1 (DP 2D, pseudo-polinomial), LIS (DP 1D O(n²) ou O(n log n)), LCS (DP 2D em strings), Edit Distance / Levenshtein (DP 2D em strings com 3 operações). Cada um aparece em variações em milhares de problemas.
+
+**Reconhecer DP** é pattern matching. Procurar palavras como máximo, mínimo, contagem, com estrutura de decisões em estágios.
+
+**Edit Distance** (Levenshtein 1965, Wagner-Fischer 1974) está por trás de autocorretores, spell-checkers, diff, BLAST. Conceito redescoberto múltiplas vezes independentemente.
+
+DP em produção: compiladores, bioinformática, busca fuzzy, reconhecimento de fala, e — talvez o mais impressionante — **toda a base teórica de Reinforcement Learning moderno** sai da equação de Bellman.
+
+Próxima lição: **Greedy Algorithms** — quando ser ganancioso funciona, quando falha, e como provar a corretude de algoritmos gulosos. Frequentemente confundida com DP, mas com filosofia oposta.

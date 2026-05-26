@@ -1,0 +1,547 @@
+---
+titulo: "Normalização: Por que Toda Tabela Bem Desenhada Segue 4 Regras de Codd"
+trilha: "banco-de-dados"
+duracaoMin: 65
+dificuldade: "iniciante"
+referencias:
+  - "Edgar F. Codd (1970), 'A Relational Model of Data for Large Shared Data Banks', Communications of the ACM 13(6), pp. 377-387 — introduz 1NF"
+  - "Edgar F. Codd (1971), 'Further Normalization of the Data Base Relational Model', IBM Research Report RJ909, apresentado no Courant Computer Science Symposia 6 (NYC, 24-25 maio 1971) — define 2NF e 3NF formalmente"
+  - "Ian Heath (1971), 'Unacceptable File Operations in a Relational Database', Proc. ACM SIGFIDET Workshop, San Diego — primeira definição do que viraria BCNF (Chris Date defende que deveria chamar-se 'Heath normal form')"
+  - "Edgar F. Codd (1974), 'Recent Investigations in Relational Data Base Systems', Proceedings of the IFIP Congress, pp. 1017-1021 — formalização da BCNF com Raymond F. Boyce"
+  - "Ronald Fagin (1977), 'Multivalued Dependencies and a New Normal Form for Relational Databases', ACM Trans. Database Syst. 2(3) — 4NF"
+  - "Ronald Fagin (1979), 'Normal forms and relational database operators' — 5NF (PJ/NF)"
+  - "William Kent (1983), 'A Simple Guide to Five Normal Forms in Relational Database Theory', CACM 26(2) — referência didática clássica"
+  - "C. J. Date, 'An Introduction to Database Systems', 8ª ed., Addison-Wesley 2003"
+  - "Elmasri & Navathe, 'Fundamentals of Database Systems', 7ª ed., Pearson 2015"
+  - "Stanford CS 245 — Database normalization lectures"
+---
+
+## Por que tabelas desnormalizadas viram pesadelo
+
+Imagina que você está modelando o sistema do seu estágio no PDVx. Cliente faz pedido, pedido tem itens, itens são produtos. **Primeira tentativa ingênua** de quem nunca viu modelagem:
+
+<svg width="100%" viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Tabela desnormalizada de Pedidos</title>
+<desc>Uma única tabela enorme com dados duplicados de cliente, produto e preço repetidos em várias linhas</desc>
+
+<rect x="20" y="40" width="720" height="200" fill="none" stroke="#FF6B6B" strokeWidth="2"/>
+
+<rect x="20" y="40" width="720" height="32" fill="#5C2B2B"/>
+<text x="40" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">pedido_id</text>
+<text x="115" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">cliente</text>
+<text x="200" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">cliente_email</text>
+<text x="320" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">cliente_cidade</text>
+<text x="430" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">produtos</text>
+<text x="550" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">precos</text>
+<text x="650" y="61" fontFamily="monospace" fontSize="12" fill="#ffffff" fontWeight="bold">total</text>
+
+<rect x="20" y="72" width="720" height="30" fill="#1a1a1a"/>
+<text x="40" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="115" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="200" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">bruno@email.com</text>
+<text x="320" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro/SP</text>
+<text x="430" y="91" fontFamily="monospace" fontSize="11" fill="#F5A36C">"Notebook, Mouse"</text>
+<text x="550" y="91" fontFamily="monospace" fontSize="11" fill="#F5A36C">"4500, 80"</text>
+<text x="650" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">4580</text>
+
+<rect x="20" y="102" width="720" height="30" fill="#222222"/>
+<text x="40" y="121" fontFamily="monospace" fontSize="11" fill="#cccccc">102</text>
+<text x="115" y="121" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="200" y="121" fontFamily="monospace" fontSize="11" fill="#cccccc">bruno@email.com</text>
+<text x="320" y="121" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro/SP</text>
+<text x="430" y="121" fontFamily="monospace" fontSize="11" fill="#F5A36C">"Mouse"</text>
+<text x="550" y="121" fontFamily="monospace" fontSize="11" fill="#F5A36C">"80"</text>
+<text x="650" y="121" fontFamily="monospace" fontSize="11" fill="#cccccc">80</text>
+
+<rect x="20" y="132" width="720" height="30" fill="#1a1a1a"/>
+<text x="40" y="151" fontFamily="monospace" fontSize="11" fill="#cccccc">103</text>
+<text x="115" y="151" fontFamily="monospace" fontSize="11" fill="#cccccc">Murilo Silva</text>
+<text x="200" y="151" fontFamily="monospace" fontSize="11" fill="#cccccc">murilo@email.com</text>
+<text x="320" y="151" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro/SP</text>
+<text x="430" y="151" fontFamily="monospace" fontSize="11" fill="#F5A36C">"Notebook"</text>
+<text x="550" y="151" fontFamily="monospace" fontSize="11" fill="#F5A36C">"4500"</text>
+<text x="650" y="151" fontFamily="monospace" fontSize="11" fill="#cccccc">4500</text>
+
+<rect x="20" y="162" width="720" height="30" fill="#222222"/>
+<text x="40" y="181" fontFamily="monospace" fontSize="11" fill="#cccccc">104</text>
+<text x="115" y="181" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="200" y="181" fontFamily="monospace" fontSize="11" fill="#cccccc">bruno@gmail.com</text>
+<text x="320" y="181" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro/SP</text>
+<text x="430" y="181" fontFamily="monospace" fontSize="11" fill="#F5A36C">"Teclado"</text>
+<text x="550" y="181" fontFamily="monospace" fontSize="11" fill="#F5A36C">"250"</text>
+<text x="650" y="181" fontFamily="monospace" fontSize="11" fill="#cccccc">250</text>
+
+<rect x="20" y="192" width="720" height="30" fill="#1a1a1a"/>
+<text x="40" y="211" fontFamily="monospace" fontSize="11" fill="#cccccc">105</text>
+<text x="115" y="211" fontFamily="monospace" fontSize="11" fill="#cccccc">Murilo Silva</text>
+<text x="200" y="211" fontFamily="monospace" fontSize="11" fill="#cccccc">murilo@email.com</text>
+<text x="320" y="211" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro/SP</text>
+<text x="430" y="211" fontFamily="monospace" fontSize="11" fill="#F5A36C">"Mouse, Teclado"</text>
+<text x="550" y="211" fontFamily="monospace" fontSize="11" fill="#F5A36C">"80, 250"</text>
+<text x="650" y="211" fontFamily="monospace" fontSize="11" fill="#cccccc">330</text>
+
+<text x="380" y="25" fontFamily="sans-serif" fontSize="14" fill="#FF6B6B" fontWeight="bold" textAnchor="middle">⚠ Tabela Desnormalizada (NÃO faça isso)</text>
+
+<text x="380" y="265" fontFamily="sans-serif" fontSize="12" fill="#888888" textAnchor="middle">Veja os PROBLEMAS abaixo</text>
+</svg>
+
+Olhando essa tabela com olho clínico, **conta os problemas**:
+
+1. **Cliente "Bruno Kenji" está em 3 linhas** com email diferente em uma delas (`bruno@email.com` vs `bruno@gmail.com`) — qual é o email correto? Provavelmente um foi digitado errado em algum momento e ninguém percebeu
+2. **"Cruzeiro/SP" está em todas as linhas** — se eu quiser mudar a forma de armazenar cidade (separar cidade e UF, por exemplo), tenho que atualizar **N linhas** e arriscar inconsistência
+3. **Coluna `produtos` tem listas** ("Notebook, Mouse") — pra responder "quem comprou Mouse?" preciso fazer parse de string. Pra ordenar por produto, pior ainda
+4. **Coluna `precos`** depende da coluna `produtos` na **mesma ordem** — se inverter, vira bagunça
+5. **Pra cadastrar um cliente novo** que ainda não fez pedido, preciso criar uma linha com `pedido_id` falso ou `NULL`. Quebra a semântica
+6. **Pra deletar um pedido**, se for o último daquele cliente, **o cliente some também** — perda de dado
+
+Esses são os **três tipos clássicos de anomalia** que a normalização resolve:
+
+- **Anomalia de Inserção**: não consegue cadastrar X sem ter Y junto
+- **Anomalia de Atualização**: precisa atualizar dados em N lugares; algum vai escapar
+- **Anomalia de Remoção**: deletar uma coisa apaga outra que você queria manter
+
+A solução? **Normalização** — quebrar a tabela em várias tabelas menores, cada uma com **uma responsabilidade**. Foi o que **Edgar F. Codd** propôs em **1970-1971** num conjunto de papers que definiram as **três primeiras formas normais**.
+
+---
+
+## A história em 4 atos
+
+A história das formas normais é uma sequência de descobertas ao longo de **8 anos**:
+
+- **1970**: Codd publica *"A Relational Model"* (CACM 13(6)) — define implicitamente **1NF** ("valores atômicos"). Naquele momento, era só "normalização", sem número
+- **1971**: Codd publica *"Further Normalization of the Data Base Relational Model"* (IBM Research Report RJ909, apresentado no Courant Symposia em Nova York, 24-25 maio 1971) — **define formalmente 2NF e 3NF**. É aqui que aparece o pipeline conceitual UNF → 1NF → 2NF → 3NF
+- **1971 (alguns meses depois)**: **Ian Heath** publica *"Unacceptable File Operations in a Relational Database"* (Proc. ACM SIGFIDET, San Diego, novembro 1971) — descreve o que viraria a **BCNF**. **Chris Date defende publicamente que deveria se chamar "Heath normal form"**, já que Heath publicou 3 anos antes de Boyce-Codd
+- **1974**: Codd publica *"Recent Investigations in Relational Data Base Systems"* (IFIP Congress, pp. 1017-1021), junto com **Raymond F. Boyce** — formaliza a **BCNF** (Boyce-Codd Normal Form), corrigindo casos que a 3NF não cobria. **Boyce morreu em 1974 antes do paper sair publicado**, com apenas 26 anos, de aneurisma cerebral
+- **1977-1979**: **Ronald Fagin** (IBM) publica papers definindo **4NF** (multivalued dependencies) e **5NF** (project-join normal form)
+
+A maior parte dos sistemas em produção mira **3NF ou BCNF**. **4NF e 5NF são raras na prática** — usadas quando você tem dados muito específicos com dependências multivaloradas.
+
+<Insight>
+Por que tantas normais formas? Cada uma elimina um **tipo específico de redundância**. 1NF resolve "valores não atômicos". 2NF resolve "dependência parcial em chave composta". 3NF resolve "dependência transitiva". BCNF resolve casos edge que 3NF deixa passar. 4NF resolve "dependências multivaloradas". 5NF resolve casos ainda mais sutis. **Cada NF é mais rigorosa que a anterior** — se uma tabela está em 5NF, ela também está em 4NF, BCNF, 3NF, 2NF e 1NF, automaticamente.
+</Insight>
+
+---
+
+## Dependências funcionais: a base teórica
+
+Antes das formas normais, um conceito central: **dependência funcional** (FD).
+
+> **Dizemos que `X → Y`** (X determina Y) se, **para cada valor único de X, existe exatamente um valor de Y** correspondente.
+
+Exemplos:
+- `cpf → nome` ✓ (cada CPF identifica unicamente uma pessoa, logo um nome)
+- `cep → cidade` ✓ (cada CEP pertence a uma cidade específica)
+- `pedido_id → cliente_id` ✓ (cada pedido pertence a um cliente)
+- `cliente_id → email` — provavelmente sim, se cada cliente tem só um email principal
+- `email → cliente_id` — depende; se permitir emails duplicados, não vale
+
+**Dependência funcional NÃO É correlação** — é uma garantia estrutural do modelo. Se `X → Y` vale, então **toda vez** que dois registros têm o mesmo X, terão o mesmo Y. Sempre.
+
+Identificar as dependências funcionais do seu domínio **é o passo mais importante** da modelagem. As formas normais são definidas em termos delas.
+
+### Tipos de dependência problemáticos
+
+Três variantes que causam violações de NF:
+
+1. **Dependência parcial**: parte da chave composta determina um atributo
+   - Ex: PK = `(pedido_id, produto_id)`. Se `pedido_id → cliente_nome` (só metade da chave já determina), é **parcial**
+2. **Dependência transitiva**: `X → Y → Z`, onde Y não é chave
+   - Ex: `pedido_id → cep → cidade`. Cidade depende transitivamente de pedido_id via cep
+3. **Dependência não-trivial onde lado esquerdo não é superkey**: violação da BCNF
+   - Ex: `(estudante, matéria) → professor`, mas `professor → matéria` (cada professor leciona uma matéria). `professor` não é superkey, mas determina `matéria`
+
+Vamos ver cada uma resolvida abaixo.
+
+---
+
+## 1NF: valores atômicos
+
+A **regra**:
+
+> **Toda célula contém um único valor atômico** (não decomponível). Sem listas, JSON aninhado, ou subtabelas dentro de células.
+
+Voltando ao exemplo do início — a coluna `produtos` com `"Notebook, Mouse"` **viola 1NF**. Fix: criar uma tabela de **itens do pedido**.
+
+<svg width="100%" viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Tabela em 1NF</title>
+<desc>Tabela Pedido sem listas + tabela ItemPedido separada com produto e preço por linha</desc>
+
+<rect x="20" y="40" width="320" height="200" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="20" y="40" width="320" height="32" fill="#1d4d3f"/>
+<text x="180" y="61" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Pedido</text>
+
+<rect x="20" y="72" width="320" height="28" fill="#222222"/>
+<text x="35" y="91" fontFamily="monospace" fontSize="11" fill="#FFD700" fontWeight="bold">PK</text>
+<text x="65" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">pedido_id</text>
+<text x="160" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">cliente_nome</text>
+<text x="270" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">cidade</text>
+
+<rect x="20" y="100" width="320" height="26" fill="#1a1a1a"/>
+<text x="65" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="160" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="270" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro</text>
+
+<rect x="20" y="126" width="320" height="26" fill="#222222"/>
+<text x="65" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">102</text>
+<text x="160" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="270" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro</text>
+
+<rect x="20" y="152" width="320" height="26" fill="#1a1a1a"/>
+<text x="65" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">103</text>
+<text x="160" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">Murilo Silva</text>
+<text x="270" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro</text>
+
+<rect x="20" y="178" width="320" height="26" fill="#222222"/>
+<text x="65" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">104</text>
+<text x="160" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">Bruno Kenji</text>
+<text x="270" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro</text>
+
+<rect x="20" y="204" width="320" height="26" fill="#1a1a1a"/>
+<text x="65" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">105</text>
+<text x="160" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">Murilo Silva</text>
+<text x="270" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">Cruzeiro</text>
+
+<rect x="400" y="40" width="340" height="200" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="400" y="40" width="340" height="32" fill="#1d4d3f"/>
+<text x="570" y="61" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">ItemPedido</text>
+
+<rect x="400" y="72" width="340" height="28" fill="#222222"/>
+<text x="415" y="91" fontFamily="monospace" fontSize="10" fill="#FF8C42" fontWeight="bold">FK</text>
+<text x="445" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">pedido_id</text>
+<text x="535" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">produto</text>
+<text x="650" y="91" fontFamily="monospace" fontSize="11" fill="#cccccc">preco</text>
+
+<rect x="400" y="100" width="340" height="26" fill="#1a1a1a"/>
+<text x="445" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="535" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">Notebook</text>
+<text x="650" y="118" fontFamily="monospace" fontSize="11" fill="#cccccc">4500</text>
+
+<rect x="400" y="126" width="340" height="26" fill="#222222"/>
+<text x="445" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="535" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">Mouse</text>
+<text x="650" y="144" fontFamily="monospace" fontSize="11" fill="#cccccc">80</text>
+
+<rect x="400" y="152" width="340" height="26" fill="#1a1a1a"/>
+<text x="445" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">102</text>
+<text x="535" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">Mouse</text>
+<text x="650" y="170" fontFamily="monospace" fontSize="11" fill="#cccccc">80</text>
+
+<rect x="400" y="178" width="340" height="26" fill="#222222"/>
+<text x="445" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">103</text>
+<text x="535" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">Notebook</text>
+<text x="650" y="196" fontFamily="monospace" fontSize="11" fill="#cccccc">4500</text>
+
+<rect x="400" y="204" width="340" height="26" fill="#1a1a1a"/>
+<text x="445" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">105</text>
+<text x="535" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">Teclado</text>
+<text x="650" y="222" fontFamily="monospace" fontSize="11" fill="#cccccc">250</text>
+
+<text x="380" y="25" fontFamily="sans-serif" fontSize="14" fill="#7F77DD" fontWeight="bold" textAnchor="middle">✓ 1NF: valores atômicos, listas viraram tabela</text>
+
+<text x="380" y="260" fontFamily="sans-serif" fontSize="11" fill="#888888" textAnchor="middle">Mas ainda tem problemas — Bruno Kenji ainda está repetido em Pedido. Continue normalizando.</text>
+</svg>
+
+**Importante**: **1NF resolve apenas listas em células** — não resolve duplicação de dados. A tabela `Pedido` acima ainda repete "Bruno Kenji" em 3 linhas. Próximas formas normais cuidam disso.
+
+### Em SGBDs modernos: a 1NF está sendo "relaxada"?
+
+PostgreSQL, MySQL e outros suportam **arrays e JSON** nativamente — tecnicamente, isso viola 1NF. Mas é tolerado por conveniência: caches, configurações, dados semi-estruturados.
+
+**Boa regra**:
+- Se o conteúdo dentro de um array/JSON **vai ser consultado, ordenado, ou indexado** — normalize, crie tabela
+- Se é **opaco** (apenas lido como bloco) — JSON pode ser apropriado
+
+Exemplo: `usuario.preferencias_ui = {tema: "dark", lang: "pt-BR"}` em JSON é razoável. Já `usuario.pedidos = [101, 102, 103]` em array **é péssimo** — viola 1NF e dificulta consultas básicas.
+
+---
+
+## 2NF: sem dependência parcial em chave composta
+
+A **regra** (Codd, 1971):
+
+> Uma tabela está em **2NF** se está em 1NF **e** todo atributo não-chave depende da **chave inteira**, não de uma parte dela.
+
+2NF **só importa quando a PK é composta** (formada por múltiplas colunas). Se a PK é uma coluna só, **automaticamente está em 2NF** (não dá pra ter dependência "parcial" de uma chave de uma única coluna).
+
+### Exemplo de violação de 2NF
+
+Considera essa tabela de matrículas (relacionando aluno e disciplina, com nota e info da disciplina):
+
+| aluno_id (PK) | disciplina_id (PK) | nota | nome_disciplina | carga_horaria |
+|---|---|---|---|---|
+| 1 | 101 | 8.5 | Algoritmos I | 80h |
+| 1 | 102 | 7.0 | Banco de Dados | 80h |
+| 2 | 101 | 9.0 | Algoritmos I | 80h |
+| 3 | 101 | 6.5 | Algoritmos I | 80h |
+
+PK composta: `(aluno_id, disciplina_id)`. Atributos não-chave: `nota`, `nome_disciplina`, `carga_horaria`.
+
+**Análise das dependências funcionais**:
+
+- `(aluno_id, disciplina_id) → nota` — sim, depende da chave inteira ✓
+- `disciplina_id → nome_disciplina` — só metade da chave já determina o nome ✗ **dependência parcial!**
+- `disciplina_id → carga_horaria` — mesma coisa ✗
+
+**Problema**: "Algoritmos I, 80h" se repete em 3 linhas. Se mudarmos a carga horária da disciplina, temos que atualizar 3 linhas. Anomalia de atualização clássica.
+
+**Solução**: separar a info da disciplina em outra tabela.
+
+<svg width="100%" viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Decomposição para 2NF</title>
+<desc>Tabela Matricula sem info redundante de disciplina; tabela Disciplina separada</desc>
+
+<rect x="20" y="40" width="320" height="160" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="20" y="40" width="320" height="30" fill="#1d4d3f"/>
+<text x="180" y="60" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Matricula</text>
+
+<rect x="20" y="70" width="320" height="26" fill="#222222"/>
+<text x="35" y="88" fontFamily="monospace" fontSize="10" fill="#FFD700" fontWeight="bold">PK,FK</text>
+<text x="80" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">aluno_id</text>
+<text x="160" y="88" fontFamily="monospace" fontSize="10" fill="#FFD700" fontWeight="bold">PK,FK</text>
+<text x="205" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">disciplina_id</text>
+<text x="305" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">nota</text>
+
+<rect x="20" y="96" width="320" height="26" fill="#1a1a1a"/>
+<text x="80" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">1</text>
+<text x="205" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="305" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">8.5</text>
+
+<rect x="20" y="122" width="320" height="26" fill="#222222"/>
+<text x="80" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">1</text>
+<text x="205" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">102</text>
+<text x="305" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">7.0</text>
+
+<rect x="20" y="148" width="320" height="26" fill="#1a1a1a"/>
+<text x="80" y="166" fontFamily="monospace" fontSize="11" fill="#cccccc">2</text>
+<text x="205" y="166" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="305" y="166" fontFamily="monospace" fontSize="11" fill="#cccccc">9.0</text>
+
+<rect x="20" y="174" width="320" height="26" fill="#222222"/>
+<text x="80" y="192" fontFamily="monospace" fontSize="11" fill="#cccccc">3</text>
+<text x="205" y="192" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="305" y="192" fontFamily="monospace" fontSize="11" fill="#cccccc">6.5</text>
+
+<rect x="420" y="40" width="320" height="160" fill="none" stroke="#7F77DD" strokeWidth="2"/>
+<rect x="420" y="40" width="320" height="30" fill="#1d4d3f"/>
+<text x="580" y="60" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Disciplina</text>
+
+<rect x="420" y="70" width="320" height="26" fill="#222222"/>
+<text x="435" y="88" fontFamily="monospace" fontSize="11" fill="#FFD700" fontWeight="bold">PK</text>
+<text x="465" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">disciplina_id</text>
+<text x="570" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">nome</text>
+<text x="680" y="88" fontFamily="monospace" fontSize="11" fill="#cccccc">carga_hr</text>
+
+<rect x="420" y="96" width="320" height="26" fill="#1a1a1a"/>
+<text x="465" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">101</text>
+<text x="570" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">Algoritmos I</text>
+<text x="680" y="114" fontFamily="monospace" fontSize="11" fill="#cccccc">80h</text>
+
+<rect x="420" y="122" width="320" height="26" fill="#222222"/>
+<text x="465" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">102</text>
+<text x="570" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">Banco de Dados</text>
+<text x="680" y="140" fontFamily="monospace" fontSize="11" fill="#cccccc">80h</text>
+
+<text x="380" y="25" fontFamily="sans-serif" fontSize="14" fill="#7F77DD" fontWeight="bold" textAnchor="middle">✓ 2NF: cada disciplina aparece uma vez só</text>
+</svg>
+
+Agora, mudar a carga horária = update em **1 linha** apenas. Cadastrar uma disciplina nova sem ter aluno matriculado = pode (basta inserir em `Disciplina`). Anomalias de inserção e atualização **resolvidas**.
+
+---
+
+## 3NF: sem dependência transitiva
+
+A **regra** (Codd, 1971):
+
+> Uma tabela está em **3NF** se está em 2NF **e** nenhum atributo não-chave depende de outro atributo não-chave (sem dependência transitiva).
+
+Em outras palavras: **todo atributo não-chave depende diretamente da PK, e somente dela**.
+
+### Exemplo de violação de 3NF
+
+Tabela de funcionários:
+
+| funcionario_id (PK) | nome | departamento_id | departamento_nome | departamento_localizacao |
+|---|---|---|---|---|
+| 1 | Bruno Kenji | 10 | TI | Cruzeiro |
+| 2 | Murilo Silva | 10 | TI | Cruzeiro |
+| 3 | Erika Costa | 20 | Jurídico | Lorena |
+
+PK é simples (`funcionario_id`), então **2NF automaticamente satisfeita**. Mas:
+
+- `funcionario_id → departamento_id` ✓
+- `departamento_id → departamento_nome` ✓ (cada depto tem um nome)
+- `departamento_id → departamento_localizacao` ✓
+- Logo: `funcionario_id → departamento_id → departamento_nome` — **dependência transitiva!**
+
+`departamento_nome` é determinado por `departamento_id`, que não é PK desta tabela. Isso é a dependência transitiva proibida pela 3NF.
+
+**Problema**: "TI, Cruzeiro" se repete em 2 linhas. Se TI mudar de cidade, update em N linhas. Se um depto novo é criado mas ainda não tem funcionário, não dá pra cadastrar.
+
+**Solução**: separa Departamento em tabela própria.
+
+```sql
+-- Antes (viola 3NF):
+CREATE TABLE Funcionario (
+    funcionario_id BIGINT PRIMARY KEY,
+    nome VARCHAR(100),
+    departamento_id INT,
+    departamento_nome VARCHAR(50),
+    departamento_localizacao VARCHAR(100)
+);
+
+-- Depois (3NF):
+CREATE TABLE Departamento (
+    departamento_id INT PRIMARY KEY,
+    nome VARCHAR(50),
+    localizacao VARCHAR(100)
+);
+
+CREATE TABLE Funcionario (
+    funcionario_id BIGINT PRIMARY KEY,
+    nome VARCHAR(100),
+    departamento_id INT REFERENCES Departamento(departamento_id)
+);
+```
+
+Agora `Funcionario` só guarda **a referência** (`departamento_id`). Pra consultar o nome do depto, faz `JOIN` — operação rápida com FK indexada.
+
+### Regra mnemônica das três primeiras NFs
+
+Tem uma frase clássica que ajuda a lembrar:
+
+> *"Every non-key attribute must provide a fact about the key, the whole key, and nothing but the key — so help me Codd."*
+
+Atribuída ao **William Kent** no paper *"A Simple Guide to Five Normal Forms"* (CACM 26(2), 1983).
+
+- **"the key"** → 1NF (atributos são fatos sobre o registro identificado pela PK)
+- **"the WHOLE key"** → 2NF (não parte dela)
+- **"and NOTHING but the key"** → 3NF (não outros atributos)
+
+A parte "so help me Codd" é piada — paródia do juramento jurídico americano "so help me God". Em CS database humor, é tradição.
+
+---
+
+## BCNF: a forma normal "3.5"
+
+Em **1974**, no IFIP Congress em Estocolmo, **Edgar F. Codd** e **Raymond F. Boyce** publicaram *"Recent Investigations in Relational Data Base Systems"* — formalizaram o que viraria a **Boyce-Codd Normal Form (BCNF)**.
+
+**Boyce morreu em 1974, aos 26 anos, antes do paper aparecer publicado**. Causa: aneurisma cerebral. Era um dos arquitetos do SQL (junto com Donald Chamberlin). Por homenagem, a normal form leva o nome dele.
+
+**Curiosidade**: **Ian Heath** descreveu BCNF **3 anos antes** (1971) no paper *"Unacceptable File Operations in a Relational Database"*. Chris Date defende publicamente que **deveria se chamar "Heath normal form"**. Não pegou.
+
+### A regra
+
+> Uma tabela está em **BCNF** se, para **toda** dependência funcional não-trivial `X → Y`, **`X` é uma superkey** (chave candidata ou superconjunto dela).
+
+Versão mais simples: **todo determinante (lado esquerdo de uma dependência) tem que ser superkey**. Se algum atributo determina outro sem ser chave candidata, viola BCNF.
+
+3NF permite uma exceção que BCNF não permite: 3NF aceita `A → B` onde A não é superkey, desde que B seja **atributo primo** (parte de alguma chave candidata). BCNF elimina essa exceção.
+
+### Exemplo onde 3NF passa mas BCNF falha
+
+Tabela `Aulas`: cada aluno está matriculado em uma matéria, e cada matéria é lecionada por um professor (e **cada professor leciona exatamente uma matéria**).
+
+| aluno (PK) | materia (PK) | professor |
+|---|---|---|
+| Bruno | Algoritmos | Mendel |
+| Bruno | Banco de Dados | Aguiar |
+| Murilo | Algoritmos | Mendel |
+| Erika | Banco de Dados | Aguiar |
+
+Chaves candidatas: `(aluno, materia)` e `(aluno, professor)` (já que `professor → materia`). PK escolhida: `(aluno, materia)`.
+
+**Dependências**:
+- `(aluno, materia) → professor` ✓
+- `professor → materia` ✓ (cada professor leciona uma matéria específica)
+
+**Está em 3NF?** Sim! `professor` é parte de uma chave candidata `(aluno, professor)`, então a dependência `professor → materia` não envolve atributos "não-primos".
+
+**Viola BCNF?** Sim! Porque `professor → materia` é uma dependência onde **professor não é superkey**. BCNF não aceita.
+
+**Problema prático**: se "Mendel" parar de dar Algoritmos e passar a dar Estatística, eu preciso atualizar **todas as linhas** onde Mendel aparece. Anomalia de atualização **continua existindo apesar de estar em 3NF**.
+
+**Solução BCNF**: separar.
+
+```sql
+CREATE TABLE Professor_Materia (
+    professor VARCHAR(50) PRIMARY KEY,
+    materia VARCHAR(50)
+);
+
+CREATE TABLE Aluno_Professor (
+    aluno VARCHAR(50),
+    professor VARCHAR(50) REFERENCES Professor_Materia(professor),
+    PRIMARY KEY (aluno, professor)
+);
+```
+
+Agora `Mendel → Algoritmos` aparece em **uma linha só** na tabela `Professor_Materia`. Mudou de matéria? Update em 1 linha.
+
+### Quando parar — 3NF vs BCNF na prática
+
+Em **sistemas reais**, a maioria mira **3NF**. BCNF é alvo de "fundamentalistas" de normalização. **Trade-off**:
+
+- **3NF** sempre é alcançável com **decomposição preservando dependências** (todas as FDs originais podem ser verificadas dentro de tabelas individuais sem JOIN)
+- **BCNF** nem sempre permite isso — às vezes pra atingir BCNF, você perde a capacidade de garantir uma FD sem fazer JOIN. Trade-off de integridade vs performance
+
+Pra **a maior parte dos sistemas**, 3NF basta. Casos especiais (problemas conhecidos com chaves sobrepostas) justificam BCNF.
+
+---
+
+## 4NF e 5NF: existem, raramente importam
+
+Pra fechar:
+
+- **4NF** (Ronald Fagin, 1977): resolve **dependências multivaloradas**. Caso típico: tabela com `(funcionário, habilidade, idioma)` onde habilidade e idioma são **independentes** entre si — gera explosão combinatorial de linhas. Solução: separar em duas tabelas
+- **5NF** ou **PJ/NF** (Fagin, 1979): cobre dependências de junção mais sutis. Caso ainda mais raro
+- **6NF** (Date, Darwen, 2002): pra bancos temporais. Ainda mais nicho
+
+**Pra quase todo sistema corporativo**, **3NF ou BCNF cobre 99% dos casos**. Não vale a pena obcecar com 4NF+ a menos que você esteja num caso específico — e quando estiver, vai saber.
+
+---
+
+## Quando desnormalizar (sim, é OK em alguns casos)
+
+Normalização tem um custo: **mais tabelas = mais JOINs**. JOINs são rápidos (O(log N) com índices), mas não grátis. Em alguns cenários, **desnormalizar deliberadamente** é a escolha certa:
+
+1. **OLAP / Data Warehouse**: análises em grandes volumes de dados frios. Schemas estrela (star schema) **propositalmente desnormalizam** dimensões pra acelerar queries analíticas. Compromete consistência (não tem updates), ganha performance
+2. **Cache de campo calculado**: ex.: armazenar `total_pedido` na tabela Pedido em vez de recalcular do `ItemPedido` sempre. Viola 3NF mas pode valer a pena com triggers ou campos materializados
+3. **Reporting / dashboards em tempo real**: views materializadas, tabelas resumidas
+4. **Dados que não mudam** (lookup tables grandes): se nunca atualiza, desnormalização não traz risco de inconsistência
+
+Mas **a regra geral é**: normalize até 3NF/BCNF por padrão. Desnormalize **com intenção explícita**, documentando o motivo. Desnormalização prematura (igual otimização prematura) gera dívida técnica brutal.
+
+---
+
+## Recap
+
+**Normalização** é o processo de **decompor tabelas** pra eliminar redundância e prevenir três tipos de **anomalia**: inserção (não consegue cadastrar X sem Y), atualização (precisa atualizar N lugares), remoção (deletar uma coisa apaga outra). Inventada por **Edgar F. Codd** nos papers de **1970-1971**.
+
+**Linhagem das formas normais**:
+- **1NF** (Codd, 1970, no paper original): valores **atômicos**, sem listas/JSON aninhado em células
+- **2NF** (Codd, 1971, IBM Research Report RJ909): sem **dependência parcial** em PK composta. Só importa se PK tem múltiplas colunas
+- **3NF** (Codd, 1971): sem **dependência transitiva**. Atributos não-chave dependem **só da PK**
+- **BCNF** (Heath 1971, Boyce-Codd 1974 IFIP Congress): todo **determinante** é superkey. Versão mais rigorosa de 3NF. **Boyce morreu aos 26 anos antes do paper sair**
+- **4NF, 5NF** (Ronald Fagin, 1977-1979): casos especiais, raramente importam na prática
+
+**Dependência funcional** (`X → Y`): pra cada valor único de X, existe exatamente um Y correspondente. **Identificar as FDs do domínio é o passo mais importante** da modelagem.
+
+**Mnemônica do William Kent (1983)**:
+> *"The key, the whole key, and nothing but the key — so help me Codd."*
+
+- **the key** → 1NF
+- **the whole key** → 2NF
+- **nothing but the key** → 3NF
+
+**Na prática**: mire em **3NF ou BCNF** por padrão. Desnormalize **com intenção** apenas em OLAP, cache de campos calculados, ou dados imutáveis. Em Spring Boot/JPA, a estrutura `@Entity` + `@ManyToOne` + `@OneToMany` segue naturalmente o esquema normalizado — as anotações fazem você pensar em 3NF/BCNF sem perceber.
+
+Próximas lições da trilha:
+
+- **SQL básico** — DDL (CREATE/ALTER/DROP), DML (SELECT/INSERT/UPDATE/DELETE), JOIN, GROUP BY, HAVING, subqueries
+- **SQL avançado** — CTEs, window functions, recursive queries, UPSERT, MERGE
+- **Índices** — B+tree, hash, BRIN, GIN, GiST. Como o otimizador escolhe
+- **Transações e ACID** — isolation levels, MVCC (PostgreSQL), locking, deadlock
+- **Modelagem prática** — modelar do zero um sistema com brModelo ou dbdiagram.io
+- **JPA/Hibernate** — mapeamento OO ↔ relacional, lazy/eager, N+1 problem
+
+Manda qual quer.

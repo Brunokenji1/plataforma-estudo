@@ -1,0 +1,788 @@
+---
+titulo: "Clean Architecture: Os 4 Círculos que Tornam Código Independente de Frameworks"
+trilha: "arquitetura-software"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "Alistair Cockburn (2005), 'Hexagonal Architecture / Ports and Adapters' — blog post original em alistair.cockburn.us/hexagonal-architecture"
+  - "Jeffrey Palermo (2008), 'The Onion Architecture' — série de posts em jeffreypalermo.com"
+  - "Robert C. Martin (13 ago 2012), 'The Clean Architecture' — blog post em blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html"
+  - "Robert C. Martin (2017), 'Clean Architecture: A Craftsman's Guide to Software Structure and Design', Prentice Hall"
+  - "Ivar Jacobson (1992), 'Object-Oriented Software Engineering: A Use Case Driven Approach' — origem do conceito de Use Case e Boundary"
+  - "Trygve Reenskaug (2009), 'The DCI Architecture: A New Vision of Object-Oriented Programming' — Data, Context, Interaction; influência menor mas reconhecida"
+  - "Steve Freeman, Nat Pryce (2009), 'Growing Object-Oriented Software, Guided by Tests' — adoção prática de Ports and Adapters; citado no post original do Uncle Bob"
+  - "Tom Hombergs (2019), 'Get Your Hands Dirty on Clean Architecture' — guia prático em Java/Spring Boot"
+  - "Martin Fowler (2003), 'AnemicDomainModel' — artigo clássico em martinfowler.com/bliki/AnemicDomainModel.html"
+---
+
+## O sintoma que motivou tudo
+
+Você abriu um projeto Spring Boot velho. Quer mudar **uma regra de negócio simples** — digamos, alterar como calcula desconto pra clientes VIP. Pra fazer isso, você precisa:
+
+1. Mexer no `OrderController` (Spring MVC)
+2. Mexer no `OrderService` (Spring)
+3. Mexer na `OrderRepository` (Spring Data JPA)
+4. Mexer na `OrderEntity` (Hibernate / JPA)
+5. Atualizar 3 testes que viraram **testes de integração com banco** porque mock virou impossível
+6. Rodar o Spring Boot inteiro pra testar — 30 segundos por iteração
+
+**A regra de negócio em si — calcular desconto VIP — tem 4 linhas**. Mas o **framework permeou tudo**. A lógica de domínio está **espalhada e acoplada** a Spring, JPA, Jackson, validações Bean Validation.
+
+Esse é o problema que **Robert C. Martin** ("Uncle Bob") quis resolver quando publicou em **13 de agosto de 2012** o post *"The Clean Architecture"* no Clean Coder Blog, depois expandido no livro homônimo de **2017**.
+
+A tese central:
+
+> **O sistema deve ser independente de frameworks, bancos de dados, UI, e qualquer detalhe técnico externo. A regra de negócio é o coração — tudo mais é detalhe substituível.**
+
+Esta lição cobre:
+
+1. **A linhagem histórica** — Hexagonal (Cockburn, 2005) → Onion (Palermo, 2008) → Clean (Martin, 2012)
+2. **Os 4 círculos concêntricos** — Entities, Use Cases, Interface Adapters, Frameworks & Drivers
+3. **The Dependency Rule** — a regra que governa tudo
+4. **Use Case Interactors, Input/Output Ports, DTOs**
+5. **Como cruzar fronteiras** com Dependency Inversion
+6. **Mapeamento prático em Spring Boot** — packages e camadas
+7. **Anti-patterns reais** — Clean Architecture mal aplicada vira over-engineering
+
+No fim, você consegue projetar um sistema onde **mudar de Spring pra Quarkus, de PostgreSQL pra MongoDB, de REST pra GraphQL** é mexer em **uma camada só**.
+
+---
+
+## A linhagem: 7 anos de evolução
+
+Clean Architecture **não é invenção do zero**. Uncle Bob explicitamente cita as influências no post original de 2012:
+
+### 2005 — Hexagonal Architecture (Alistair Cockburn)
+
+**Alistair Cockburn** — um dos signatários do Manifesto Ágil — publicou no blog dele *"Hexagonal Architecture"* (também chamada **Ports and Adapters**). A ideia:
+
+- **Núcleo de aplicação** isolado, sem dependência de tecnologia
+- **Portas (ports)**: interfaces que definem como o núcleo se comunica com o mundo externo
+- **Adaptadores (adapters)**: implementações concretas das portas (HTTP, banco, fila, etc.)
+
+A forma hexagonal era **arbitrária** — 6 lados representam "muitas portas possíveis", não significam nada literal. Cockburn depois reconheceu duas categorias de adapters:
+
+- **Primary / Driving**: quem **chama** o sistema (UI, controllers, CLI)
+- **Secondary / Driven**: quem o sistema **chama** (banco, APIs externas, queues)
+
+Influência reconhecida: **Ivar Jacobson** com *Object-Oriented Software Engineering* (1992) — primary/secondary actors.
+
+### 2008 — Onion Architecture (Jeffrey Palermo)
+
+**Jeffrey Palermo** publicou em julho de 2008 a série *"The Onion Architecture"*. Pegou Ports & Adapters e organizou em **camadas concêntricas** mais opinativas:
+
+- **Centro**: Domain Model (Entities, Value Objects)
+- **Camada 2**: Domain Services
+- **Camada 3**: Application Services
+- **Camada externa**: Infrastructure (UI, DB, External)
+
+Diferente de Hexagonal (que não opina sobre estrutura interna), Onion **define como organizar o núcleo**. Tornou-se popular em .NET (Palermo era da comunidade C#).
+
+### 2012 — Clean Architecture (Robert C. Martin)
+
+**Uncle Bob** publicou *"The Clean Architecture"* em 13 de agosto de 2012. Reconheceu explicitamente que estava **consolidando ideias anteriores** — Hexagonal, Onion, BCE (Boundary-Control-Entity de Jacobson), DCI (Reenskaug), Screaming Architecture. A contribuição própria foi:
+
+1. **Diagrama dos 4 círculos** — visual icônico que viralizou
+2. **The Dependency Rule** — uma regra simples e universal
+3. **Conceitos concretos** — Interactors, Boundaries, Input/Output Ports
+4. **Popularização massiva** — virou referência mainstream
+
+Em **2017**, expandiu no livro *"Clean Architecture: A Craftsman's Guide to Software Structure and Design"* — 432 páginas detalhando os princípios.
+
+<Insight>
+**Hexagonal, Onion e Clean não são arquiteturas diferentes** — são **abordagens da mesma ideia central**: isolar domínio de detalhes técnicos. Se você implementar qualquer uma corretamente, conseguirá: (1) trocar banco sem mexer no domínio; (2) testar regra de negócio sem subir framework; (3) ter código que **grita o que faz, não que tecnologia usa** (princípio Uncle Bob chama de "Screaming Architecture"). Use o nome que sua equipe entender melhor; o que importa é o resultado.
+</Insight>
+
+---
+
+## Os 4 círculos da Clean Architecture
+
+<svg width="100%" viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Os 4 círculos concêntricos da Clean Architecture</title>
+<desc>Diagrama mostrando círculos aninhados de dentro pra fora: Entities (centro), Use Cases, Interface Adapters, Frameworks e Drivers (externo), com setas indicando que dependências apontam pra dentro</desc>
+
+<circle cx="380" cy="260" r="240" fill="#1a1a1a" stroke="#FF6B6B" strokeWidth="2"/>
+<circle cx="380" cy="260" r="180" fill="#5c2b2b" fillOpacity="0.4" stroke="#FF8C42" strokeWidth="2"/>
+<circle cx="380" cy="260" r="120" fill="#5c4a1a" fillOpacity="0.6" stroke="#FFC857" strokeWidth="2"/>
+<circle cx="380" cy="260" r="60" fill="#1d4d3f" stroke="#1d9e75" strokeWidth="2.5"/>
+
+<text x="380" y="255" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">Entities</text>
+<text x="380" y="272" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">domain</text>
+
+<text x="380" y="170" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Use Cases</text>
+<text x="380" y="186" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">application</text>
+
+<text x="380" y="105" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Interface Adapters</text>
+<text x="380" y="120" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">controllers, presenters, gateways</text>
+
+<text x="380" y="48" fontFamily="monospace" fontSize="14" fill="#ffffff" fontWeight="bold" textAnchor="middle">Frameworks e Drivers</text>
+<text x="380" y="64" fontFamily="sans-serif" fontSize="10" fill="#cccccc" textAnchor="middle">Spring, JPA, HTTP, DB, queues</text>
+
+<path d="M 200 260 L 240 260" stroke="#7F77DD" strokeWidth="2.5" markerEnd="url(#arr2)"/>
+<path d="M 520 260 L 480 260" stroke="#7F77DD" strokeWidth="2.5" markerEnd="url(#arr2)"/>
+<path d="M 380 440 L 380 400" stroke="#7F77DD" strokeWidth="2.5" markerEnd="url(#arr2)"/>
+<path d="M 130 130 L 175 175" stroke="#7F77DD" strokeWidth="2" markerEnd="url(#arr2)"/>
+<path d="M 630 130 L 585 175" stroke="#7F77DD" strokeWidth="2" markerEnd="url(#arr2)"/>
+
+<defs>
+<marker id="arr2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+<path d="M0,0 L0,6 L9,3 z" fill="#7F77DD"/>
+</marker>
+</defs>
+
+<text x="380" y="495" fontFamily="sans-serif" fontSize="13" fill="#7F77DD" fontWeight="bold" textAnchor="middle">The Dependency Rule</text>
+<text x="380" y="512" fontFamily="sans-serif" fontSize="11" fill="#888888" textAnchor="middle">setas das dependências apontam SEMPRE pra dentro</text>
+</svg>
+
+### Círculo 1 — Entities (centro, verde)
+
+**Definição** (Uncle Bob): *"Encapsulam Enterprise Business Rules — as regras mais críticas e estáveis do negócio. Não devem mudar por mudanças operacionais, técnicas ou de UI."*
+
+**Características**:
+- **Independente de framework** — Java puro, C++ puro, sem `@Entity` JPA, sem Spring
+- **Sem conhecimento de banco** — não sabe que existe SQL nem MongoDB
+- **Encapsula invariantes do domínio** — uma `Conta` nunca pode ter saldo negativo (sem cheque especial)
+- **Pode mudar SÓ se a regra de negócio fundamental mudar**
+
+Em Spring Boot, isso vai no package `domain/` (ou similar) com **ZERO** imports do Spring/JPA/Hibernate.
+
+### Círculo 2 — Use Cases (laranja claro)
+
+**Definição**: *"Encapsulam Application Business Rules — regras específicas da aplicação, ou seja, como o sistema usa as Entities pra executar fluxos do usuário."*
+
+**Cada Use Case** = **um fluxo do sistema**: "Criar pedido", "Transferir dinheiro", "Calcular desconto VIP". Cada um é uma classe (ou Interactor).
+
+**Características**:
+- Orquestra Entities
+- Não conhece UI nem banco — recebe **DTOs de entrada** e retorna **DTOs de saída**
+- Usa interfaces (Output Ports) pra acessar persistência sem conhecer a implementação
+- Independente de Spring (apesar de poder ser anotado com `@Service` no nível de adapter — discutível)
+
+### Círculo 3 — Interface Adapters (laranja escuro)
+
+**Definição**: *"Convertem dados entre o formato mais conveniente para Use Cases/Entities e o formato mais conveniente para agentes externos (banco, web, etc.)."*
+
+Aqui ficam:
+- **Controllers** (Spring `@RestController`) — recebem HTTP, traduzem pra DTO de entrada do use case
+- **Presenters** — pegam o output do use case e formatam (JSON, HTML, etc.)
+- **Gateways / Repository implementations** — implementam Output Ports usando JPA, JDBC, MongoDB
+
+### Círculo 4 — Frameworks & Drivers (vermelho externo)
+
+**Definição**: *"Detalhes voláteis. Spring, JPA, Hibernate, banco específico, biblioteca HTTP, framework UI. Onde tudo acontece, mas onde nada importante é decidido."*
+
+Idealmente, **muito pouco código** mora aqui. Configs do Spring, bootstrap da aplicação, instanciação de beans. Nada de lógica.
+
+---
+
+## The Dependency Rule
+
+A regra **mais importante** da Clean Architecture, do post original:
+
+> *"Source code dependencies can only point inwards. Nothing in an inner circle can know anything at all about something in an outer circle."*
+
+Tradução: **dependências em código apontam sempre pra dentro**. Coisa do círculo interno **NÃO PODE referenciar** coisa do círculo externo. Nem nome, nem import, nem nada.
+
+**Implicações práticas**:
+
+- `Entity` **não importa** classes de Spring, JPA, Jackson
+- `UseCase` **não importa** classes de adapters (controllers, repositories concretos)
+- `Adapter` **pode importar** `UseCase` e `Entity` (sentido permitido)
+- `Frameworks` **podem** referenciar tudo de dentro, mas geralmente não precisam
+
+Quando você **precisa** que algo de dentro chame algo de fora (ex: use case precisa salvar no banco), aplica **Dependency Inversion** (DIP, da Lição 1):
+
+1. Use case define uma **interface** (Output Port) no próprio círculo do use case
+2. Adapter de fora **implementa** essa interface
+3. O fluxo de dados vai de dentro pra fora, mas a **dependência do código** vai de fora pra dentro
+
+Veremos isso em código abaixo.
+
+---
+
+## Exemplo completo: Use Case de Transferência Bancária
+
+Vamos implementar **"transferir dinheiro entre contas"** seguindo Clean Architecture. Vou começar pelo centro (Entities) e ir crescendo.
+
+### Camada 1 — Entity Conta (domain puro)
+
+<CodeSwap>
+<Code lang="java">
+```java
+// package: com.banco.domain
+// SEM imports de Spring, JPA, Jackson — Java puro
+
+public class Conta {
+    private final String numero;
+    private BigDecimal saldo;
+
+    public Conta(String numero, BigDecimal saldoInicial) {
+        if (numero == null || numero.isBlank()) {
+            throw new IllegalArgumentException("Número de conta inválido");
+        }
+        if (saldoInicial == null || saldoInicial.signum() < 0) {
+            throw new IllegalArgumentException("Saldo inicial inválido");
+        }
+        this.numero = numero;
+        this.saldo = saldoInicial;
+    }
+
+    public void debitar(BigDecimal valor) {
+        if (valor.signum() <= 0) {
+            throw new IllegalArgumentException("Valor deve ser positivo");
+        }
+        if (valor.compareTo(saldo) > 0) {
+            throw new SaldoInsuficienteException(numero);
+        }
+        this.saldo = saldo.subtract(valor);
+    }
+
+    public void creditar(BigDecimal valor) {
+        if (valor.signum() <= 0) {
+            throw new IllegalArgumentException("Valor deve ser positivo");
+        }
+        this.saldo = saldo.add(valor);
+    }
+
+    public String getNumero() { return numero; }
+    public BigDecimal getSaldo() { return saldo; }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// namespace: banco::domain
+// SEM dependência de framework — C++ puro
+
+class Conta {
+private:
+    std::string numero;
+    int64_t saldoCentavos;  // centavos evitam imprecisão de ponto flutuante
+
+public:
+    Conta(std::string numero_, int64_t saldoInicial)
+        : numero(std::move(numero_)), saldoCentavos(saldoInicial) {
+        if (numero.empty()) {
+            throw std::invalid_argument("Numero de conta invalido");
+        }
+        if (saldoInicial < 0) {
+            throw std::invalid_argument("Saldo inicial invalido");
+        }
+    }
+
+    void debitar(int64_t valor) {
+        if (valor <= 0) {
+            throw std::invalid_argument("Valor deve ser positivo");
+        }
+        if (valor > saldoCentavos) {
+            throw SaldoInsuficienteException(numero);
+        }
+        saldoCentavos -= valor;
+    }
+
+    void creditar(int64_t valor) {
+        if (valor <= 0) {
+            throw std::invalid_argument("Valor deve ser positivo");
+        }
+        saldoCentavos += valor;
+    }
+
+    const std::string& getNumero() const { return numero; }
+    int64_t getSaldo() const { return saldoCentavos; }
+};
+```
+</Code>
+</CodeSwap>
+
+**Observe**:
+- Encapsula invariantes (saldo nunca negativo, valores sempre positivos)
+- Não tem `@Entity`, nem `@Id`, nem `@Column` — Hibernate **não conhece** essa classe
+- Pode ser instanciada em qualquer contexto, qualquer teste, sem framework
+- Pode ser reusada em CLI, batch job, web, mobile
+
+### Camada 2 — Use Case TransferirDinheiro
+
+Aqui aplicamos **Boundaries** — interfaces que definem o contrato do use case:
+
+<CodeSwap>
+<Code lang="java">
+```java
+// package: com.banco.application.usecases
+
+// === DTOs de entrada e saída ===
+public record TransferirDinheiroRequest(
+    String contaOrigem,
+    String contaDestino,
+    BigDecimal valor
+) {}
+
+public record TransferirDinheiroResponse(
+    String transferenciaId,
+    BigDecimal saldoFinalOrigem,
+    BigDecimal saldoFinalDestino
+) {}
+
+// === Input Port (interface do use case) ===
+public interface TransferirDinheiroUseCase {
+    TransferirDinheiroResponse executar(TransferirDinheiroRequest request);
+}
+
+// === Output Port (interface pra acessar persistência) ===
+// FICA na camada de use case — quem implementa é o adapter externo
+public interface ContaRepository {
+    Optional<Conta> buscarPorNumero(String numero);
+    void salvar(Conta conta);
+}
+
+// === Interactor (implementação do use case) ===
+public class TransferirDinheiroInteractor implements TransferirDinheiroUseCase {
+    private final ContaRepository repository;
+
+    public TransferirDinheiroInteractor(ContaRepository repository) {
+        this.repository = repository;
+    }
+
+    @Override
+    public TransferirDinheiroResponse executar(TransferirDinheiroRequest req) {
+        Conta origem = repository.buscarPorNumero(req.contaOrigem())
+            .orElseThrow(() -> new ContaNaoEncontradaException(req.contaOrigem()));
+        Conta destino = repository.buscarPorNumero(req.contaDestino())
+            .orElseThrow(() -> new ContaNaoEncontradaException(req.contaDestino()));
+
+        origem.debitar(req.valor());
+        destino.creditar(req.valor());
+
+        repository.salvar(origem);
+        repository.salvar(destino);
+
+        return new TransferirDinheiroResponse(
+            UUID.randomUUID().toString(),
+            origem.getSaldo(),
+            destino.getSaldo()
+        );
+    }
+}
+```
+</Code>
+
+<Code lang="cpp">
+```cpp
+// namespace: banco::application::usecases
+
+// === DTOs de entrada e saida ===
+struct TransferirDinheiroRequest {
+    std::string contaOrigem;
+    std::string contaDestino;
+    int64_t valorCentavos;
+};
+
+struct TransferirDinheiroResponse {
+    std::string transferenciaId;
+    int64_t saldoFinalOrigem;
+    int64_t saldoFinalDestino;
+};
+
+// === Input Port (interface do use case) ===
+class TransferirDinheiroUseCase {
+public:
+    virtual ~TransferirDinheiroUseCase() = default;
+    virtual TransferirDinheiroResponse executar(const TransferirDinheiroRequest& req) = 0;
+};
+
+// === Output Port (interface pra acessar persistencia) ===
+class ContaRepository {
+public:
+    virtual ~ContaRepository() = default;
+    virtual std::optional<Conta> buscarPorNumero(const std::string& numero) = 0;
+    virtual void salvar(const Conta& conta) = 0;
+};
+
+// === Interactor (implementacao do use case) ===
+class TransferirDinheiroInteractor : public TransferirDinheiroUseCase {
+private:
+    ContaRepository& repository;
+
+public:
+    explicit TransferirDinheiroInteractor(ContaRepository& repo)
+        : repository(repo) {}
+
+    TransferirDinheiroResponse executar(const TransferirDinheiroRequest& req) override {
+        auto origemOpt = repository.buscarPorNumero(req.contaOrigem);
+        if (!origemOpt) throw ContaNaoEncontradaException(req.contaOrigem);
+        auto destinoOpt = repository.buscarPorNumero(req.contaDestino);
+        if (!destinoOpt) throw ContaNaoEncontradaException(req.contaDestino);
+
+        Conta origem = *origemOpt;
+        Conta destino = *destinoOpt;
+
+        origem.debitar(req.valorCentavos);
+        destino.creditar(req.valorCentavos);
+
+        repository.salvar(origem);
+        repository.salvar(destino);
+
+        return TransferirDinheiroResponse{
+            gerarUuid(),
+            origem.getSaldo(),
+            destino.getSaldo()
+        };
+    }
+};
+```
+</Code>
+</CodeSwap>
+
+**Observe a estrutura**:
+- `TransferirDinheiroUseCase` = **Input Port** — interface que define **o que** o use case faz
+- `ContaRepository` = **Output Port** — interface que o use case **precisa** pra funcionar
+- `TransferirDinheiroInteractor` = implementação concreta do use case, **conhece apenas as interfaces**, não suas implementações
+- **Não tem `@Service` aqui** — discussão polêmica, voltaremos no fim
+
+### Camada 3 — Interface Adapters
+
+Adapters de entrada (Controller HTTP) e saída (Repository JPA) — esses já dependem de Spring/JPA, mas o domínio não:
+
+```java
+// package: com.banco.adapters.in.web
+
+@RestController
+@RequestMapping("/api/transferencias")
+public class TransferenciaController {
+    private final TransferirDinheiroUseCase useCase;
+
+    public TransferenciaController(TransferirDinheiroUseCase useCase) {
+        this.useCase = useCase;
+    }
+
+    @PostMapping
+    public ResponseEntity<TransferenciaResponseJson> transferir(
+            @Valid @RequestBody TransferenciaRequestJson body) {
+
+        TransferirDinheiroRequest req = new TransferirDinheiroRequest(
+            body.contaOrigem(),
+            body.contaDestino(),
+            body.valor()
+        );
+
+        TransferirDinheiroResponse resp = useCase.executar(req);
+
+        return ResponseEntity.ok(TransferenciaResponseJson.from(resp));
+    }
+}
+
+// DTOs específicos da camada web — separados dos DTOs do use case
+public record TransferenciaRequestJson(
+    @NotBlank String contaOrigem,
+    @NotBlank String contaDestino,
+    @Positive BigDecimal valor
+) {}
+
+public record TransferenciaResponseJson(
+    String id, BigDecimal saldoOrigem, BigDecimal saldoDestino
+) {
+    public static TransferenciaResponseJson from(TransferirDinheiroResponse r) {
+        return new TransferenciaResponseJson(
+            r.transferenciaId(), r.saldoFinalOrigem(), r.saldoFinalDestino()
+        );
+    }
+}
+```
+
+```java
+// package: com.banco.adapters.out.persistence
+
+@Repository
+public class JpaContaRepository implements ContaRepository {
+    private final ContaJpaEntityRepository jpaRepo;
+
+    public JpaContaRepository(ContaJpaEntityRepository jpa) {
+        this.jpaRepo = jpa;
+    }
+
+    @Override
+    public Optional<Conta> buscarPorNumero(String numero) {
+        return jpaRepo.findByNumero(numero).map(this::toDomain);
+    }
+
+    @Override
+    public void salvar(Conta conta) {
+        ContaJpaEntity entity = toEntity(conta);
+        jpaRepo.save(entity);
+    }
+
+    private Conta toDomain(ContaJpaEntity e) {
+        return new Conta(e.getNumero(), e.getSaldo());
+    }
+
+    private ContaJpaEntity toEntity(Conta c) {
+        ContaJpaEntity e = new ContaJpaEntity();
+        e.setNumero(c.getNumero());
+        e.setSaldo(c.getSaldo());
+        return e;
+    }
+}
+
+// Entity JPA — SEPARADA da Entity de domínio
+@Entity
+@Table(name = "conta")
+class ContaJpaEntity {
+    @Id
+    private String numero;
+    private BigDecimal saldo;
+    // getters, setters
+}
+```
+
+<Aviso>
+**Detalhe importante**: `ContaJpaEntity` (anotada com `@Entity` do Hibernate) é **diferente** de `Conta` (entity de domínio). Tem **mapeamento explícito** entre as duas (`toDomain` / `toEntity`). Isso permite que domínio evolua independente do schema do banco, e impede que anotações JPA "vazem" pro domínio. **Custo**: mais código. **Benefício**: domínio limpo, refatoração segura. Em projetos CRUD simples, alguns combinam — discutiremos como anti-pattern abaixo.
+</Aviso>
+
+---
+
+## Estrutura de packages em Spring Boot
+
+Mapping prático que funciona em projetos reais:
+
+```
+src/main/java/com/banco/
+├── domain/                              ← Círculo 1 (Entities)
+│   ├── Conta.java
+│   ├── SaldoInsuficienteException.java
+│   └── ContaNaoEncontradaException.java
+│
+├── application/                         ← Círculo 2 (Use Cases)
+│   ├── usecases/
+│   │   ├── TransferirDinheiroUseCase.java       (Input Port)
+│   │   ├── TransferirDinheiroInteractor.java    (implementação)
+│   │   ├── TransferirDinheiroRequest.java       (DTO entrada)
+│   │   └── TransferirDinheiroResponse.java      (DTO saída)
+│   └── ports/
+│       └── ContaRepository.java                 (Output Port)
+│
+├── adapters/                            ← Círculo 3 (Interface Adapters)
+│   ├── in/
+│   │   └── web/
+│   │       ├── TransferenciaController.java
+│   │       └── TransferenciaRequestJson.java
+│   └── out/
+│       └── persistence/
+│           ├── JpaContaRepository.java          (implementa Output Port)
+│           ├── ContaJpaEntity.java              (mapeamento JPA)
+│           └── ContaJpaEntityRepository.java    (Spring Data interface)
+│
+└── infrastructure/                      ← Círculo 4 (Frameworks & Drivers)
+    ├── config/
+    │   ├── BeanConfig.java                      (Spring config)
+    │   └── DataSourceConfig.java
+    └── BancoApplication.java                    (@SpringBootApplication)
+```
+
+**Regra de import nas camadas**:
+
+| Camada | Pode importar de |
+|---|---|
+| `domain/` | nada além de Java padrão |
+| `application/` | apenas `domain/` |
+| `adapters/` | `application/` e `domain/` |
+| `infrastructure/` | tudo |
+
+Ferramentas como **ArchUnit** (Java) permitem **escrever testes que validam** essas regras automaticamente:
+
+```java
+@Test
+void domain_nao_deve_depender_de_spring() {
+    ArchRuleDefinition.noClasses()
+        .that().resideInAPackage("..domain..")
+        .should().dependOnClassesThat().resideInAPackage("org.springframework..")
+        .check(importedClasses);
+}
+```
+
+---
+
+## Anti-patterns reais
+
+Clean Architecture mal aplicada vira pior que arquitetura nenhuma. Os erros mais comuns:
+
+### 1. JPA Entity = Domain Entity (acoplamento total)
+
+```java
+// ANTI-PATTERN — domínio acoplado ao Hibernate
+@Entity
+@Table(name = "conta")
+public class Conta {
+    @Id
+    private String numero;
+    private BigDecimal saldo;
+
+    public void debitar(BigDecimal valor) { /* lógica domínio */ }
+}
+```
+
+Parece "menos código", mas:
+- Domínio depende de Hibernate (não pode mais ser instanciado sem Spring)
+- Mudanças no schema do banco forçam mudança no domínio
+- Testes precisam de banco ou Mockito complexo
+- Lazy loading errado vira `LazyInitializationException` (vimos na Lição 7 de Bancos)
+
+**Quando aceitar**: projetos CRUD simples sem regras de domínio complexas. Honestamente, **a maior parte dos projetos**. Mas reconheça o trade-off.
+
+### 2. Anemic Domain Model
+
+```java
+// ANTI-PATTERN — entity só com getters/setters, lógica espalhada em Service
+public class Conta {
+    private String numero;
+    private BigDecimal saldo;
+    public BigDecimal getSaldo() { return saldo; }
+    public void setSaldo(BigDecimal s) { this.saldo = s; }
+    // qualquer um pode setar saldo negativo
+}
+
+@Service
+public class ContaService {
+    public void debitar(Conta c, BigDecimal valor) {
+        if (valor.compareTo(c.getSaldo()) > 0) throw new RuntimeException("...");
+        c.setSaldo(c.getSaldo().subtract(valor));
+    }
+}
+```
+
+**Martin Fowler escreveu sobre isso em 2003** (artigo *"AnemicDomainModel"*). Sintoma: entities viraram **DTOs**, regras de negócio espalhadas em serviços. **Encapsulamento quebrado** — qualquer um pode chamar `setSaldo(-9999)`. **Use Cases ficam gigantes** porque concentram lógica que devia estar nas entities.
+
+**Solução**: comportamentos na entity, setters minimais, invariantes garantidas no construtor e métodos de domínio.
+
+### 3. Over-engineering em CRUD simples
+
+```
+CRUD simples virou MONSTRO de 8 classes:
+ListarUsuariosUseCase.java
+ListarUsuariosInteractor.java
+ListarUsuariosRequest.java   (vazio, sem campos)
+ListarUsuariosResponse.java
+UsuarioRepository.java
+JpaUsuarioRepository.java
+UsuarioJpaEntity.java
+Usuario.java
+UsuarioMapper.java
+```
+
+Pra **fazer um SELECT ALL** e retornar a lista. Pra ler 5 campos do banco e devolver pra UI.
+
+**Reality check**: Clean Architecture **brilha** em sistemas com **regras de negócio complexas** e **vida longa**. Pra CRUD raso (admin interno, cadastros simples), pode ser **YAGNI extremo**. Trade-off real:
+
+| Tipo de projeto | Vale Clean? |
+|---|---|
+| Sistema bancário, ERP, fintech, e-commerce com regras | **Sim** |
+| MVP de startup pra validar ideia | **Não** (refatora depois) |
+| Tela de admin com 5 CRUDs | **Não** (Spring Boot vanilla) |
+| Sistema legado de 10 anos sem testes | **Sim, gradualmente** (estrangulando) |
+
+### 4. Domain dependendo de anotações Spring
+
+```java
+// ANTI-PATTERN — domain conhece @Service
+@Service                        // ← DOMAIN NÃO PODE TER ISSO
+public class CalculadoraJurosDomain {
+    public BigDecimal calcular(Conta c) { /* ... */ }
+}
+```
+
+Domain deve ser **Java/C++ puro**, zero framework. Se precisa que Spring instancie, faz a configuração no `infrastructure/config/`:
+
+```java
+@Configuration
+public class DomainBeansConfig {
+    @Bean
+    public CalculadoraJurosDomain calculadora() {
+        return new CalculadoraJurosDomain();
+    }
+}
+```
+
+### 5. Use Case que sabe demais
+
+```
+ANTI-PATTERN — Use Case orquestra DEMAIS, vira god class:
+public class CriarPedidoInteractor {
+    public void executar(...) {
+        // valida usuário
+        // calcula imposto
+        // valida estoque
+        // aplica desconto
+        // envia notificação
+        // emite NF
+        // grava no banco
+        // grava em ElasticSearch pra busca
+        // publica evento no Kafka
+        // ... 400 linhas
+    }
+}
+```
+
+Use Case orquestra, mas **lógica de cada parte fica em domain services e entities**. Quando o use case fica gigante, **delegue pra outros use cases ou services** (composição).
+
+---
+
+## Quando NÃO usar Clean Architecture
+
+Reconhecer **quando NÃO usar** é parte da maturidade arquitetural:
+
+- **CRUDs simples sem regras de negócio**: 2-3 camadas Spring (`@Controller` → `@Service` → `@Repository`) bastam
+- **Prototipagem / MVP**: foco em validar produto, refatora depois
+- **Microservice muito pequeno** (um endpoint, uma tabela): over-engineering
+- **Equipe sem familiaridade**: aprender Clean enquanto entrega prazo apertado é receita pra desastre — o resultado é "Clean malfeito" pior que arquitetura tradicional bem-feita
+- **Time pequeno (1-2 devs) em produto novo**: simplicidade é a chave; arquitetura cresce com o time
+
+**Heurística**: se o sistema tem **regras de negócio reais** + **vida útil esperada acima de 2 anos** + **time com 3 ou mais devs**, vale Clean. Caso contrário, comece **simples** e refatore quando a complexidade justificar.
+
+---
+
+## Recap
+
+**Clean Architecture** foi formalizada por **Robert C. Martin** em **13 de agosto de 2012** no post *"The Clean Architecture"* no Clean Coder Blog, expandida no livro de **2017** *"Clean Architecture: A Craftsman's Guide to Software Structure and Design"*. **Não foi inventada do zero** — consolidou ideias de:
+
+- **Alistair Cockburn (2005)** — **Hexagonal Architecture / Ports & Adapters**
+- **Jeffrey Palermo (2008)** — **Onion Architecture**
+- **Ivar Jacobson (1992)** — Boundary-Control-Entity, Use Cases
+- **Trygve Reenskaug** — DCI
+- **Steve Freeman, Nat Pryce (2009)** — *Growing Object-Oriented Software*
+
+**Os 4 círculos concêntricos**:
+
+| Círculo | Conteúdo | Exemplos em Java |
+|---|---|---|
+| **Entities** | Enterprise Business Rules | `Conta`, `Pedido` — Java puro, sem framework |
+| **Use Cases** | Application Business Rules | `TransferirDinheiroInteractor`, Input/Output Ports |
+| **Interface Adapters** | Controllers, Presenters, Gateways | `@RestController`, `JpaContaRepository` |
+| **Frameworks & Drivers** | Tudo externo | Spring, JPA, banco, libs HTTP |
+
+**The Dependency Rule** (regra mais importante): **dependências em código apontam SEMPRE pra dentro**. Coisa interna nunca importa coisa externa. Quando precisa de inversão de fluxo, aplica **Dependency Inversion Principle** (DIP) com Input Ports (interfaces que o use case oferece) e Output Ports (interfaces que o use case precisa).
+
+**Em Spring Boot**: packages `domain/` (entities puras) → `application/usecases/` (interactors mais DTOs) e `application/ports/` (interfaces) → `adapters/in/web/` (controllers) e `adapters/out/persistence/` (repository implementations) → `infrastructure/` (configs e bootstrap). **ArchUnit** valida regras automaticamente.
+
+**Trade-offs cruciais**:
+- **JPA Entity ≠ Domain Entity** — separação custa código, mas isola domínio de Hibernate
+- **DTOs por camada** — controller usa Request/Response JSON; use case usa Request/Response próprio; entity de domínio fica intacta. Mais mapeamento, mais limpeza
+- **Não use `@Service` em interactors** se quer pureza máxima; use `@Bean` em config
+
+**Anti-patterns clássicos**:
+- JPA Entity como Entity de domínio (acoplamento total ao Hibernate)
+- **Anemic Domain Model** (Martin Fowler, 2003) — entities só com getters/setters, lógica em services
+- Over-engineering em CRUD simples (8 classes pra um SELECT)
+- Domain dependendo de `@Service`, `@Component` ou qualquer anotação Spring
+- Use Case "god class" orquestrando 400 linhas
+
+**Quando NÃO usar**: CRUDs simples, MVP, microservices triviais, equipes sem familiaridade. Clean brilha em sistemas com **regras complexas + vida longa + time médio ou grande**.
+
+**Em uma frase**: Clean Architecture é separação de concerns + Dependency Inversion levados ao extremo, com benefício de **trocar banco/framework/UI mexendo só nos adapters**. Custa código a mais; paga-se em sistemas reais.
+
+Próximas lições da trilha:
+
+- **DDD Strategic Design** — Ubiquitous Language, Bounded Contexts, Context Map (Eric Evans, 2003)
+- **DDD Tactical Design** — Entities, Value Objects, Aggregates, Repositories, Services, Factories
+- **Hexagonal Architecture detalhada** — Ports & Adapters em profundidade
+- **Event-Driven Architecture e CQRS** — Greg Young, Udi Dahan
+
+Manda qual quer.

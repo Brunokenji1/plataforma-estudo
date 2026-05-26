@@ -1,0 +1,127 @@
+[
+  {
+    "id": "tx-01",
+    "enunciado": "Quem cunhou o acrônimo ACID e em qual paper?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Edgar F. Codd, no paper original do modelo relacional em 1970",
+      "Theo Härder e Andreas Reuter, em dezembro de 1983, no paper 'Principles of Transaction-Oriented Database Recovery' (ACM Computing Surveys 15(4), pp. 287-317). Eles consolidaram o framework conceitual baseado no trabalho anterior de Jim Gray (1981, paper VLDB Cannes 'The Transaction Concept'). Härder e Reuter eram da Universidade de Kaiserslautern (Alemanha)",
+      "Jim Gray, no paper VLDB Cannes 1981",
+      "Donald Knuth, em 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Theo Härder e Andreas Reuter, da Universidade de Kaiserslautern, Alemanha, em dezembro de 1983, no paper 'Principles of Transaction-Oriented Database Recovery' publicado em ACM Computing Surveys Vol. 15, No. 4, pp. 287-317. Citação literal do paper: 'The four properties, atomicity (A), consistency (C), isolation (I), and durability (D), describe the major highlights of the transaction paradigm'. CONTEXTO: o conceito de transação foi formalizado por JIM GRAY em 1981 no paper 'The Transaction Concept: Virtues and Limitations' (VLDB Cannes) — Härder e Reuter citam Gray como autor do conceito. Eles consolidaram o framework e cunharam o ACRÔNIMO MEMORIZÁVEL. Jim Gray ganhou o Turing Award em 1998. TRAGÉDIA HISTÓRICA: Jim Gray desapareceu em 28 de janeiro de 2007 num passeio de barco solo na Baía de São Francisco em direção às Farallon Islands. Google, Amazon, Microsoft e NASA participaram da busca usando imagens de satélite. Nunca foi encontrado. Em 2012 foi declarado morto. Tinha 63 anos."
+  },
+  {
+    "id": "tx-02",
+    "enunciado": "O que cada letra de ACID significa concretamente?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Atomic, Consistent, Isolated, Durable — mas só conceitos sem implementação prática",
+      "ATOMICITY: tudo-ou-nada (transação inteira ou nada, implementado via WAL+rollback). CONSISTENCY: banco em estado válido (constraints PK/FK/CHECK/UNIQUE garantidas). ISOLATION: transações concorrentes não interferem (níveis configuráveis). DURABILITY: após COMMIT persiste mesmo com crash (via fsync em disco)",
+      "Acid, Crash, Index, Database — termos técnicos do SGBD",
+      "Apenas garantias do hardware"
+    ],
+    "resposta": 1,
+    "explicacao": "ATOMICITY (Atomicidade): 'tudo ou nada'. A transação inteira é executada com sucesso, ou NADA é aplicado. Não existe estado parcial. Implementado via Write-Ahead Log (WAL) + rollback. CONSISTENCY (Consistência): antes e depois da transação, o banco está num estado VÁLIDO — todas as constraints (PK, FK, CHECK, UNIQUE) são satisfeitas. Diferente do 'C' do CAP theorem (que é sobre distribuição), aqui é sobre regras do banco. ISOLATION (Isolamento): transações executando em paralelo NÃO interferem umas nas outras. Resultado é como se tivessem executado em sequência. Esta é a propriedade MAIS SUTIL e MAIS CARA de implementar — tem níveis configuráveis. DURABILITY (Durabilidade): depois do COMMIT, resultado persiste mesmo se o servidor crashar, perder energia, ou falhar. Implementado via fsync do log/tabela em disco antes do COMMIT retornar sucesso. SSDs corporativos têm super-capacitor pra garantir escrita em queda de energia. TRADE-OFF: cada propriedade tem custo de performance. Sistemas NoSQL muitas vezes abrem mão de algumas (eventual consistency) pra ganhar escala."
+  },
+  {
+    "id": "tx-03",
+    "enunciado": "O que é DIRTY READ e qual isolation level previne?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Leitura de dado corrompido em disco; previne SERIALIZABLE apenas",
+      "Uma transação lê dados que outra transação AINDA NÃO COMMITOU. Se a outra fizer rollback, sua leitura foi 'suja' (dado que nunca existiu de verdade). Previne a partir do READ COMMITTED (default do PostgreSQL e Oracle). READ UNCOMMITTED permite — praticamente ninguém usa em produção; PostgreSQL nem implementa de verdade",
+      "Leitura mais lenta que o esperado; previne com índice",
+      "Tipo específico de erro de sintaxe SQL"
+    ],
+    "resposta": 1,
+    "explicacao": "Dirty Read (P1 / A1 no paper de Berenson): transação T2 lê dados que T1 modificou MAS AINDA NÃO COMMITOU. Se T1 fizer rollback depois, T2 leu valor que NUNCA EXISTIU oficialmente — leitura 'suja'. EXEMPLO: T1 BEGIN; UPDATE Conta SET saldo = 100 WHERE id = 1; T2 SELECT saldo FROM Conta WHERE id = 1 (lê 100, não commitado); T1 ROLLBACK (saldo volta a 1000); T2 usa valor 100 que nunca existiu. PREVENÇÃO: READ COMMITTED (e superiores) bloqueiam dirty read — cada SELECT vê apenas dados commitados. READ UNCOMMITTED permite dirty reads — basicamente sem isolamento. NA PRÁTICA: praticamente NINGUÉM usa READ UNCOMMITTED em produção. PostgreSQL NEM IMPLEMENTA DE VERDADE — trata READ UNCOMMITTED como READ COMMITTED. MySQL/InnoDB tem READ UNCOMMITTED real, mas é raro alguém ligar. Default na maioria dos sistemas: PostgreSQL e Oracle = READ COMMITTED; MySQL/InnoDB = REPEATABLE READ; SQL Server = READ COMMITTED."
+  },
+  {
+    "id": "tx-04",
+    "enunciado": "Qual a diferença entre NON-REPEATABLE READ e PHANTOM READ?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São termos diferentes para a mesma coisa",
+      "NON-REPEATABLE READ: mesma transação lê o MESMO DADO duas vezes e obtém valores DIFERENTES porque outra transação UPDATOU no meio. PHANTOM READ: mesma transação lê um CONJUNTO de linhas com filtro, e na segunda leitura aparecem LINHAS NOVAS (fantasmas) que satisfazem o filtro, porque outra transação INSERIU. REPEATABLE READ previne non-repeatable mas permite phantoms (em alguns SGBDs); SERIALIZABLE previne os dois",
+      "Non-repeatable é só em PostgreSQL, phantom só em MySQL",
+      "Phantom é sobre delete, non-repeatable sobre update"
+    ],
+    "resposta": 1,
+    "explicacao": "NON-REPEATABLE READ (Fuzzy Read, P2): T1 lê uma linha específica, T2 ATUALIZA aquela linha e commita, T1 lê de novo e vê valor diferente. EXEMPLO: T1 SELECT saldo WHERE id=1 (lê 1000); T2 UPDATE saldo=500 WHERE id=1 COMMIT; T1 SELECT saldo WHERE id=1 (agora lê 500). PHANTOM READ (P3): T1 lê um conjunto de linhas com filtro, T2 INSERE nova linha que satisfaz o filtro e commita, T1 reexecuta o mesmo filtro e vê linha NOVA (fantasma). EXEMPLO: T1 SELECT COUNT(*) WHERE valor > 1000 (retorna 5); T2 INSERT VALUES(1500) COMMIT; T1 mesmo SELECT (retorna 6 — fantasma). DIFERENÇA CHAVE: non-repeatable é sobre VALOR de uma linha existente que mudou; phantom é sobre EXISTÊNCIA de linhas novas. PREVENÇÃO ANSI: REPEATABLE READ previne non-repeatable mas permite phantoms; SERIALIZABLE previne ambos. NA PRÁTICA: PostgreSQL no nível 'REPEATABLE READ' usa SNAPSHOT ISOLATION (mais forte) — previne phantoms também. Isolation real é mais nuance que ANSI sugere — Berenson et al. (1995) mostrou isso."
+  },
+  {
+    "id": "tx-05",
+    "enunciado": "O paper 'A Critique of ANSI SQL Isolation Levels' (1995) de Berenson et al. mostrou que ANSI não cobre 2 anomalias importantes. Quais?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Dirty Read e Phantom Read",
+      "LOST UPDATE: T1 e T2 lêem mesmo valor, ambas calculam novo valor baseado no lido, ambas escrevem — a segunda escrita SOBRESCREVE a primeira; uma atualização foi perdida. WRITE SKEW: anomalia do Snapshot Isolation — duas transações lêem o MESMO snapshot, cada uma atualiza linha DIFERENTE, juntas violam invariante do banco (exemplo famoso: 2 médicos tirando plantão simultaneamente)",
+      "Apenas Dirty Read",
+      "Snapshot Isolation e Serializable"
+    ],
+    "resposta": 1,
+    "explicacao": "Berenson, Bernstein, Gray, Melton, O'Neil & O'Neil (1995), 'A Critique of ANSI SQL Isolation Levels', SIGMOD '95. ANSI definiu apenas 3 fenômenos (dirty read, non-repeatable, phantom), mas há mais. LOST UPDATE (atualização perdida): T1 SELECT (lê saldo=1000); T2 SELECT (lê saldo=1000); T1 calcula 1000-500=500; T2 calcula 1000-300=700; T1 UPDATE saldo=500; T2 UPDATE saldo=700. Resultado: 700 (esperado 200). Atualização de T1 foi perdida. SOLUÇÕES: (a) SELECT FOR UPDATE pessimistic lock; (b) coluna 'version' com optimistic locking (JPA @Version); (c) UPDATE atômico (UPDATE saldo = saldo - 500 em vez de SELECT+UPDATE). WRITE SKEW: anomalia específica do Snapshot Isolation. CASO FAMOSO DOS MÉDICOS: regra 'sempre pelo menos 1 médico de plantão'. 2 médicos online (Bruno e Murilo). Cada um simultaneamente: T1 SELECT count (=2 médicos); T2 SELECT count (=2 médicos); T1 UPDATE Bruno ativo=false (snapshot diz que há 2, OK); T2 UPDATE Murilo ativo=false; ambos COMMIT. Resultado: 0 médicos no plantão, invariante violado. Snapshot Isolation PERMITE write skew (cada T vê seu snapshot, ninguém modifica linha conflitante). Só SERIALIZABLE previne (detecta conflito read-write). Demonstra que SI ≠ Serializable, mesmo sendo próximo."
+  },
+  {
+    "id": "tx-06",
+    "enunciado": "Como funciona MVCC (Multi-Version Concurrency Control) em PostgreSQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Usa apenas locks pra controlar concorrência",
+      "Mantém MÚLTIPLAS VERSÕES de cada linha simultaneamente. Cada linha tem xmin (transação que criou) e xmax (transação que deletou/atualizou). UPDATE não modifica a linha existente — cria linha NOVA com xmin=transação_atual e marca a antiga com xmax=transação_atual. Cada transação vê a versão visível pra seu snapshot. Resultado: leitores NUNCA bloqueiam escritores e vice-versa",
+      "Implementa apenas Serializable",
+      "Não funciona em concorrência"
+    ],
+    "resposta": 1,
+    "explicacao": "MVCC (Multi-Version Concurrency Control) foi proposto na tese de PhD de David P. Reed no MIT em 1978. PostgreSQL, Oracle, SQL Server (read committed snapshot) e MySQL/InnoDB todos usam variantes. NO POSTGRESQL: cada linha tem dois campos invisíveis — xmin (ID da transação que criou esta versão) e xmax (ID da transação que deletou/atualizou ou 0). UPDATE em PostgreSQL é FISICAMENTE UM INSERT + marcação: (1) Marca linha antiga com xmax = sua_tx_id; (2) Cria linha NOVA com xmin = sua_tx_id. Cada transação T vê uma versão de linha SE xmin já commitou ANTES de T começar E (xmax = 0 OU xmax ainda não commitou OU xmax abortou). CONSEQUÊNCIAS: (a) leitores nunca bloqueiam escritores e vice-versa — diferente de SQL Server tradicional onde locks de leitura são comuns; (b) UPDATEs fazem tabela crescer mesmo sem novos dados (bloat); (c) VACUUM é o garbage collection — remove linhas 'dead' periodicamente (autovacuum); (d) Em tabelas com muito UPDATE, autovacuum pode não acompanhar e gerar bloat (use pg_stat_user_tables pra verificar n_dead_tup); (e) VACUUM FULL reescreve a tabela inteira mas BLOQUEIA — não usar em prod sem cuidado; usar pg_repack."
+  },
+  {
+    "id": "tx-07",
+    "enunciado": "O que é Two-Phase Locking (2PL) e quem inventou?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Eswaran, Gray, Lorie e Traiger (1976), no paper 'The Notions of Consistency and Predicate Locks in a Database System' (CACM 19(11)). Protocolo de locking onde transação tem 2 fases: GROWING (adquire locks, nunca libera) e SHRINKING (libera, nunca adquire mais). Locks são SHARED (S, leitura, múltiplos OK) ou EXCLUSIVE (X, escrita, bloqueia tudo)",
+      "Edsger Dijkstra em 1965",
+      "Tim Berners-Lee em 1989",
+      "Donald Knuth em 1973"
+    ],
+    "resposta": 0,
+    "explicacao": "Two-Phase Locking (2PL) foi formalizado em 1976 por K. P. Eswaran, J. N. Gray (o mesmo Jim Gray), R. A. Lorie e I. L. Traiger, todos da IBM, no paper 'The Notions of Consistency and Predicate Locks in a Database System' publicado em Communications of the ACM Vol. 19, No. 11. Funciona em DUAS FASES: GROWING — transação adquire locks, NUNCA LIBERA; SHRINKING — libera locks, NUNCA ADQUIRE MAIS. Prova-se que isso garante serializability. TIPOS DE LOCK: SHARED (S) — lock de leitura, múltiplos S simultâneos OK (várias transações podem ler); EXCLUSIVE (X) — lock de escrita, bloqueia tudo (uma transação escrevendo). MATRIZ COMPATIBILIDADE: pedir S quando há S existente — OK; pedir S quando há X — espera; pedir X quando há S — espera; pedir X quando há X — espera. PROBLEMA: deadlocks. T1 lock A, depois pede B; T2 lock B, depois pede A — espera infinita. SOLUÇÃO: SGBDs detectam graph de espera, escolhem 'vítima' pra abortar, aplicação faz retry. PREVENÇÃO: sempre adquirir locks na MESMA ORDEM (ex: ordenar por ID). USO PRÁTICO em SQL: SELECT FOR UPDATE adquire X lock; SELECT FOR SHARE adquire S lock. Em Spring Boot/JPA: @Lock(LockModeType.PESSIMISTIC_WRITE)."
+  },
+  {
+    "id": "tx-08",
+    "enunciado": "Em Spring Boot, qual a pegadinha conhecida como 'self-invocation' com @Transactional?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "@Transactional não funciona com JPA",
+      "@Transactional funciona via PROXY. Quando você chama um método @Transactional A PARTIR DE OUTRO MÉTODO NA MESMA CLASSE, o proxy é IGNORADO — a transação NÃO É ABERTA. Bug comum e silencioso. Solução: separar em outro service, ou injetar a própria classe via Spring (@Autowired self) e chamar via self.metodo()",
+      "@Transactional só funciona em métodos privados",
+      "@Transactional precisa de XML config"
+    ],
+    "resposta": 1,
+    "explicacao": "Spring usa PROXIES (CGLIB ou JDK Dynamic Proxy) pra interceptar chamadas a métodos @Transactional. Quando código externo chama um bean Spring, na verdade chama o proxy, que: (1) abre transação; (2) chama método real; (3) commita ou faz rollback. PROBLEMA: chamadas INTERNAS na mesma classe NÃO PASSAM pelo proxy — vão direto ao método. RESULTADO: @Transactional do método interno é IGNORADO. EXEMPLO BUGADO: 'public void processar(Long id) { this.salvarComTx(id); } @Transactional public void salvarComTx(Long id) { ... }'. Aqui salvarComTx NÃO abre transação quando chamado via processar. BUG SILENCIOSO — código compila, roda, mas sem isolamento esperado. SOLUÇÕES: (1) Separar em outro @Service — injetar como dependência, chamada vai pelo proxy; (2) Injetar a própria classe (@Autowired private MeuService self;) e chamar via self.salvarComTx(id); (3) Usar AspectJ load-time weaving (avançado); (4) Mover a anotação pro método público chamado externamente. OUTRAS PEGADINHAS de @Transactional: (a) não funciona em métodos private (proxy não consegue interceptar); (b) rollback default APENAS pra RuntimeException — pra Exception checada precisa @Transactional(rollbackFor = Exception.class); (c) readOnly=true é HINT pro JDBC/Hibernate — não impede escrita, apenas otimiza."
+  },
+  {
+    "id": "tx-09",
+    "enunciado": "Por que o default do PostgreSQL para isolation level é READ COMMITTED em vez de SERIALIZABLE?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Para preservar bugs",
+      "TRADE-OFF DE PERFORMANCE vs SEGURANÇA. SERIALIZABLE em PostgreSQL usa Serializable Snapshot Isolation (SSI) que detecta conflitos em runtime e ABORTA transações conflitantes — aplicação precisa fazer RETRY. Em workloads de alta concorrência, isso pode gerar muitos retries. READ COMMITTED é boa escolha pra maioria dos casos OLTP onde tolerar variações entre selects é OK. Quando precisa de garantia absoluta (transferências críticas, contagens de estoque), usa SERIALIZABLE explicitamente",
+      "PostgreSQL não suporta SERIALIZABLE",
+      "Para compatibilidade com Oracle"
+    ],
+    "resposta": 1,
+    "explicacao": "Trade-off central de design: ISOLATION MAIS FORTE = PERFORMANCE PIOR. SERIALIZABLE em PostgreSQL implementa Serializable Snapshot Isolation (SSI) — algoritmo que detecta conflitos em tempo de execução e ABORTA transações que violariam serializability. Aplicação RECEBE EXCEÇÃO ('could not serialize access') e precisa FAZER RETRY. Em workloads OLTP de alta concorrência com transações curtas, isso pode gerar muitos retries — overhead significativo. CASOS de uso ideais pra cada nível: READ COMMITTED (default): queries OLTP típicas (CRUD de pedidos, listagens com filtros, dashboards básicos) onde tolerância a variação entre selects da mesma tx é OK. REPEATABLE READ (= Snapshot Isolation em PostgreSQL): relatórios consistentes (precisa do mesmo snapshot durante toda a transação), exportações, queries longas onde mudanças no meio bagunçariam. SERIALIZABLE: transferências bancárias críticas, contagem de estoque concorrente, regras de negócio que dependem de invariantes que cruzam múltiplas linhas (caso dos médicos de plantão). REGRA PRÁTICA: use o default e suba o isolation só quando identificar problema específico. Operações críticas individuais podem usar SERIALIZABLE pontualmente via 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'. Em Spring Boot: @Transactional(isolation = Isolation.SERIALIZABLE) na operação crítica específica, deixando o resto no default."
+  },
+  {
+    "id": "tx-10",
+    "enunciado": "Verdadeiro ou falso: Snapshot Isolation é equivalente a SERIALIZABLE — ambos previnem todas as anomalias de concorrência.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Snapshot Isolation (SI) é STRONGER que REPEATABLE READ mas WEAKER que SERIALIZABLE. SI previne dirty read, non-repeatable read e phantom read, MAS PERMITE WRITE SKEW — anomalia descoberta no paper Berenson et al. (1995). EXEMPLO CANÔNICO DE WRITE SKEW (caso dos médicos de plantão): regra de negócio 'sempre pelo menos 1 médico de plantão'. 2 médicos online (Bruno e Murilo). Simultaneamente: T1 SELECT count(*) FROM Plantao WHERE ativo=true (snapshot diz 2); T2 SELECT count(*) FROM Plantao WHERE ativo=true (snapshot diz 2); T1 UPDATE Plantao SET ativo=false WHERE medico=Bruno (snapshot disse que havia 2, OK); T2 UPDATE Plantao SET ativo=false WHERE medico=Murilo; ambos COMMIT. RESULTADO: 0 médicos no plantão, invariante violada. SI permite isso porque cada transação vê seu snapshot inicial e MODIFICA LINHAS DIFERENTES — não há conflito direto de escrita. Apenas SERIALIZABLE previne write skew, detectando que a LEITURA de T1 (count) foi AFETADA pela ESCRITA de T2, criando conflito 'read-after-write' que viola serializability. Caso ATERRADOR HISTÓRICO: Oracle vendeu SI como Serializable por muito tempo, mesmo NÃO sendo equivalente — referência irônica no paper de Berenson sobre 'one large database vendor (rhymes with Auracle)'. PostgreSQL desde 9.1 (2011) implementa SERIALIZABLE REAL via SSI — primeira implementação prática que combina performance de MVCC com garantia de serializability."
+  }
+]

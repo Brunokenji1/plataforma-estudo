@@ -1,0 +1,122 @@
+[
+  {
+    "id": "bs-01",
+    "enunciado": "Qual a complexidade de tempo da busca binária em um array ordenado de n elementos?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+    "resposta": 1,
+    "explicacao": "O(log n) — logarítmica. A cada comparação, busca binária descarta metade do espaço de busca. Para um array de n elementos, são log₂(n) iterações no pior caso. Para n = 1 milhão, são ~20 iterações. Para n = 1 bilhão, ~30. Esse comportamento logarítmico é o que torna busca binária tão poderosa: dobrar o tamanho do problema custa só mais uma iteração."
+  },
+  {
+    "id": "bs-02",
+    "enunciado": "Qual a PRÉ-CONDIÇÃO obrigatória para usar busca binária?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O array deve ter número par de elementos",
+      "O array deve estar ordenado",
+      "O array deve ser de inteiros",
+      "O alvo deve estar no array"
+    ],
+    "resposta": 1,
+    "explicacao": "O array PRECISA estar ordenado. Sem ordenação, a busca binária não consegue decidir para qual lado descartar — toda a lógica depende de saber 'se arr[mid] < alvo, o alvo está na metade direita'. Se você precisa fazer várias buscas em dados que não estão ordenados, vale ordenar uma vez (O(n log n)) e fazer todas as buscas em O(log n). Se vai fazer poucas buscas, busca linear simples (O(n)) é mais eficiente que sort + binary search."
+  },
+  {
+    "id": "bs-03",
+    "enunciado": "Qual a forma CORRETA de calcular o meio em uma busca binária, evitando o bug famoso descoberto por Joshua Bloch em 2006?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "int mid = (lo + hi) / 2;",
+      "int mid = (lo + hi) * 2;",
+      "int mid = lo + (hi - lo) / 2;",
+      "int mid = (hi - lo) / 2;"
+    ],
+    "resposta": 2,
+    "explicacao": "lo + (hi - lo) / 2 evita overflow. A versão (lo + hi) / 2 que aparece em Programming Pearls (Bentley, 1986) falha quando lo + hi excede Integer.MAX_VALUE (2.147.483.647), pois a soma vira negativa e a divisão por 2 produz índice negativo — ArrayIndexOutOfBoundsException em Java, comportamento indefinido em C/C++. O bug ficou em produção por 20 anos antes de Bloch descobrir no JDK em 2006. Em Java moderno, (lo + hi) >>> 1 também funciona (unsigned right shift trata overflow como número positivo)."
+  },
+  {
+    "id": "bs-04",
+    "enunciado": "Para que tamanho de array o bug de overflow no `(lo + hi) / 2` da busca binária se manifesta em Java?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Mais de 1.000 elementos",
+      "Mais de 1 milhão de elementos",
+      "Mais de 1 bilhão de elementos (2^30)",
+      "Nunca acontece na prática"
+    ],
+    "resposta": 2,
+    "explicacao": "Aproximadamente 1 bilhão de elementos (2^30 = 1.073.741.824). Quando lo e hi estão ambos próximos de 2^30, a soma deles ultrapassa 2^31 - 1 (Integer.MAX_VALUE), causando overflow. Em 1986 quando Bentley publicou Programming Pearls, arrays de 1 bilhão eram INCONCEBÍVEIS. Em 2006, com Java no Google e arrays grandes em produção, o bug começou a se manifestar — daí Joshua Bloch descobriu. Big Data hoje torna essa preocupação rotineira."
+  },
+  {
+    "id": "bs-05",
+    "enunciado": "Qual é a diferença entre lower_bound e upper_bound?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "lower_bound encontra o menor elemento, upper_bound encontra o maior",
+      "lower_bound retorna o primeiro elemento >= alvo, upper_bound retorna o primeiro elemento > alvo",
+      "lower_bound é mais rápido que upper_bound",
+      "lower_bound só funciona com inteiros"
+    ],
+    "resposta": 1,
+    "explicacao": "lower_bound retorna a posição do primeiro elemento >= alvo. upper_bound retorna a posição do primeiro elemento > alvo. Em [1, 2, 2, 2, 3, 5] com alvo 2: lower_bound = 1 (primeiro 2), upper_bound = 4 (primeiro 3). A diferença upper_bound - lower_bound = 3 dá a quantidade de elementos iguais ao alvo, em O(log n). Em C++, std::lower_bound e std::upper_bound já estão prontos em <algorithm>. Em Java, Arrays.binarySearch tem comportamento confuso com duplicatas, então é melhor implementar manualmente."
+  },
+  {
+    "id": "bs-06",
+    "enunciado": "Em busca binária na resposta (BSA), o que é necessário para a técnica funcionar?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O problema precisa ter array ordenado",
+      "Espaço de respostas monotônico + função check(R) eficiente para validar uma resposta candidata",
+      "O problema precisa ser de grafos",
+      "Recursão obrigatória"
+    ],
+    "resposta": 1,
+    "explicacao": "Os dois requisitos: (1) monotonicidade — se a resposta R é viável, todas R' maiores (ou menores) também são; (2) check(R) eficiente que decide rapidamente se uma resposta R é viável. Com isso, você faz busca binária no ESPAÇO DAS RESPOSTAS POSSÍVEIS, não num array. Complexidade típica: O(log(range) × check_cost). Exemplos: Aggressive Cows, Allocate Books, Capacity to Ship Packages, Koko Eating Bananas, Split Array Largest Sum. Quando reconhece o padrão, problemas 'difíceis' viram quase mecânicos."
+  },
+  {
+    "id": "bs-07",
+    "enunciado": "Por que busca binária NÃO funciona bem em uma LinkedList?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque LinkedList não é ordenada",
+      "Porque o acesso ao elemento do meio é O(n) — você precisa percorrer a lista até chegar lá",
+      "Porque LinkedList só permite acesso sequencial",
+      "Porque LinkedList tem complexidade O(n²)"
+    ],
+    "resposta": 1,
+    "explicacao": "Busca binária depende de acesso ALEATÓRIO em O(1) ao elemento do meio. Em ArrayList ou std::vector, arr[i] é O(1). Em LinkedList, chegar no índice i é O(i) — precisa seguir os ponteiros next um por um. Isso destrói o ganho da busca binária: você teria O(n) por iteração × log n iterações = O(n log n), pior que busca linear simples O(n). Por isso lower_bound e binary_search precisam de RandomAccessIterator em C++."
+  },
+  {
+    "id": "bs-08",
+    "enunciado": "No problema 'Allocate Books' (distribuir n livros entre m estudantes minimizando o máximo de páginas), qual é o RANGE de busca binária na resposta?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "[0, n] — quantidade de livros",
+      "[1, m] — quantidade de estudantes",
+      "[max(pages), sum(pages)] — maior livro individual até soma total",
+      "[0, Integer.MAX_VALUE]"
+    ],
+    "resposta": 2,
+    "explicacao": "O range é [max(pages), sum(pages)]. O mínimo absoluto é max(pages): nenhum estudante pode receber menos que o maior livro individual (afinal, ELE precisa ler esse livro inteiro). O máximo é sum(pages): um único estudante pega todos os livros. Qualquer resposta fora desse range é impossível ou trivial. Definir o range correto é uma parte essencial da técnica — range muito amplo desperdiça iterações, range muito estreito pode excluir a resposta correta."
+  },
+  {
+    "id": "bs-09",
+    "enunciado": "Qual é o segundo bug mais comum em busca binária (depois do overflow)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Esquecer de retornar o resultado",
+      "Loop infinito por atualizar os ponteiros incorretamente (lo = mid em vez de lo = mid + 1)",
+      "Confundir lower com upper bound",
+      "Usar variável errada para o alvo"
+    ],
+    "resposta": 1,
+    "explicacao": "Loop infinito por atualização errada dos ponteiros. Se você escreve 'lo = mid' (sem o +1) e o caso atual não é solução, na próxima iteração o mid recalculado pode ser o MESMO valor, e o loop nunca termina. A regra: quando arr[mid] != alvo, mid definitivamente NÃO é a resposta, então exclua-o com mid + 1 ou mid - 1. Esse bug é especialmente perigoso porque NÃO falha em testes pequenos — só trava em entrada grande, dando timeout sem mensagem de erro. ICPC love."
+  },
+  {
+    "id": "bs-10",
+    "enunciado": "Verdadeiro ou falso: bancos de dados como PostgreSQL e MySQL usam busca binária (na forma de B-Trees) em seus índices.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. B-Trees (e B+Trees) são árvores balanceadas otimizadas para acesso a disco, generalizações da busca binária para casos onde cada nó tem MUITOS filhos (tipicamente 50-200, em vez de 2). Buscar em uma tabela com 1 bilhão de linhas usando índice B-Tree leva apenas 4-5 acessos a disco (log_100(10^9) ≈ 4.5). Sem o índice, full table scan = ler 1 bilhão de linhas. A diferença prática é entre 'instantâneo' e 'impraticável'. Toda vez que você cria um INDEX em SQL, está habilitando busca binária no disco — mesmo conceito da lição, só que escala industrial."
+  }
+]

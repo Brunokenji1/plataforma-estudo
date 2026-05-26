@@ -1,0 +1,453 @@
+---
+titulo: "Geometria Computacional: Quando Pontos no Plano Viram Algoritmos"
+trilha: "algoritmos"
+duracaoMin: 70
+dificuldade: "intermediario"
+referencias:
+  - "Ronald L. Graham (1972), 'An Efficient Algorithm for Determining the Convex Hull of a Finite Planar Set', Information Processing Letters 1(4), pp. 132-133 — paper original do Graham scan"
+  - "R. A. Jarvis (1973), 'On the identification of the convex hull of a finite set of points in the plane', Information Processing Letters 2(1), pp. 18-21 — gift wrapping"
+  - "A. M. Andrew (1979), 'Another efficient algorithm for convex hulls in two dimensions', Information Processing Letters 9(5), pp. 216-219 — monotone chain"
+  - "Michael Ian Shamos, Dan Hoey (1975), 'Closest-point problems', 16th Annual Symposium on Foundations of Computer Science (FOCS'75), pp. 151-162"
+  - "Jon L. Bentley, Michael Ian Shamos (1976), 'Divide-and-conquer in multidimensional space', STOC'76"
+  - "Jon L. Bentley, Thomas A. Ottmann (1979), 'Algorithms for reporting and counting geometric intersections', IEEE Transactions on Computers C-28(9), pp. 643-647"
+  - "Mark de Berg, Otfried Cheong, Marc van Kreveld, Mark Overmars, Computational Geometry: Algorithms and Applications, 3ª ed., Springer 2008 — livro definitivo"
+  - "Franco P. Preparata, Michael Ian Shamos, Computational Geometry: An Introduction, Springer 1985 — primeiro livro-texto da área"
+  - "MIT OCW 6.838 (Geometric Folding Algorithms), Erik Demaine"
+  - "Stanford CS 268 — Geometric Algorithms"
+---
+
+## A área que nasceu nos anos 70
+
+Em **1975**, na **16th Annual Symposium on Foundations of Computer Science** (FOCS) em Berkeley, dois pesquisadores chamados **Michael Ian Shamos** e **Dan Hoey** apresentaram um paper intitulado **"Closest-point problems"**. Era uma das primeiras vezes que problemas geométricos clássicos — encontrar o par de pontos mais próximo, calcular envoltórias convexas, detectar interseções de segmentos — eram tratados sistematicamente como **problemas algorítmicos**, com análise rigorosa de complexidade.
+
+Esse paper marca o nascimento formal da **Geometria Computacional** como área. Antes dela, problemas geométricos eram tratados por matemáticos (síntese geométrica) ou engenheiros (CAD aplicado), mas raramente com a abordagem rigorosa de "qual o algoritmo ótimo pra resolver isso em N pontos?".
+
+Shamos defendeu seu PhD em **Yale** em 1978 com a tese **"Computational Geometry"** — o termo foi cunhado por ele. Em **1985**, junto com **Franco Preparata** (Brown University), publicou o livro **"Computational Geometry: An Introduction"** (Springer) — o primeiro livro-texto da área, ainda hoje a referência clássica.
+
+Hoje, **Geometria Computacional** é uma das áreas mais aplicadas em algoritmos:
+
+- **Sistemas de Informação Geográfica (GIS)** — PostGIS, MongoDB geospatial, Google Maps, Waze
+- **Computer Graphics** — renderização, ray tracing, simulação física
+- **Robótica** — planejamento de trajetória, detecção de colisão, navegação autônoma
+- **Computer-Aided Design (CAD)** — AutoCAD, SolidWorks, modelagem 3D
+- **Visão Computacional** — feature matching, reconhecimento de formas
+- **Jogos** — física, IA de pathfinding, line-of-sight
+- **Drug design** — análise de estruturas moleculares
+- **Astronomia** — Voronoi diagrams pra distribuição de galáxias
+
+Esta lição cobre **três problemas fundamentais** dessa área:
+
+1. **Orientação de pontos** (cross product trick) — primitiva fundamental usada em tudo
+2. **Convex Hull** (envoltória convexa) — Graham scan (1972) e Andrew's monotone chain (1979)
+3. **Closest Pair of Points** — Shamos-Hoey (1975), elegante divide-and-conquer
+
+E uma **técnica geral** — **Line Sweep** — que aparece em vários problemas.
+
+No fim, você vai ter o ferramental básico de geometria computacional usado em ICPC, engenharia de software de jogos, GIS, e muito mais.
+
+---
+
+## A primitiva fundamental: orientação de 3 pontos
+
+Antes de qualquer algoritmo, precisa de uma primitiva geométrica. Quase todo algoritmo de geometria computacional usa essa pergunta:
+
+> **Dado 3 pontos A, B, C no plano, em que sentido eles "viram"? Esquerda (counter-clockwise), direita (clockwise), ou são colineares?**
+
+Visualização:
+
+```
+        C
+       /
+      /            ← virada à esquerda (CCW)
+     B            
+    /
+   A
+
+   A───B───C       ← colineares
+
+   A
+    \
+     \             ← virada à direita (CW)
+      B
+       \
+        C
+```
+
+Pra responder isso eficientemente, usa-se o **produto vetorial 2D** (cross product). Define-se:
+
+```
+cross(AB, AC) = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)
+```
+
+E o sinal do resultado revela a orientação:
+
+- `cross > 0` → **counter-clockwise** (esquerda)
+- `cross < 0` → **clockwise** (direita)
+- `cross == 0` → **colineares**
+
+> **Por que isso funciona?** O cross product 2D é o **determinante** da matriz com vetores `AB` e `AC` como linhas. Geometricamente, é a **área com sinal** do paralelogramo formado por esses vetores. Sinal positivo = orientação CCW, sinal negativo = CW, zero = vetores paralelos (= pontos colineares).
+
+Operação O(1), super barata. Mas **base de tudo**. Implementação:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class Geometria {
+    static class Ponto {
+        double x, y;
+        Ponto(double x, double y) { this.x = x; this.y = y; }
+    }
+
+    // Retorna positivo se ABC é CCW (esquerda),
+    // negativo se CW (direita), zero se colineares
+    public static double cross(Ponto A, Ponto B, Ponto C) {
+        return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+    }
+
+    public static int orientacao(Ponto A, Ponto B, Ponto C) {
+        double v = cross(A, B, C);
+        if (v > 0) return 1;          // CCW
+        if (v < 0) return -1;         // CW
+        return 0;                     // colineares
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+struct Ponto { double x, y; };
+
+double cross(const Ponto& A, const Ponto& B, const Ponto& C) {
+    return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+}
+
+int orientacao(const Ponto& A, const Ponto& B, const Ponto& C) {
+    double v = cross(A, B, C);
+    if (v > 0) return 1;     // CCW
+    if (v < 0) return -1;    // CW
+    return 0;                // colineares
+}
+```
+
+</Code>
+</CodeSwap>
+
+<Insight>
+**Truque clássico**: pra evitar erros de ponto flutuante, **use coordenadas inteiras sempre que possível**. Se os pontos têm coordenadas inteiras, o `cross` produz inteiro — comparação exata, sem ε de tolerância. Em ICPC, isso é regra: leia os pontos como `long long`, faça o cross product com `long long`, compare com zero exato. Cuidado com overflow: se coordenadas são até 10^9, o cross pode chegar a 4×10^18, próximo do limite de `long long` (~9.2×10^18). Use `__int128` se precisar de mais precisão.
+</Insight>
+
+### Aplicações imediatas da orientação
+
+Com `cross` em mãos, dá pra responder várias perguntas em O(1):
+
+- **Ponto está à esquerda/direita de uma reta?** → `cross(A, B, P)` com A, B definindo a reta
+- **Dois segmentos se cruzam?** → testar orientações dos endpoints
+- **Polígono é convexo?** → todas as triplas consecutivas têm mesma orientação
+- **Ponto está dentro de polígono convexo?** → sinal consistente do cross com cada lado
+- **Calcular área de polígono** → "shoelace formula" usa cross products
+
+Essa é a primeira lição da geometria computacional: **quase tudo se reduz a determinar orientação de pontos**.
+
+---
+
+## Convex Hull: a envoltória convexa
+
+Agora um problema clássico. Dado um conjunto de N pontos no plano, encontre o **menor polígono convexo que contém todos os pontos**.
+
+**Visualização intuitiva**: imagine os pontos como pregos numa tábua. Estique um elástico em volta deles. O formato que o elástico assume = **convex hull**.
+
+```
+   •          •
+                       •
+       •
+                   •         •
+            •
+      •                 •            (pontos no plano)
+         •         •
+              •
+```
+
+```
+   ┌─────────────┐
+   │•          • │
+   │           ╲ │
+   │              •
+   │     •     ╲ │
+   │            ╲ ─ ─ • ─ ─ •
+   │             ╲│     ╱
+   │      •       ╲    ╱            (convex hull)
+   └────────╲──────╲ ╱
+            ╲      ╲
+             • ─ ─ ─•
+```
+
+### Aplicações de convex hull
+
+Mais comum do que parece:
+
+- **Robótica / detecção de colisão**: substitui um robô complexo pela sua convex hull (mais simples). Se o hull não colide, o robô não colide
+- **Computer vision**: aproximação de contornos de objetos detectados em imagens
+- **GIS**: menor área convexa cobrindo um conjunto de pontos (cidades, antenas)
+- **Análise de dados**: outliers ficam nos vértices do hull
+- **Pattern recognition**: convex deficiency trees pra classificar formas
+- **Minimum bounding box**: a menor caixa retangular tem ao menos um lado paralelo a uma aresta do hull
+
+### Graham scan (1972): o algoritmo clássico
+
+Em **1972**, **Ronald Graham** (1935-2020) — matemático lendário também conhecido pelo **número de Graham** (um número tão grande que ganhou nome próprio) — publicou um paper de **duas páginas** no Information Processing Letters: **"An Efficient Algorithm for Determining the Convex Hull of a Finite Planar Set"**. O algoritmo é **O(N log N)**, ótimo (já que ordenação de N números reais reduz pra ele).
+
+A ideia:
+
+1. Encontre o **ponto mais baixo** (menor `y`, desempate por menor `x`). Chame-o `P0`. Esse ponto está garantidamente no hull.
+2. **Ordene** todos os outros pontos por **ângulo polar** em relação a `P0`. Empate (colineares) → mais próximo primeiro.
+3. **Itera** pelos pontos ordenados, mantendo uma **pilha**. A cada novo ponto:
+   - Enquanto o topo da pilha + ponto atual fizerem uma **virada à direita ou colinear**, **desempilha** (esse ponto não está no hull final).
+   - Empilha o ponto atual.
+4. **Pilha final = vértices do hull em ordem CCW**.
+
+A intuição: ao varrer os pontos em ordem angular, **viradas à esquerda preservam convexidade**, viradas à direita ou colinearidade indicam que o vértice anterior é "concavidade" que precisa ser removida.
+
+### Andrew's monotone chain (1979): a variante mais usada hoje
+
+Em **1979**, **A. M. Andrew** publicou no mesmo Information Processing Letters uma variante: **"Another efficient algorithm for convex hulls in two dimensions"** (IPL 9(5), pp. 216-219). Mesma complexidade O(N log N), mas:
+
+- **Ordena por `(x, y)` lexicograficamente** em vez de por ângulo polar — mais simples, sem trigonometria
+- **Constrói o hull em duas metades**: parte superior e parte inferior, depois junta
+- **Implementação mais limpa**, sem casos especiais
+
+Hoje, **monotone chain é a versão padrão em ICPC e produção** — mais fácil de implementar corretamente. Implementação:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class ConvexHull {
+    static class Ponto implements Comparable<Ponto> {
+        long x, y;
+        Ponto(long x, long y) { this.x = x; this.y = y; }
+        public int compareTo(Ponto o) {
+            if (x != o.x) return Long.compare(x, o.x);
+            return Long.compare(y, o.y);
+        }
+    }
+
+    // > 0: CCW (esquerda), < 0: CW (direita), = 0: colineares
+    static long cross(Ponto O, Ponto A, Ponto B) {
+        return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+    }
+
+    // Retorna o convex hull em ordem CCW, sem repetir o primeiro ponto no final
+    public static List<Ponto> convexHull(List<Ponto> pontos) {
+        int n = pontos.size();
+        if (n < 3) return new ArrayList<>(pontos);
+
+        Collections.sort(pontos);
+        Ponto[] hull = new Ponto[2 * n];
+        int k = 0;
+
+        // Constrói parte INFERIOR
+        for (Ponto p : pontos) {
+            while (k >= 2 && cross(hull[k - 2], hull[k - 1], p) <= 0) k--;
+            hull[k++] = p;
+        }
+
+        // Constrói parte SUPERIOR
+        int lower = k + 1;
+        for (int i = n - 2; i >= 0; i--) {
+            Ponto p = pontos.get(i);
+            while (k >= lower && cross(hull[k - 2], hull[k - 1], p) <= 0) k--;
+            hull[k++] = p;
+        }
+
+        List<Ponto> resultado = new ArrayList<>();
+        for (int i = 0; i < k - 1; i++) resultado.add(hull[i]);
+        return resultado;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+struct Ponto {
+    long long x, y;
+    bool operator<(const Ponto& o) const {
+        return x != o.x ? x < o.x : y < o.y;
+    }
+};
+
+long long cross(const Ponto& O, const Ponto& A, const Ponto& B) {
+    return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+}
+
+std::vector<Ponto> convexHull(std::vector<Ponto> pontos) {
+    int n = pontos.size();
+    if (n < 3) return pontos;
+    std::sort(pontos.begin(), pontos.end());
+    std::vector<Ponto> hull(2 * n);
+    int k = 0;
+
+    // Parte inferior
+    for (int i = 0; i < n; i++) {
+        while (k >= 2 && cross(hull[k - 2], hull[k - 1], pontos[i]) <= 0) k--;
+        hull[k++] = pontos[i];
+    }
+
+    // Parte superior
+    int lower = k + 1;
+    for (int i = n - 2; i >= 0; i--) {
+        while (k >= lower && cross(hull[k - 2], hull[k - 1], pontos[i]) <= 0) k--;
+        hull[k++] = pontos[i];
+    }
+
+    hull.resize(k - 1);
+    return hull;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(N log N) — dominada pelo sort. O loop de construção é O(N) amortizado (cada ponto entra e sai da pilha no máximo uma vez).
+
+<ComplexidadeBox melhor="O(N log N)" media="O(N log N)" pior="O(N log N)" />
+
+### Detalhe: `<= 0` ou `< 0`?
+
+Olha o `while (... cross(...) <= 0)` no código. A diferença:
+
+- `<= 0`: remove pontos colineares (hull terá só os "vértices estritos")
+- `< 0`: mantém pontos colineares na borda
+
+Depende do que o problema pede. Em ICPC, leia o enunciado com atenção. **Default seguro**: `<= 0` (hull mínimo, sem pontos redundantes).
+
+### Outros algoritmos de convex hull
+
+Existem várias alternativas:
+
+- **Jarvis march / Gift Wrapping** (R. A. Jarvis, 1973): O(N·H) onde H = pontos no hull. Vantagem: rápido quando H é pequeno. Desvantagem: ruim quando H é grande.
+- **QuickHull** (Bykat, Eddy, 1977): divide-and-conquer, O(N log N) em média, O(N²) pior caso. Análogo geométrico do QuickSort.
+- **Chan's algorithm** (Timothy M. Chan, 1996): O(N log H), **output-sensitive** — ótimo quando H é pequeno. Combina ideias de Graham + Jarvis.
+- **3D Convex Hull**: complicação séria. Algoritmos em O(N log N) usam técnicas como gift-wrapping 3D, incremental, divide-and-conquer.
+
+Em ICPC, **monotone chain** é o suficiente em 99% dos casos.
+
+---
+
+## Closest Pair of Points: o problema canônico
+
+Próximo problema clássico: dado N pontos no plano, encontre **o par mais próximo** (menor distância euclidiana).
+
+**Brute force**: testar todos os pares — O(N²). Pra N = 100.000, isso são **10 bilhões de operações**. Inviável.
+
+A pergunta de Shamos e Hoey em **1975**: **dá pra fazer melhor**? Sim — **O(N log N)** com **divide-and-conquer** (FOCS'75, paper *"Closest-point problems"*).
+
+### A ideia: dividir o plano em duas metades
+
+1. **Ordena os pontos por coordenada `x`**
+2. **Divide ao meio**: metade esquerda L, metade direita R, separadas por uma reta vertical `x = m`
+3. **Recursivamente** encontra o par mais próximo em L (distância `dL`) e em R (distância `dR`)
+4. Seja `d = min(dL, dR)`. **Mas o par mais próximo pode ter um ponto em L e outro em R, próximos da divisão!**
+5. **Faixa central**: considera apenas pontos com `|x - m| < d`. Pares mais próximos atravessando a divisão estão aqui.
+6. **Aqui vem o truque**: na faixa, ordenando por `y`, **cada ponto precisa comparar com no máximo 7 outros** (prova geométrica usando a propriedade de que `d` é o menor visto até agora). Verificação O(N) total.
+
+```
+Esquerda (L)      |  faixa  |     Direita (R)
+                  |←  2d  →|
+ •      •         |  •  •  |     •         •
+        •         |        |  •
+                  | •      |        •     •
+   •              |        |
+        •         |   •    | •            •
+                  | •      |        •
+                  |        |
+                  m (linha vertical)
+```
+
+Cada nível da recursão: O(N) trabalho. Profundidade: log N. **Total: O(N log N)**.
+
+### Aplicações
+
+- **Detecção de colisão** em jogos físicos (broad phase): "qual par de objetos pode colidir?"
+- **GIS / mapas**: "qual a cidade mais próxima de cada cidade?"
+- **Astronomia**: distância mínima entre objetos celestes
+- **Algoritmos de clustering** (single-linkage hierarchical clustering)
+- **Bioinformática**: análise de estruturas moleculares
+- **Computação gráfica**: nearest-neighbor queries em ray tracing
+
+### Variante: nearest neighbor query
+
+Generalização: dado um conjunto de pontos, **construa uma estrutura que responda "qual o ponto mais próximo de uma query Q?"** em tempo sub-linear.
+
+Estruturas pra isso: **kd-tree** (Bentley, 1975 — mesmo Jon Bentley do Bentley-Ottmann, Programming Pearls, Segment Tree), **R-tree** (Guttman, 1984 — usada em PostGIS, MongoDB geospatial), **Ball-tree**, **HNSW** (Hierarchical Navigable Small World, mais recente, usado em **vector databases** como Pinecone, Weaviate, Qdrant pra busca semântica com embeddings de LLMs).
+
+---
+
+## Line Sweep: a técnica geral
+
+Pra fechar a lição, uma **técnica geral** que aparece em vários problemas de geometria computacional: **line sweep** (ou **sweep line**).
+
+### A ideia
+
+Imagine uma **linha vertical** varrendo o plano da esquerda pra direita. Conforme ela se move, eventos acontecem (pontos são "encontrados", segmentos começam ou terminam). Mantém-se uma **estrutura de dados** ativa que representa o "estado atual" no momento da varredura.
+
+Eventos são processados em ordem de coordenada `x` — geralmente armazenados em uma **priority queue** (heap, da Lição 10).
+
+### Aplicação canônica: Line segment intersection (Bentley-Ottmann)
+
+Em **1979**, **Jon L. Bentley** e **Thomas A. Ottmann** publicaram **"Algorithms for reporting and counting geometric intersections"** (IEEE Trans. Computers C-28(9)). Resolve o problema: dado N segmentos no plano, encontre todas as K interseções.
+
+Brute force: O(N²) testando todos os pares. Bentley-Ottmann: **O((N + K) log N)** — muito melhor quando K é pequeno (caso comum).
+
+A ideia:
+
+1. **Eventos**: cada segmento contribui com 2 eventos (início e fim em coordenada `x`). Cada interseção descoberta gera novo evento.
+2. **Estrutura ativa**: BBST (Lição 9) com os segmentos atualmente "abertos", ordenados pela sua coordenada `y` na posição atual da varredura.
+3. **Processamento**:
+   - **Início de segmento**: insere na BBST. Testa interseção com vizinhos imediatos (acima e abaixo).
+   - **Fim de segmento**: remove da BBST. Testa interseção entre os dois vizinhos que ficaram adjacentes.
+   - **Interseção encontrada**: troca a ordem dos dois segmentos na BBST. Testa interseções com novos vizinhos.
+
+Aplicações modernas: **renderização gráfica** (z-buffer, depth sorting), **engines de jogos**, **CAD** (verificar overlap de peças), **detecção de auto-interseção** de polígonos complexos.
+
+### Outras aplicações de line sweep
+
+- **Closest Pair via sweep line** (variante do Shamos-Hoey)
+- **Voronoi diagrams** via Fortune's algorithm (Steven Fortune, 1986)
+- **Retângulos: união, interseção, área total**
+- **Skyline problem** (clássico em entrevistas): silhueta de edifícios visíveis
+- **Event-driven simulation** em geral
+
+A técnica é tão geral que **"line sweep" se tornou paradigma** em geometria computacional, equivalente ao "divide and conquer" em algoritmos clássicos.
+
+---
+
+## Recap
+
+**Geometria Computacional** nasceu formalmente em 1975 com o paper de **Shamos & Hoey** no FOCS. O termo foi cunhado por Shamos em sua tese de PhD em Yale (1978). Em 1985, Preparata & Shamos publicaram o livro **"Computational Geometry: An Introduction"** — primeiro livro-texto da área. Hoje, aparece em GIS, jogos, robótica, CAD, visão computacional, drug design, astronomia.
+
+A **primitiva fundamental** é a **orientação de 3 pontos** via **cross product 2D**: `cross(AB, AC) = (B.x-A.x)·(C.y-A.y) - (B.y-A.y)·(C.x-A.x)`. Sinal positivo = CCW, negativo = CW, zero = colineares. Base de praticamente todo algoritmo geométrico. Em ICPC, use coordenadas inteiras + `long long` (cuidado com overflow).
+
+**Convex Hull** (envoltória convexa) — menor polígono convexo cobrindo todos os pontos. **Graham scan** (Ronald Graham, 1972 — também conhecido pelo número de Graham): O(N log N), pilha + ordenação por ângulo polar. **Monotone chain** (A. M. Andrew, 1979): mesma complexidade, ordenação lexicográfica, mais simples — versão padrão em ICPC. Outras: Jarvis march O(N·H), QuickHull, Chan's algorithm. Aplicações em colisão, GIS, pattern recognition, bounding boxes.
+
+**Closest Pair of Points** — Shamos-Hoey 1975, divide-and-conquer em **O(N log N)**. Truque do "cada ponto compara com no máximo 7 vizinhos" na faixa central. Generalização: nearest neighbor queries via kd-tree (Bentley, 1975), R-tree (Guttman, 1984), HNSW (vector databases modernos).
+
+**Line Sweep** — técnica geral onde uma linha varre o plano da esquerda pra direita, processando eventos em ordem de `x`, mantendo uma estrutura ativa (priority queue + BBST). Aplicação canônica: **Bentley-Ottmann** (1979) pra interseção de segmentos em O((N+K) log N). Aparece em Fortune's algorithm pra Voronoi (1986), skyline problem, união de retângulos, e muito mais.
+
+A trilha de algoritmos cobre agora 23 lições. Cobertura praticamente exaustiva de algoritmos clássicos. Próximas direções:
+
+- **Number Theory pra ICPC** — GCD/Euclides estendido, modular exp, Sieve, Euler totient, CRT, Fermat
+- **String matching avançado** — suffix arrays, Z-function, suffix automaton (expande Lição 17)
+- **Algoritmos randomizados e aproximados** — Las Vegas vs Monte Carlo, Christofides (TSP), 2-approx (Vertex Cover)
+- **Mudar de trilha**: Bancos de Dados, Sistemas Operacionais, Redes, Arquitetura de Software
+
+Manda qual direção quer.

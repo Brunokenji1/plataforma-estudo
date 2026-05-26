@@ -1,0 +1,590 @@
+---
+titulo: "Heap e Priority Queue: A Estrutura Que Sabe Quem é o Próximo"
+trilha: "algoritmos"
+duracaoMin: 55
+dificuldade: "intermediario"
+referencias:
+  - "J. W. J. Williams (1964), 'Algorithm 232: Heapsort', Communications of the ACM 7(6) — paper que introduziu heap e heapsort"
+  - "Robert W. Floyd (1964), 'Algorithm 245: Treesort', Communications of the ACM 7(12) — heapify em O(n)"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 6 — Heapsort"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 2.4 — Priority Queues"
+  - "MIT OCW 6.006 (Spring 2020), Lecture 4 — Heaps and Heap Sort, Erik Demaine"
+  - "Edinburgh University, IADS Lecture 12 (2022/23) — Heapsort properties"
+  - "Oracle Java SE 21 — java.util.PriorityQueue"
+  - "cppreference.com — std::priority_queue, std::make_heap, std::push_heap, std::pop_heap"
+  - "Donald Knuth, The Art of Computer Programming, Vol. 3, Cap. 5.2.3 — Sorting by Selection (heap-related)"
+---
+
+## Onde árvore binária encontra ranking
+
+Quase toda aplicação real tem o mesmo padrão em algum momento: você tem um monte de coisas pra processar, e precisa **escolher a próxima** baseado em alguma prioridade.
+
+Dijkstra processa nós de grafo em ordem de menor distância. A* prioriza nós com menor `f(n) = g(n) + h(n)`. O kernel agenda processos por prioridade. Bancos de dados ordenam queries por custo estimado. Compressores Huffman montam árvores escolhendo sempre os dois símbolos menos frequentes. Streaming de mediana mantém duas heaps que cooperam. Top-K em ranking mantém uma heap fixa.
+
+Em **todos** esses casos, você quer:
+- Inserir um item com prioridade arbitrária — **rápido**
+- Pegar (e remover) o item de **maior** ou **menor** prioridade — **rápido**
+
+Hash table não serve: não tem noção de ordem. BST balanceada (TreeMap) serve, mas é complexa demais pra um problema mais simples. **Heap** resolve isso de forma elegante e eficiente.
+
+Nesta lição você vai entender uma estrutura que é, de longe, uma das mais bonitas em CS: simples de descrever (cabe num parágrafo), simples de implementar (caberia em meia página de código), e poderosa o suficiente pra estar em quase todo algoritmo sério de grafos e de otimização.
+
+---
+
+## Heap: a árvore que mora num array
+
+Heap é uma árvore binária com duas regras simples:
+
+**Regra 1: Quase completa.** Cada nível está preenchido da esquerda pra direita, e só o último nível pode estar incompleto.
+
+```
+       7
+      / \
+     4   6
+    / \  /
+   1  3 5      ← último nível, parcial (pode estar incompleto)
+```
+
+**Regra 2: Propriedade do heap.** Em um **max-heap**, todo nó é **maior ou igual** aos seus filhos. Em um **min-heap**, todo nó é **menor ou igual** aos seus filhos.
+
+Note bem: a propriedade vale **só entre pai e filhos**, não entre irmãos. Os filhos de um mesmo pai podem estar em qualquer ordem entre si. Isso é **diferente de BST**, onde existe ordem total entre todos os nós.
+
+Como consequência da Regra 2, **a raiz é sempre o maior elemento** (max-heap) ou o **menor** (min-heap). É essa propriedade que torna heap útil pra "pegar o melhor".
+
+### O truque de guardar uma árvore em array
+
+Aqui está a parte mais elegante da estrutura. Por causa da Regra 1 (árvore quase completa), você consegue **representar o heap inteiro em um array, sem ponteiros**.
+
+Numera os nós em **level order** (largura, da esquerda pra direita), começando do 0:
+
+```
+Posição:    0
+          /   \
+         1     2
+        / \   / \
+       3   4 5   6
+      /
+     7
+
+Array:  [val0, val1, val2, val3, val4, val5, val6, val7]
+```
+
+A genialidade: pra qualquer nó no índice `i`, você calcula filhos e pai com **aritmética simples**:
+
+- Filho esquerdo de `i`: `2*i + 1`
+- Filho direito de `i`: `2*i + 2`
+- Pai de `i`: `(i - 1) / 2`
+
+Quer ir do nó 2 pro filho esquerdo dele? Índice `2*2 + 1 = 5`. Quer subir do nó 4 pro pai? Índice `(4-1)/2 = 1`. Tudo em O(1), sem alocar objetos, sem seguir ponteiros.
+
+<Insight>
+Esse truque de mapear árvore pra array é uma das ideias mais elegantes em estruturas de dados. Sem ponteiros: **economia de memória** (cada ponteiro custa 8 bytes em sistemas 64-bit; com um milhão de nós são 16 MB economizados em relação a uma BST). E cache locality muito superior: nós próximos na árvore ficam próximos no array, então acessos seguem padrões previsíveis pra o prefetcher do CPU.
+</Insight>
+
+---
+
+## As duas operações fundamentais
+
+Inserção e remoção da raiz são tudo o que heap oferece. Ambas em **O(log n)**.
+
+### Insert: sift up
+
+Quando você insere um novo elemento, ele entra na **primeira posição livre** (último nível, mais à esquerda possível) — preserva a Regra 1 (forma da árvore) trivialmente. Mas pode quebrar a Regra 2 (propriedade do heap).
+
+A correção: **borbulhar pra cima** comparando com o pai. Se o filho é maior (em max-heap), troca. Repete até parar de quebrar a propriedade.
+
+Esse processo se chama **sift up** (peneirar pra cima).
+
+```
+Estado inicial (max-heap):       Insere 9 no fim:           Sift up 9:
+       7                              7                          9
+      / \                            / \                        / \
+     4   6                          4   6                      4   7
+    / \                            / \  \                     / \  \
+   1   3                          1   3  9                   1   3  6
+```
+
+Inseriu 9 na próxima posição livre. Compara com pai (6): 9 > 6, troca. Compara com novo pai (7): 9 > 7, troca. Compara com novo pai (raiz, não tem pai): para. Heap restaurado.
+
+**Custo**: o sift up percorre no máximo um caminho da folha até a raiz. Em uma árvore quase completa, isso é **O(log n)**.
+
+### Extract: sift down
+
+Você sempre tira **da raiz** (o maior, em max-heap). Mas se você simplesmente remove a raiz, a árvore quebra: duas subárvores soltas sem nó comum.
+
+O truque clássico: **pega o último elemento (folha mais à direita do último nível) e coloca na raiz**. Isso preserva a forma da árvore (Regra 1). Mas pode quebrar a propriedade — o novo "topo" provavelmente não é o maior.
+
+A correção: **borbulhar pra baixo** comparando com os filhos. Se algum filho é maior (max-heap), troca com o **maior** dos filhos. Repete até estabilizar.
+
+```
+Antes:                Move último p/ raiz:          Sift down:
+       9                      3                          7
+      / \                    / \                        / \
+     4   7                  4   7                      4   6
+    / \  \                 / \                        / \
+   1   3  6               1                          1   3
+```
+
+Tira 9 (a resposta), move 3 pra raiz. Compara com filhos: 4 e 7. O maior é 7, troca. Compara 3 com filhos (nenhum). Heap restaurado.
+
+**Custo**: o sift down percorre no máximo um caminho da raiz até uma folha — **O(log n)**.
+
+### Implementação completa do MaxHeap
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class MaxHeap {
+    private List<Integer> heap = new ArrayList<>();
+
+    public int size() { return heap.size(); }
+    public boolean isEmpty() { return heap.isEmpty(); }
+
+    public int peek() {
+        if (isEmpty()) throw new IllegalStateException("vazio");
+        return heap.get(0);                          // raiz = máximo
+    }
+
+    public void insert(int valor) {
+        heap.add(valor);                              // insere no fim
+        siftUp(heap.size() - 1);
+    }
+
+    public int extractMax() {
+        if (isEmpty()) throw new IllegalStateException("vazio");
+        int max = heap.get(0);
+        int ultimo = heap.remove(heap.size() - 1);
+        if (!isEmpty()) {
+            heap.set(0, ultimo);                       // último na raiz
+            siftDown(0);
+        }
+        return max;
+    }
+
+    private void siftUp(int i) {
+        while (i > 0) {
+            int pai = (i - 1) / 2;
+            if (heap.get(i) <= heap.get(pai)) break;
+            trocar(i, pai);
+            i = pai;
+        }
+    }
+
+    private void siftDown(int i) {
+        int n = heap.size();
+        while (true) {
+            int esq = 2 * i + 1;
+            int dir = 2 * i + 2;
+            int maior = i;
+            if (esq < n && heap.get(esq) > heap.get(maior)) maior = esq;
+            if (dir < n && heap.get(dir) > heap.get(maior)) maior = dir;
+            if (maior == i) break;
+            trocar(i, maior);
+            i = maior;
+        }
+    }
+
+    private void trocar(int i, int j) {
+        int tmp = heap.get(i);
+        heap.set(i, heap.get(j));
+        heap.set(j, tmp);
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <stdexcept>
+
+class MaxHeap {
+private:
+    std::vector<int> heap;
+
+    void siftUp(int i) {
+        while (i > 0) {
+            int pai = (i - 1) / 2;
+            if (heap[i] <= heap[pai]) break;
+            std::swap(heap[i], heap[pai]);
+            i = pai;
+        }
+    }
+
+    void siftDown(int i) {
+        int n = heap.size();
+        while (true) {
+            int esq = 2 * i + 1;
+            int dir = 2 * i + 2;
+            int maior = i;
+            if (esq < n && heap[esq] > heap[maior]) maior = esq;
+            if (dir < n && heap[dir] > heap[maior]) maior = dir;
+            if (maior == i) break;
+            std::swap(heap[i], heap[maior]);
+            i = maior;
+        }
+    }
+
+public:
+    int size() const { return heap.size(); }
+    bool empty() const { return heap.empty(); }
+
+    int peek() const {
+        if (empty()) throw std::runtime_error("vazio");
+        return heap[0];                            // raiz = máximo
+    }
+
+    void insert(int valor) {
+        heap.push_back(valor);                     // insere no fim
+        siftUp(heap.size() - 1);
+    }
+
+    int extractMax() {
+        if (empty()) throw std::runtime_error("vazio");
+        int max = heap[0];
+        int ultimo = heap.back();
+        heap.pop_back();
+        if (!empty()) {
+            heap[0] = ultimo;                       // último na raiz
+            siftDown(0);
+        }
+        return max;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+A implementação inteira cabe em ~50 linhas. Compara com a complexidade de implementar Red-Black Tree (200+ linhas, casos de rotação intrincados) e você entende por que heap é a estrutura preferida quando você só precisa de "próximo maior/menor".
+
+<ComplexidadeBox melhor="O(log n)" media="O(log n)" pior="O(log n)" />
+
+---
+
+## Heapify: construir heap em O(n)
+
+E se você tem um array desordenado de n elementos e quer transformar em heap? A abordagem ingênua é inserir um por um — n inserções, cada uma O(log n), total O(n log n).
+
+**Robert W. Floyd**, em 1964, demonstrou que dá pra fazer melhor. A operação dele se chama **heapify** (também conhecida como Floyd's algorithm), e roda em **O(n)** — linear no tamanho do array.
+
+### A ideia
+
+Em vez de "construir de cima pra baixo" inserindo, o algoritmo do Floyd faz o oposto: **começa pelas folhas e vai subindo**, aplicando sift down em cada nó.
+
+Folhas (metade inferior do array) já são heaps triviais (tamanho 1). Você só precisa aplicar sift down aos nós **não-folha**: índices de `n/2 - 1` até `0`, processando da direita pra esquerda.
+
+### Por que é O(n) e não O(n log n)?
+
+Análise sutil. Cada sift down custa proporcional à altura do nó (não à altura da árvore inteira). E na contagem total:
+
+- Metade dos nós são folhas (altura 0) — sift down não faz nada
+- ~1/4 dos nós têm altura 1 — fazem ~1 swap cada
+- ~1/8 dos nós têm altura 2 — fazem ~2 swaps cada
+- ...e assim por diante
+
+A soma `n/4 × 1 + n/8 × 2 + n/16 × 3 + ...` converge pra **O(n)**, não O(n log n). A demonstração formal está em CLRS Cap. 6, e essa é uma das análises de complexidade mais elegantes do livro.
+
+<Aviso>
+O ganho de O(n log n) pra O(n) é importante porque significa que **construir um heap não custa mais que percorrer o array**. Quando você quer fazer K extractions depois (cada uma O(log n)), o custo total é O(n + K log n) — domina pelo K log n. Se K é pequeno (digamos, K = top-K), o custo total é praticamente O(n).
+</Aviso>
+
+### Implementação do heapify
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public void heapify(int[] arr) {
+    int n = arr.length;
+    // Começa do último nó não-folha e desce
+    for (int i = n / 2 - 1; i >= 0; i--) {
+        siftDown(arr, i, n);
+    }
+}
+
+private void siftDown(int[] arr, int i, int n) {
+    while (true) {
+        int esq = 2 * i + 1;
+        int dir = 2 * i + 2;
+        int maior = i;
+        if (esq < n && arr[esq] > arr[maior]) maior = esq;
+        if (dir < n && arr[dir] > arr[maior]) maior = dir;
+        if (maior == i) break;
+        int tmp = arr[i]; arr[i] = arr[maior]; arr[maior] = tmp;
+        i = maior;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <algorithm>
+#include <vector>
+
+void siftDown(std::vector<int>& arr, int i, int n) {
+    while (true) {
+        int esq = 2 * i + 1;
+        int dir = 2 * i + 2;
+        int maior = i;
+        if (esq < n && arr[esq] > arr[maior]) maior = esq;
+        if (dir < n && arr[dir] > arr[maior]) maior = dir;
+        if (maior == i) break;
+        std::swap(arr[i], arr[maior]);
+        i = maior;
+    }
+}
+
+void heapify(std::vector<int>& arr) {
+    int n = arr.size();
+    // Começa do último nó não-folha e desce
+    for (int i = n / 2 - 1; i >= 0; i--) {
+        siftDown(arr, i, n);
+    }
+}
+```
+
+</Code>
+</CodeSwap>
+
+---
+
+## Um pouco de história
+
+A história do heap é curta e contada em poucos paragrafos.
+
+Em **1964**, **J. W. J. (Bill) Williams** publicou na Communications of the ACM o paper **"Algorithm 232: Heapsort"**. O paper introduziu tanto o **algoritmo de ordenação** Heapsort quanto a **estrutura de dados heap** em si. Foi a primeira vez que alguém percebeu que uma árvore binária quase completa podia ser representada num array e que isso era suficiente pra implementar uma fila de prioridade eficiente.
+
+**Meses depois, no mesmo ano**, **Robert W. Floyd** publicou na mesma revista o paper **"Algorithm 245: Treesort"**, com a otimização do heapify em O(n). Floyd já vinha pesquisando algoritmos baseados em árvore (treesort), e o ajuste dele tornou o Heapsort genuinamente competitivo com o Quicksort, especialmente em cenários onde garantia de pior caso O(n log n) importa.
+
+Curiosamente, Floyd é mais famoso por outras contribuições:
+- **Floyd-Warshall algorithm** (caminhos mais curtos entre todos os pares de vértices em grafo)
+- **Floyd's cycle-finding algorithm** ("tortoise and hare", detecção de ciclo em lista ligada)
+- **Turing Award em 1978** por contribuições fundamentais à teoria de algoritmos
+
+Williams é menos conhecido, mas o trabalho dele de 1964 foi citado mais de 1000 vezes — heap virou patrimônio da computação.
+
+---
+
+## Heapsort: ordenar com heap
+
+Heapsort é Heap aplicado pra ordenação. A receita:
+
+1. **Heapify** o array (transforma em max-heap em O(n))
+2. **Extract max** repetidamente. Cada extract move o maior pra "fora do heap" (na verdade, pra posição final correta no array). Após n extractions, o array está ordenado.
+
+A engenharia é elegante: o array que armazena o heap **é o mesmo** que vai armazenar o resultado ordenado. Não precisa de buffer auxiliar — Heapsort é **in-place**.
+
+```java
+public void heapsort(int[] arr) {
+    int n = arr.length;
+    // Fase 1: constrói o max-heap
+    for (int i = n / 2 - 1; i >= 0; i--) {
+        siftDown(arr, i, n);
+    }
+    // Fase 2: extrai elementos um por um
+    for (int i = n - 1; i > 0; i--) {
+        // Troca a raiz (max) com o último do heap
+        int tmp = arr[0]; arr[0] = arr[i]; arr[i] = tmp;
+        // Restaura o heap no que sobrou (sem o último)
+        siftDown(arr, 0, i);
+    }
+}
+```
+
+**Complexidade**: O(n) pra heapify + O(n log n) pra n extractions = **O(n log n) total**.
+
+### Por que Heapsort não é o padrão em produção
+
+Heapsort tem características interessantes:
+- **In-place**: O(1) de memória extra
+- **O(n log n) garantido**, mesmo no pior caso (diferente de quicksort)
+
+Mas:
+- **Não é estável** (extractions misturam ordem de iguais)
+- **Cache locality ruim** — sift down pula entre níveis da árvore, padrão de acesso aleatório
+- **Em benchmarks reais, é mais lento que dual-pivot quicksort** apesar de ambos serem O(n log n)
+
+Por isso bibliotecas-padrão usam quicksort (com heapsort como fallback no Introsort em C++) ou TimSort, e raramente heapsort puro. Onde Heapsort brilha é como **estrutura de dados de prioridade** (Priority Queue), não como algoritmo de ordenação.
+
+---
+
+## Priority Queue em produção
+
+Java e C++ ambos têm Priority Queue baseada em heap na biblioteca padrão.
+
+### Java: java.util.PriorityQueue
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.PriorityQueue;
+import java.util.Comparator;
+
+// Por padrão, MIN-HEAP em Java (menor elemento sai primeiro)
+PriorityQueue<Integer> minHeap = new PriorityQueue<>();
+minHeap.offer(5);
+minHeap.offer(1);
+minHeap.offer(3);
+
+minHeap.peek();   // 1 (não remove)
+minHeap.poll();   // 1 (remove e retorna)
+minHeap.poll();   // 3
+minHeap.poll();   // 5
+
+// MAX-HEAP: passar Comparator.reverseOrder()
+PriorityQueue<Integer> maxHeap = new PriorityQueue<>(Comparator.reverseOrder());
+maxHeap.offer(5);
+maxHeap.offer(1);
+maxHeap.offer(3);
+maxHeap.poll();   // 5
+maxHeap.poll();   // 3
+maxHeap.poll();   // 1
+
+// Comparador customizado: ordenar por atributo de objeto
+PriorityQueue<int[]> fila = new PriorityQueue<>(
+    (a, b) -> Integer.compare(a[0], b[0])   // por primeiro elemento
+);
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <queue>
+#include <vector>
+#include <functional>
+
+// Por padrão, MAX-HEAP em C++ (oposto do Java!)
+std::priority_queue<int> maxHeap;
+maxHeap.push(5);
+maxHeap.push(1);
+maxHeap.push(3);
+
+maxHeap.top();    // 5 (não remove)
+maxHeap.pop();    // remove (não retorna! 😬)
+maxHeap.top();    // 3 agora
+
+// MIN-HEAP: usar std::greater como comparador
+std::priority_queue<int, std::vector<int>, std::greater<int>> minHeap;
+minHeap.push(5);
+minHeap.push(1);
+minHeap.push(3);
+minHeap.top();    // 1
+
+// Comparador customizado:
+auto cmp = [](const std::vector<int>& a, const std::vector<int>& b) {
+    return a[0] > b[0];   // CUIDADO: lógica invertida vs Java
+};
+std::priority_queue<std::vector<int>,
+                    std::vector<std::vector<int>>,
+                    decltype(cmp)> fila(cmp);
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+**Pegadinhas importantes**:
+
+1. **Java é MIN-heap por padrão**. C++ é **MAX-heap** por padrão. Inverter é fácil mas é confuso quando você troca de linguagem.
+
+2. **C++ pop() não retorna**. Sempre faça `top()` antes de `pop()`. Esse é o mesmo padrão que vimos em `std::stack::pop()` — design consistente, mas confuso pra quem vem de Java.
+
+3. **Comparadores invertem semântica**. Em Java, comparador `(a,b) -> a - b` faz min-heap. Em C++, comparador `a < b` faz **max-heap** (a sintaxe está invertida — leia como "qual a tem prioridade menor?"). Erro super comum.
+</Aviso>
+
+---
+
+## Aplicações práticas
+
+Heap aparece em quase todo algoritmo sério de grafos e otimização. Os mais clássicos:
+
+### 1. Dijkstra (caminho mais curto)
+
+Em vez de visitar nós em ordem aleatória, Dijkstra **sempre processa o nó com menor distância conhecida**. Implementação ingênua percorre todos os nós a cada iteração: O(V²). Com **min-heap**, cai pra **O((V + E) log V)** — vencedor pra grafos esparsos.
+
+### 2. A* (path-finding com heurística)
+
+Variante de Dijkstra usada em jogos e robótica. Em vez de priorizar por `g(n)` (distância real), prioriza por `f(n) = g(n) + h(n)`, onde h é uma heurística. Min-heap ordena por `f(n)`. **Toda IA de personagens em jogos top-down moderno tem um A* rodando**.
+
+### 3. Top-K Elements
+
+Problema: dado um array de n números, retorne os K maiores. Solução ingênua: ordena O(n log n) e pega os K primeiros. Com heap: **mantém um min-heap de tamanho K**. Pra cada novo elemento, compara com o topo. Se maior, troca. Custo: **O(n log K)** — bem melhor quando K é muito menor que n.
+
+```java
+public int[] topK(int[] nums, int k) {
+    PriorityQueue<Integer> heap = new PriorityQueue<>(k);
+    for (int x : nums) {
+        if (heap.size() < k) {
+            heap.offer(x);
+        } else if (x > heap.peek()) {
+            heap.poll();
+            heap.offer(x);
+        }
+    }
+    int[] res = new int[k];
+    for (int i = 0; i < k; i++) res[i] = heap.poll();
+    return res;
+}
+```
+
+### 4. Mediana streaming (Two Heaps)
+
+Problema clássico: dado um stream contínuo de números, mantenha a mediana atualizada em tempo real.
+
+**Truque com duas heaps**: max-heap pra metade menor, min-heap pra metade maior. Mediana = topo de uma delas (se tamanhos diferentes) ou média dos dois topos (se tamanhos iguais).
+
+Operações: insere → balanceia tamanhos. Tudo em O(log n) por inserção, e mediana em O(1).
+
+### 5. Huffman Coding
+
+Algoritmo clássico de compressão. Constrói uma árvore binária ótima pra códigos de tamanho variável. A cada passo, **pega os dois nós de menor frequência** (min-heap), combina, e devolve. Repete até sobrar um só.
+
+### 6. Merge K Sorted Lists
+
+Dado k listas ordenadas, produza uma única lista ordenada. Min-heap mantendo a "cabeça" de cada lista: extrai o menor, anexa no resultado, avança naquela lista. **O(N log K)** onde N é o total de elementos.
+
+---
+
+## Outras variações de heap
+
+Pra completar o quadro:
+
+**d-ary heap**: como heap binário, mas cada nó tem `d` filhos em vez de 2. Profundidade menor (log_d n), porém comparações por nível maiores. Útil quando inserções são muito mais frequentes que extrações.
+
+**Binomial heap**: estrutura mais sofisticada, com merge eficiente (O(log n) em vez de O(n)). Pouco usada em prática.
+
+**Fibonacci heap**: heap teoricamente ótima — decrease-key em **O(1) amortizado**, importantíssima na análise teórica de Dijkstra. Na prática, constantes ocultas grandes a tornam mais lenta que heap binário pra a maioria dos n. CLRS dedica um capítulo inteiro a ela. Romance da teoria.
+
+**Pairing heap**: alternativa prática à Fibonacci heap, com performance empírica boa.
+
+A maioria dos códigos de produção usa **heap binário** simples. As variações teóricas brilham em análises mas raramente em benchmarks.
+
+---
+
+## Recap
+
+Heap é uma árvore binária quase completa com uma regra simples (pai `>=` filhos pra max-heap, ou pai `<=` filhos pra min-heap). Permite **inserir** e **extrair o máximo (ou mínimo)** em O(log n), e **espiar o máximo** em O(1).
+
+A genialidade da estrutura é guardar a árvore num array sem ponteiros: filho esquerdo de `i` é `2i+1`, filho direito é `2i+2`, pai é `(i-1)/2`. Memória compacta, cache-friendly.
+
+As duas operações fundamentais são **sift up** (corrigir após inserção) e **sift down** (corrigir após remoção da raiz). Ambas O(log n) porque seguem um caminho da árvore.
+
+**Heapify** (algoritmo do Floyd, 1964) constrói heap de array desordenado em O(n) — mais rápido que inserir um por um. A análise envolve somatório de alturas e é uma das demonstrações mais elegantes de análise amortizada.
+
+**Heapsort** combina heapify + extractions repetidas pra ordenar em O(n log n) com pior caso garantido e in-place. Não é o sort padrão em produção (perde pra quicksort em cache locality), mas é a base de Priority Queues em bibliotecas-padrão.
+
+**Java** `PriorityQueue` é **min-heap** por padrão. **C++** `std::priority_queue` é **max-heap** por padrão. Inverter o sentido exige passar comparador customizado — em Java é mais intuitivo, em C++ a sintaxe inverte semanticamente.
+
+Aplicações em produção: **Dijkstra, A*, Top-K, mediana streaming, Huffman, merge K listas, agendamento de processos, simulações de eventos discretos**. Heap aparece em toda situação onde "qual o próximo de maior prioridade?" precisa ser respondido rápido.
+
+Próxima lição: **Grafos: representação, BFS e DFS** — a estrutura mais geral em CS e a porta de entrada pra algoritmos avançados como Dijkstra, A*, e detecção de ciclos.

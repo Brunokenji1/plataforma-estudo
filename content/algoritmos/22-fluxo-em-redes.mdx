@@ -1,0 +1,514 @@
+---
+titulo: "Fluxo em Redes: O Algoritmo Que Mapeou as Ferrovias Soviéticas"
+trilha: "algoritmos"
+duracaoMin: 65
+dificuldade: "intermediario"
+referencias:
+  - "Lester R. Ford Jr., Delbert R. Fulkerson (1956), 'Maximal Flow Through a Network', Canadian Journal of Mathematics 8, pp. 399-404 — paper original do algoritmo Ford-Fulkerson"
+  - "Lester R. Ford Jr., Delbert R. Fulkerson (1962), 'Flows in Networks', Princeton University Press — livro definitivo"
+  - "T. E. Harris, F. S. Ross (1955), 'Fundamentals of a Method for Evaluating Rail Net Capacities', RAND classified report — motivação histórica"
+  - "Jack Edmonds, Richard M. Karp (1972), 'Theoretical improvements in algorithmic efficiency for network flow problems', Journal of the ACM 19(2), pp. 248-264"
+  - "Yefim A. Dinitz (1970), 'Algorithm for solution of a problem of maximum flow in a network with power estimation', Soviet Math. Dokl. 11"
+  - "Dénes Kőnig (1931), 'Gráfok és mátrixok' (Hungarian for 'Graphs and Matrices') — teorema König para matching bipartido"
+  - "Philip Hall (1935), 'On Representatives of Subsets', Journal of the London Mathematical Society 10(1), pp. 26-30 — teorema de Hall"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 24 — Maximum Flow"
+  - "MIT OCW 6.046J (Spring 2015), Lectures 13-15 — Network Flow, Erik Demaine"
+  - "Kleinberg & Tardos, Algorithm Design (Cornell, 2005), Capítulo 7 — Network Flow"
+---
+
+## A história secreta da Guerra Fria que criou um algoritmo
+
+Em **1955**, em pleno auge da Guerra Fria, dois pesquisadores da **RAND Corporation** — **T. E. Harris** e **General F. S. Ross** — receberam uma tarefa peculiar da Força Aérea dos EUA: **analisar a rede ferroviária da União Soviética**. Os EUA queriam saber, em caso de conflito, qual era a **capacidade máxima de tráfego** que os soviéticos poderiam mover entre suas regiões industriais e as fronteiras europeias.
+
+O relatório resultante, **classificado como secreto**, chamava-se *"Fundamentals of a Method for Evaluating Rail Net Capacities"* (Outubro de 1955). Pra responder a pergunta, Harris e Ross modelaram a rede ferroviária soviética como um **grafo**: vértices = estações, arestas = trechos de ferrovia com **capacidade** (quantas locomotivas/cargas podem passar por unidade de tempo). A pergunta virou: **dado origem `s` e destino `t`, qual o fluxo máximo possível de `s` para `t` respeitando as capacidades das arestas?**
+
+Eles resolveram o problema, mas a solução era ad-hoc. **Lester R. Ford Jr.** (sim, o mesmo Ford do Bellman-Ford da Lição 19) e **Delbert R. Fulkerson**, ambos matemáticos na RAND, formalizaram o problema em **dezembro de 1955** num memo interno, e publicaram o paper definitivo em **1956**: *"Maximal Flow Through a Network"* (Canadian Journal of Mathematics 8, pp. 399-404). Nesse paper de 6 páginas, eles:
+
+1. **Definiram formalmente** o problema de fluxo máximo
+2. **Apresentaram o algoritmo Ford-Fulkerson** — método geral pra resolver
+3. **Provaram o teorema max-flow min-cut** — um dos resultados mais elegantes em otimização combinatória
+
+O teorema diz: **o fluxo máximo possível de `s` a `t` é exatamente igual à capacidade do corte mínimo** que separa `s` de `t`. Dualidade perfeita. Ford e Fulkerson colaboraram com **Claude Shannon** (pai da teoria da informação) durante o desenvolvimento.
+
+A motivação foi militar, o resultado é universal: hoje, algoritmos de fluxo aparecem em **otimização de tráfego**, **roteamento de redes**, **escalonamento de tarefas**, **matching em apps de relacionamento e emprego**, **segmentação de imagens**, **otimização de cadeias logísticas**, **detecção de comunidades em redes sociais**. Essa lição cobre fluxo em redes — uma das áreas mais elegantes de algoritmos, com história fascinante e aplicações modernas surpreendentes.
+
+---
+
+## O problema do fluxo máximo
+
+Formalizando o que Harris e Ross queriam resolver.
+
+**Input**: um grafo direcionado `G = (V, E)` onde:
+- Cada aresta `(u, v)` tem uma **capacidade** `c(u, v) ≥ 0`
+- Existe um vértice **fonte** `s` (source) e um vértice **sumidouro** `t` (sink)
+
+**Output**: uma **função de fluxo** `f: E → R⁺` tal que:
+1. **Capacidade**: `0 ≤ f(u, v) ≤ c(u, v)` para toda aresta
+2. **Conservação**: pra todo vértice `v ≠ s, t`: `soma de fluxo entrando = soma de fluxo saindo`
+3. **Maximize**: o fluxo total saindo de `s` (= entrando em `t`)
+
+Visualize como uma rede de canos: cada cano tem uma capacidade máxima de água/segundo, queremos maximizar o fluxo total da fonte ao destino respeitando os limites.
+
+---
+
+## A intuição: caminho aumentante
+
+A ideia central do **Ford-Fulkerson** é elegante:
+
+> Enquanto existir um **caminho da fonte ao sumidouro** com **capacidade restante > 0** em todas as suas arestas (chamamos de **caminho aumentante**), empurre fluxo por ele. Quando não houver mais caminho aumentante, o fluxo é máximo.
+
+A capacidade que podemos empurrar pelo caminho é o **mínimo das capacidades restantes** das arestas no caminho — gargalo da rota.
+
+```
+Pseudocódigo Ford-Fulkerson:
+
+fluxo = 0
+enquanto existir caminho aumentante P de s a t:
+    bottleneck = min(capacidade_restante(e) para e em P)
+    para cada aresta (u, v) em P:
+        capacidade_restante(u, v) -= bottleneck
+        capacidade_restante(v, u) += bottleneck   // aresta REVERSA cresce
+    fluxo += bottleneck
+retornar fluxo
+```
+
+### O grafo residual e as arestas reversas
+
+Esse é o ponto mais sutil. Cada vez que empurramos `b` unidades por uma aresta `(u, v)`:
+- A **capacidade restante** dessa aresta diminui em `b`
+- Uma **aresta reversa** `(v, u)` ganha `b` unidades de capacidade restante
+
+Por que arestas reversas? Pra permitir **desfazer fluxos sub-ótimos**. Considere:
+
+```
+        u
+       / \
+      10  10
+     /     \
+    s       t
+     \     /
+      10  10
+       \ /
+        v
+```
+
+Se mandar 10 unidades por `s → u → t`, dá fluxo 10. Se depois também mandar por `s → v → t`, dá fluxo 20. Bom! Mas em redes mais complexas, escolhas iniciais podem **bloquear** o ótimo:
+
+```
+        u
+       / \
+     10   1
+     /     \
+    s   /---t
+     \ / 
+      1
+     / \  
+    /   10
+    v
+```
+
+Se mandar 10 por `s → u → ? → t` por um caminho específico, pode esgotar capacidades que outro caminho precisaria. As **arestas reversas** permitem "cancelar" parte do fluxo anterior pra reencaminhar — efetivamente desfazendo escolhas. O grafo com capacidades restantes + arestas reversas é o **grafo residual**.
+
+<Insight>
+A descoberta das **arestas reversas** é o gênio do Ford-Fulkerson. Sem elas, o algoritmo poderia ficar preso em fluxos sub-ótimos. Com elas, **garante-se que o algoritmo encontra o fluxo máximo** — independente da ordem em que escolhe caminhos aumentantes. É um exemplo perfeito de como uma ideia aparentemente "esquisita" (criar arestas que não existem no grafo original) resolve elegantemente o problema.
+</Insight>
+
+---
+
+## Max-flow min-cut: a dualidade
+
+Antes do código, vale entender o **teorema mais bonito** dessa área.
+
+**Definição de corte**: um corte `(S, T)` é uma partição dos vértices tal que `s ∈ S` e `t ∈ T`. A **capacidade do corte** é a soma das capacidades das arestas saindo de `S` para `T` (não conta as voltando):
+
+```
+cap(S, T) = soma sobre (u, v) em E, u em S, v em T: c(u, v)
+```
+
+**Teorema max-flow min-cut** (Ford-Fulkerson, 1956): em qualquer rede, o valor do **fluxo máximo** é exatamente igual à **capacidade do corte mínimo**.
+
+```
+max{fluxo válido} = min{capacidade de corte (S, T)}
+```
+
+Dualidade perfeita. **Otimização de uma direção = otimização da outra**. Aparece em otimização linear (LP duality), teoria dos jogos (minimax), economia, e muitos outros lugares.
+
+**Por que importa na prática?** Min-cut tem aplicações diretas:
+- **Resistência de redes**: qual o gargalo mínimo que, se removido, separa duas regiões? (max-flow descobre isso)
+- **Segmentação de imagens** (image segmentation): dividir pixels em "objeto" e "fundo" via min-cut
+- **Bipartição em comunidades**: encontrar o "gargalo" entre dois grupos
+- **Project selection**: escolher projetos pra maximizar lucro dado custos e dependências
+
+Toda vez que você roda Ford-Fulkerson, você obtém **ambos** — o fluxo máximo **e** o corte mínimo (vértices alcançáveis de `s` no grafo residual final formam `S`).
+
+---
+
+## Ford-Fulkerson: o algoritmo original
+
+A implementação clássica usa **DFS** pra encontrar caminhos aumentantes.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class FordFulkerson {
+    private int n;
+    private long[][] capacity;            // capacity[u][v] = capacidade restante
+    private boolean[] visitado;
+
+    public FordFulkerson(int n) {
+        this.n = n;
+        this.capacity = new long[n][n];
+    }
+
+    public void addEdge(int u, int v, long cap) {
+        capacity[u][v] += cap;            // se mesma aresta vier de novo, soma
+    }
+
+    public long maxFlow(int s, int t) {
+        long fluxo = 0;
+        while (true) {
+            visitado = new boolean[n];
+            long bottleneck = dfs(s, t, Long.MAX_VALUE);
+            if (bottleneck == 0) break;
+            fluxo += bottleneck;
+        }
+        return fluxo;
+    }
+
+    private long dfs(int u, int t, long fluxoAtual) {
+        if (u == t) return fluxoAtual;
+        visitado[u] = true;
+        for (int v = 0; v < n; v++) {
+            if (!visitado[v] && capacity[u][v] > 0) {
+                long bottleneck = dfs(v, t, Math.min(fluxoAtual, capacity[u][v]));
+                if (bottleneck > 0) {
+                    capacity[u][v] -= bottleneck;
+                    capacity[v][u] += bottleneck;     // aresta reversa
+                    return bottleneck;
+                }
+            }
+        }
+        return 0;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <climits>
+#include <algorithm>
+
+class FordFulkerson {
+    int n;
+    std::vector<std::vector<long long>> capacity;
+    std::vector<bool> visitado;
+
+    long long dfs(int u, int t, long long fluxoAtual) {
+        if (u == t) return fluxoAtual;
+        visitado[u] = true;
+        for (int v = 0; v < n; v++) {
+            if (!visitado[v] && capacity[u][v] > 0) {
+                long long bottleneck = dfs(v, t, std::min(fluxoAtual, capacity[u][v]));
+                if (bottleneck > 0) {
+                    capacity[u][v] -= bottleneck;
+                    capacity[v][u] += bottleneck;
+                    return bottleneck;
+                }
+            }
+        }
+        return 0;
+    }
+
+public:
+    FordFulkerson(int n) : n(n), capacity(n, std::vector<long long>(n, 0)) {}
+
+    void addEdge(int u, int v, long long cap) { capacity[u][v] += cap; }
+
+    long long maxFlow(int s, int t) {
+        long long fluxo = 0;
+        while (true) {
+            visitado.assign(n, false);
+            long long b = dfs(s, t, LLONG_MAX);
+            if (b == 0) break;
+            fluxo += b;
+        }
+        return fluxo;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+### O problema do Ford-Fulkerson original
+
+A complexidade depende de **como você escolhe os caminhos aumentantes**. Se escolher mal, o algoritmo pode rodar em **O(E · f)**, onde `f` é o valor do fluxo máximo.
+
+Pra capacidades inteiras, `f` é finito mas pode ser **gigante**. Considere:
+
+```
+       1000000
+   s ─────────→ a
+   │            │
+1000000      1
+   │            │
+   ↓            ↓
+   b ─────────→ t
+       1000000
+```
+
+Se escolher mal a primeira vez (caminho `s → a → b → t` pelo gargalo de 1), o algoritmo faz **dois milhões de iterações**, cada uma empurrando apenas 1 unidade de fluxo. Pra capacidades irracionais, **pode até não terminar**.
+
+Era esse o problema que **Jack Edmonds** e **Richard Karp** resolveram em **1972**.
+
+<ComplexidadeBox melhor="O(E · f_max)" media="O(E · f_max)" pior="O(E · f_max)" />
+
+---
+
+## Edmonds-Karp: BFS faz toda a diferença
+
+Em **1972**, **Jack Edmonds** e **Richard M. Karp** publicaram *"Theoretical improvements in algorithmic efficiency for network flow problems"* (Journal of the ACM 19(2), pp. 248-264) — um dos papers mais importantes em otimização combinatória. Independentemente, **Yefim Dinitz** publicou um algoritmo similar em **1970** na Soviet Math. Dokl. 11 (geralmente chamado **Dinic** ou **Dinitz**).
+
+A ideia central de Edmonds-Karp é simples: **use BFS** pra encontrar caminhos aumentantes (em vez de DFS).
+
+BFS encontra o caminho com **menor número de arestas**. Isso parece detalhe técnico, mas tem consequência profunda: **garante terminação em O(V·E)** iterações, com cada iteração em O(E), totalizando **O(V·E²)**. Polinomial — **independente das capacidades**!
+
+### Por que BFS funciona
+
+A prova é uma das mais bonitas em análise de algoritmos. Define-se a "distância em arestas" de `s` a cada vértice no grafo residual atual. Edmonds-Karp prova:
+
+1. **A distância de `s` a `v` no residual NUNCA DIMINUI** ao longo das iterações (Lema 1, do paper original)
+2. Cada aresta pode ser "saturada" (esgotada) no máximo **V/2** vezes
+3. Como o grafo tem E arestas, no total temos **O(V·E)** saturações
+4. Cada BFS custa **O(E)**
+5. Total: **O(V·E²)**
+
+A demonstração formal está no paper original e em CLRS Cap. 24. É um dos exemplos canônicos de **análise amortizada** + **monotonicidade** em algoritmos.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class EdmondsKarp {
+    private int n;
+    private long[][] capacity;
+    private int[] pai;
+
+    public EdmondsKarp(int n) {
+        this.n = n;
+        this.capacity = new long[n][n];
+    }
+
+    public void addEdge(int u, int v, long cap) { capacity[u][v] += cap; }
+
+    public long maxFlow(int s, int t) {
+        long fluxo = 0;
+        while (bfs(s, t)) {
+            // Encontra bottleneck no caminho s → t
+            long bottleneck = Long.MAX_VALUE;
+            for (int v = t; v != s; v = pai[v]) {
+                bottleneck = Math.min(bottleneck, capacity[pai[v]][v]);
+            }
+            // Atualiza capacidades residuais
+            for (int v = t; v != s; v = pai[v]) {
+                capacity[pai[v]][v] -= bottleneck;
+                capacity[v][pai[v]] += bottleneck;
+            }
+            fluxo += bottleneck;
+        }
+        return fluxo;
+    }
+
+    private boolean bfs(int s, int t) {
+        pai = new int[n];
+        Arrays.fill(pai, -1);
+        pai[s] = s;
+        Queue<Integer> fila = new ArrayDeque<>();
+        fila.offer(s);
+        while (!fila.isEmpty()) {
+            int u = fila.poll();
+            for (int v = 0; v < n; v++) {
+                if (pai[v] == -1 && capacity[u][v] > 0) {
+                    pai[v] = u;
+                    if (v == t) return true;
+                    fila.offer(v);
+                }
+            }
+        }
+        return false;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <queue>
+#include <climits>
+#include <algorithm>
+
+class EdmondsKarp {
+    int n;
+    std::vector<std::vector<long long>> capacity;
+    std::vector<int> pai;
+
+    bool bfs(int s, int t) {
+        pai.assign(n, -1);
+        pai[s] = s;
+        std::queue<int> fila;
+        fila.push(s);
+        while (!fila.empty()) {
+            int u = fila.front(); fila.pop();
+            for (int v = 0; v < n; v++) {
+                if (pai[v] == -1 && capacity[u][v] > 0) {
+                    pai[v] = u;
+                    if (v == t) return true;
+                    fila.push(v);
+                }
+            }
+        }
+        return false;
+    }
+
+public:
+    EdmondsKarp(int n) : n(n), capacity(n, std::vector<long long>(n, 0)) {}
+
+    void addEdge(int u, int v, long long cap) { capacity[u][v] += cap; }
+
+    long long maxFlow(int s, int t) {
+        long long fluxo = 0;
+        while (bfs(s, t)) {
+            long long b = LLONG_MAX;
+            for (int v = t; v != s; v = pai[v]) b = std::min(b, capacity[pai[v]][v]);
+            for (int v = t; v != s; v = pai[v]) {
+                capacity[pai[v]][v] -= b;
+                capacity[v][pai[v]] += b;
+            }
+            fluxo += b;
+        }
+        return fluxo;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V·E²). Polinomial, independente de capacidades. Pra grafos com algumas centenas de vértices e milhares de arestas, é prática.
+
+---
+
+## Algoritmos mais avançados
+
+**Dinic** (1970), **Push-Relabel** (Goldberg-Tarjan, 1988), **King-Rao-Tarjan** (1994), e variantes modernas conseguem complexidades melhores:
+
+- **Dinic**: O(V²·E) geral, O(E·√V) em grafos com capacidade unitária (matching bipartido)
+- **Push-Relabel**: O(V²·√E) com heurísticas
+- **Orlin (2013)**: O(V·E) — quase ótimo
+- **Mądry, Chen et al. (2022)**: `O((V+E)^{1+o(1)})` — **quase-linear**, prêmios de "best paper" em STOC/FOCS
+
+Em produção e ICPC, **Dinic é o padrão** — mais rápido que Edmonds-Karp em grafos densos, implementação razoável (~50 linhas). Pra propósitos didáticos, Edmonds-Karp basta.
+
+---
+
+## Aplicação 1: Matching bipartido
+
+A aplicação mais elegante de fluxo em redes.
+
+**Problema**: você tem dois conjuntos disjuntos `L` e `R` (digamos, candidatos e vagas). Há arestas entre eles indicando compatibilidades. Encontre o **maior emparelhamento** — máximo número de pares (candidato, vaga) sem nenhum candidato/vaga repetido.
+
+**Aplicações práticas**:
+- **Job matching** (LinkedIn, sites de emprego): candidato ↔ vaga
+- **Apps de relacionamento** (Tinder, Bumble): formalmente "matching estável", variante mais complexa
+- **Atribuição de tarefas**: agente ↔ tarefa em sistemas distribuídos
+- **Alocação de recursos**: usuário ↔ servidor em cloud computing
+- **Transplantes de órgãos**: doador ↔ receptor compatíveis
+
+**Redução pra max-flow**: cria um grafo com fonte `s` e sumidouro `t`:
+- Arestas `s → L`, todas com capacidade 1
+- Arestas `L → R` originais, capacidade 1
+- Arestas `R → t`, capacidade 1
+
+O fluxo máximo é exatamente o tamanho do matching máximo (cada caminho `s → l → r → t` representa um par escolhido). Roda Edmonds-Karp ou Dinic, retorna o valor.
+
+**Complexidade**: O(V·E) com Dinic em grafos com capacidade unitária. Pra grafos com centenas de milhares de vértices, é prática.
+
+### Teorema König (1931)
+
+Antes mesmo de fluxo em redes existir, **Dénes Kőnig** (matemático húngaro) provou em **1931** no paper *"Gráfok és mátrixok"* um teorema relacionado:
+
+> Em qualquer grafo bipartido, o **tamanho do matching máximo** é igual ao **tamanho do vertex cover mínimo**.
+
+Vertex cover = conjunto mínimo de vértices que toca todas as arestas. Esse teorema é equivalente ao max-flow min-cut em grafos bipartidos. **Foi descoberto 25 anos antes** de Ford-Fulkerson — mas usando teoria de grafos, não otimização. Mostra como problemas profundos têm várias entradas matemáticas.
+
+**Philip Hall** (1935) provou outro resultado relacionado — o **teorema de Hall** (ou "Marriage Theorem"): existe matching perfeito de `L` em `R` se e só se, pra todo subconjunto `S` de `L`, `|N(S)| ≥ |S|` (vizinhos de `S` em `R` são pelo menos `|S|`).
+
+---
+
+## Aplicação 2: Project Selection / Image Segmentation
+
+**Problema (Project Selection)**: você tem um conjunto de projetos, cada um com lucro (positivo ou negativo). Alguns projetos têm dependências: pra fazer X, precisa fazer Y antes. Selecione um subconjunto de projetos que **maximize o lucro total**, respeitando as dependências.
+
+Solução: reduz pra **min-cut** num grafo:
+- Fonte `s` conectada a projetos lucrativos (peso = lucro)
+- Projetos custosos conectados ao sumidouro `t` (peso = |custo|)
+- Dependência "X depende de Y" = aresta `X → Y` com capacidade infinita
+
+Min-cut = "perda mínima". Lucro total ótimo = soma dos lucros - min-cut.
+
+**Image segmentation**: variante do mesmo problema. Pixels = vértices. Cada pixel tem "afinidade com foreground" e "afinidade com background" (calculadas via histograma ou rede neural). Min-cut separa pixels em duas classes ótimas.
+
+Esse é o algoritmo por trás de ferramentas como o **Magic Wand do Photoshop** (em variantes mais sofisticadas), GrabCut, e segmentação semântica clássica em visão computacional. **Boykov-Kolmogorov (2004)** popularizou o uso de min-cut em visão computacional, com bibliotecas C++ que ainda são citadas hoje em modelos clássicos.
+
+---
+
+## Aplicação 3: Network reliability
+
+Pergunta original do estudo de Harris-Ross sobre ferrovias soviéticas: **qual o gargalo da rede?**
+
+Resposta: o **corte mínimo**. Se você quer **destruir** o fluxo de `s` a `t` removendo o **mínimo de capacidade total** das arestas, identifique o min-cut. Aplicações modernas:
+- **Cybersecurity**: que conjunto mínimo de servidores, se comprometido, isola partes da rede?
+- **Robustez de redes elétricas**: que ramais são gargalos?
+- **Análise de epidemias**: que conexões cortar para conter propagação?
+- **Análise de redes sociais**: detecção de "pontes" entre comunidades
+
+---
+
+## Recap
+
+**Fluxo em redes** começou como **problema militar da Guerra Fria** — Harris e Ross modelaram ferrovias soviéticas em 1955 (RAND classified report). **Ford e Fulkerson** formalizaram o problema e publicaram o algoritmo em **1956** (*"Maximal Flow Through a Network"*, Canadian Journal of Mathematics 8), provando junto o **teorema max-flow min-cut** — uma das dualidades mais elegantes em otimização combinatória.
+
+**Ford-Fulkerson** é um **método geral**: encontre caminho aumentante no grafo residual, empurre fluxo, repita. Capacidade residual + arestas reversas garantem que o algoritmo encontra o máximo. **Limitação**: complexidade depende do valor do fluxo (`O(E·f)`), pode ser lento ou até não terminar com capacidades irracionais.
+
+**Edmonds-Karp** (Jack Edmonds, Richard Karp, 1972) — específica Ford-Fulkerson usando **BFS** pra encontrar caminhos aumentantes. **Complexidade O(V·E²)** — polinomial, **independente de capacidades**. Yefim Dinitz publicou variante anterior em 1970 (Dinic's algorithm). Dinic é o padrão em produção e ICPC, com O(V²·E) geral e O(E·√V) em capacidade unitária.
+
+**Algoritmos modernos**: Push-Relabel (Goldberg-Tarjan 1988), Orlin (2013, O(VE)), Mądry-Chen et al. (2022, quase-linear). Pesquisa ativa até hoje.
+
+**Aplicações principais**:
+- **Matching bipartido** (job matching, dating, atribuição de tarefas): reduz pra max-flow com arestas s→L→R→t de capacidade 1. **Teorema de König** (1931) já tinha resultado equivalente em grafos bipartidos
+- **Project selection / Image segmentation**: reduz pra min-cut em grafo construído. Base de algoritmos clássicos de visão computacional
+- **Network reliability**: min-cut identifica gargalos críticos de redes
+
+**Teorema max-flow min-cut**: fluxo máximo = capacidade do corte mínimo. Dualidade perfeita — toda execução de Ford-Fulkerson encontra ambos. Tem analogias profundas com **LP duality** em programação linear.
+
+A trilha de algoritmos está **muito robusta** agora. 22 lições completas cobrindo praticamente todos os tópicos clássicos de algoritmos modernos. Próximas direções:
+
+- **Geometria Computacional**: convex hull (Graham scan, Andrew), line sweep, closest pair, polygon
+- **Number Theory pra ICPC**: GCD/LCM, modular exp, Sieve, Euler totient, CRT
+- **String matching avançado**: suffix arrays, Z-function, suffix automaton
+- **Algoritmos randomizados e aproximados**: Las Vegas vs Monte Carlo, aproximações pra NP-hard
+- **Mudar de trilha**: Bancos de Dados, Sistemas Operacionais, Redes, Arquitetura de Software
+
+Manda qual direção quer seguir.

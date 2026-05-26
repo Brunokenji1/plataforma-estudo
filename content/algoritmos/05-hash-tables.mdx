@@ -1,0 +1,472 @@
+---
+titulo: "Hash Tables: O(1) Quando Funciona, O(n) Quando Não"
+trilha: "algoritmos"
+duracaoMin: 40
+dificuldade: "intermediario"
+referencias:
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 11 — Hash Tables"
+  - "Knuth, The Art of Computer Programming, Vol. 3, 2ª ed., Capítulo 6.4 — Hashing"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 3.4 — Hash Tables"
+  - "Oracle OpenJDK 21 — java.util.HashMap source code"
+  - "cppreference.com — std::unordered_map, Bucket interface"
+  - "JEP 180: Handle Frequent HashMap Collisions with Balanced Trees (Java 8, 2014)"
+  - "LeetCode #1 (Two Sum), #49 (Group Anagrams), #347 (Top K Frequent Elements)"
+---
+
+## A estrutura mais usada do mundo
+
+Sem hash tables, a internet moderna seria insuportável. Considere o que você fez nos últimos 5 minutos:
+
+- Abriu uma página → o navegador procurou o domínio no **cache DNS** (hash table)
+- Clicou em algo → o framework procurou o handler de evento numa **tabela de listeners** (hash table)
+- Tocou uma música → o serviço procurou seu user ID em **uma sessão Redis** (hash table distribuída)
+- Recebeu uma notificação → o roteador buscou seu IP em uma **tabela de roteamento** (hash table)
+
+E em código você usa o tempo todo:
+
+- Contar frequência de palavras em um texto
+- Deduplicar uma lista
+- Memoizar resultados de funções caras
+- Verificar pertinência em conjuntos grandes
+- Resolver problemas como **Two Sum** em O(n) em vez de O(n²)
+
+Hash tables prometem **O(1) para inserção, busca e remoção**. Quando funcionam. Esta lição vai mostrar **como funcionam**, **quando quebram pra O(n)**, e o que Java fez em 2014 pra mitigar o pior caso.
+
+---
+
+## Como funciona a hash table
+
+A ideia é direta: você quer guardar pares `chave → valor` e acessar pela chave em tempo constante.
+
+1. Você tem um **array de buckets** (digamos, com `N` posições)
+2. Você passa a chave por uma **função hash** que gera um inteiro
+3. Você toma `hash mod N` (ou com bit-and: `hash & (N-1)` se `N` é potência de 2) → isso vira o índice do bucket
+4. Você guarda o par no bucket
+
+```
+chave        hash         índice          bucket
+─────────    ──────────   ───────         ──────
+"banana"  →  -1380140491  →  hash & 15 = 5  →  buckets[5]
+"abacate" →   1234567890  →  hash & 15 = 2  →  buckets[2]
+```
+
+Em condições ideais, cada chave vai pra um bucket diferente — busca em O(1) puro.
+
+### Por que colisões são inevitáveis (birthday paradox)
+
+Aqui entra a parte chata da física do problema: **duas chaves diferentes podem mapear pro mesmo bucket**. Isso se chama **colisão**.
+
+Pior, colisões acontecem mais cedo do que a intuição sugere. O **paradoxo do aniversário** diz que em uma sala de 23 pessoas, há ~50% de chance de duas terem nascido no mesmo dia. Em hash tables, a regra é parecida: com `N` buckets, você espera ver a primeira colisão depois de inserir aproximadamente **√N** elementos. Para uma tabela com 1024 buckets, isso é só **32 elementos**.
+
+Conclusão: **não dá pra evitar colisões — só pra lidar com elas bem**.
+
+---
+
+## Separate chaining (Java/C++ padrão)
+
+A estratégia padrão: cada bucket não armazena um único par, mas uma **lista** de pares. Quando há colisão, você só adiciona à lista do bucket.
+
+```
+buckets[0] → [(chave1, valor1)]
+buckets[1] → []
+buckets[2] → [(chave2, valor2)] → [(chave5, valor5)]   ← 2 colisões
+buckets[3] → [(chave3, valor3)]
+buckets[4] → []
+buckets[5] → [(chave4, valor4)]
+```
+
+Buscar pela chave: hash → bucket → percorrer a lista até achar a chave.
+
+- Sem colisão: O(1)
+- Com colisões: O(tamanho da lista do bucket)
+- Pior caso (todas as chaves colidindo): O(n)
+
+`HashMap` em Java e `std::unordered_map` em C++ usam **separate chaining**.
+
+### Open addressing (linear probing) — a alternativa
+
+Em vez de listas, você **procura o próximo bucket vazio**. Se `buckets[5]` está ocupado, tente `buckets[6]`, depois `buckets[7]`...
+
+Vantagem: **memória contígua, super cache-friendly**. Sem ponteiros, sem alocação de nós.
+
+Desvantagem: **clustering** (grupos de buckets ocupados crescem juntos e degradam performance).
+
+Linguagens que usam open addressing: **Python** (`dict`), **Ruby** (`Hash`), **Go** (`map`). Java e C++ ficaram com chaining porque o padrão veio antes dos benchmarks modernos mostrarem que probing geralmente ganha em cache.
+
+<Insight>
+Há uma discussão histórica saudável aqui: chaining é mais fácil de explicar, mais simples de implementar, e tem comportamento mais previsível em casos patológicos. Probing é mais rápido na prática para a maioria das workloads (graças ao cache). Não há "vencedor" universal — escolhas diferentes pra trade-offs diferentes.
+</Insight>
+
+---
+
+## HashMap em Java por dentro
+
+A implementação do `java.util.HashMap` no **OpenJDK 21** é uma engenharia cuidadosa. Vamos destrinchar.
+
+### A estrutura
+
+```java
+// java.util.HashMap — campos principais
+transient Node<K,V>[] table;    // array de buckets
+transient int size;              // número de pares armazenados
+int threshold;                   // size acima do qual rehash acontece
+final float loadFactor;          // padrão 0.75
+```
+
+Cada `Node` é o equivalente do par + ponteiro de lista ligada:
+
+```java
+static class Node<K,V> implements Map.Entry<K,V> {
+    final int hash;     // hash já calculado (cache)
+    final K key;
+    V value;
+    Node<K,V> next;     // próximo nó na lista do mesmo bucket
+}
+```
+
+### Hash spreading: o truque dos 16 bits superiores
+
+Quando você chama `map.put("banana", 1)`, o Java não usa diretamente o `"banana".hashCode()`. Ele faz uma operação esperta:
+
+```java
+// java.util.HashMap.hash() — código real do OpenJDK
+static final int hash(Object key) {
+    int h;
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+}
+```
+
+**Por quê isso?** Porque o índice do bucket é calculado com `(n - 1) & hash`, onde `n` é o tamanho da tabela. Se `n = 16`, só os **4 bits inferiores** do hash importam. Muitas funções hash do mundo real têm os bits superiores variando mais que os inferiores — então o XOR com `h >>> 16` "mistura" os bits altos com os baixos, espalhando os hashes melhor.
+
+Sem esse passo, chaves diferentes com hashes parecidos nos 4 bits inferiores cairiam todas no mesmo bucket. Com ele, a distribuição fica muito mais uniforme.
+
+### Treeification: a inovação do Java 8
+
+Em 2014, o **JEP 180** introduziu uma mudança importante: se um bucket tem **8 ou mais elementos**, a lista ligada é convertida em uma **árvore vermelho-preta**. Constantes do OpenJDK:
+
+```java
+static final int TREEIFY_THRESHOLD = 8;       // vira árvore com ≥ 8
+static final int UNTREEIFY_THRESHOLD = 6;     // volta a ser lista com ≤ 6
+static final int MIN_TREEIFY_CAPACITY = 64;   // só treeifica se table ≥ 64
+```
+
+**Resultado**: o pior caso de busca cai de **O(n)** (lista) para **O(log n)** (árvore balanceada). Em uma tabela com 1 milhão de chaves todas colidindo, busca passa de 1.000.000 de comparações para ~20.
+
+<Aviso>
+Por que **8**, não 4 ou 16? A documentação do OpenJDK explica: assumindo hashes bem distribuídos (Poisson), a probabilidade de um bucket ter 8 ou mais elementos é cerca de **1 em 10 milhões**. Treeificar antes seria overhead desnecessário; depois seria tarde demais. O 8 é um balanço empírico entre custo de manter a árvore e benefício pra casos patológicos (DoS por colisão proposital, por exemplo).
+</Aviso>
+
+### Load factor e rehash
+
+Quando `size > capacity × loadFactor` (padrão `0.75`), o `HashMap` faz **rehash**: cria uma nova tabela com **o dobro** do tamanho e redistribui todos os pares.
+
+```java
+// Para uma tabela inicial de 16 buckets com loadFactor 0.75:
+// Rehash dispara quando size = 12, vai para 32 buckets.
+// Próximo rehash em size = 24, vai para 64 buckets.
+```
+
+**Custo do rehash**: O(n) — precisa reposicionar todos os elementos. Mas como o tamanho dobra a cada rehash, o custo amortizado por inserção continua **O(1)**.
+
+<Insight>
+**Truque de performance Java**: se você sabe que vai inserir ~1 milhão de pares, crie o `HashMap` com `new HashMap<>(1_400_000)` (ou `(int)(1_000_000 / 0.75) + 1`). Isso evita ~20 rehashs durante o build. Ganho típico: 30-50% de velocidade em código de massa.
+</Insight>
+
+### Como tudo se encaixa no put/get
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Conceitual — fluxo simplificado de HashMap.put()
+public V put(K key, V value) {
+    int h = key.hashCode();
+    int hash = h ^ (h >>> 16);                  // hash spreading
+    int idx = (table.length - 1) & hash;        // bucket index
+
+    Node<K,V> p = table[idx];
+    if (p == null) {                            // bucket vazio
+        table[idx] = new Node<>(hash, key, value, null);
+    } else {
+        // percorre lista (ou árvore) procurando a key
+        for (; p != null; p = p.next) {
+            if (p.hash == hash && Objects.equals(p.key, key)) {
+                V old = p.value;
+                p.value = value;
+                return old;
+            }
+        }
+        // chegou aqui: chave não existe, anexa no final
+        // (na implementação real, treeifica se a lista ficou com >= 8)
+    }
+    if (++size > threshold) resize();           // rehash se passou do limite
+    return null;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// Conceitual — std::unordered_map sempre usa separate chaining,
+// mas NÃO faz treeification (sempre lista, mesmo com muitas colisões).
+// O fator de carga padrão é 1.0 (mais alto que Java).
+
+template<typename K, typename V, typename Hash = std::hash<K>>
+class unordered_map_concept {
+    struct Node {
+        K key;
+        V value;
+        Node* next;     // lista ligada — sem versão tree
+    };
+
+    std::vector<Node*> buckets;
+    size_t size_;
+    float max_load_factor_ = 1.0f;
+
+    V& operator[](const K& key) {
+        size_t h = Hash{}(key);
+        size_t idx = h % buckets.size();          // sem hash spreading
+
+        for (Node* n = buckets[idx]; n; n = n->next) {
+            if (n->key == key) return n->value;
+        }
+
+        // não existe: insere
+        buckets[idx] = new Node{key, V{}, buckets[idx]};
+        ++size_;
+        if (load_factor() > max_load_factor_) rehash();
+        return buckets[idx]->value;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+### Diferenças importantes Java vs C++
+
+| Aspecto | Java `HashMap` | C++ `std::unordered_map` |
+|---|---|---|
+| Colisões | Lista → árvore vermelho-preta com 8+ | Sempre lista (sem treeification) |
+| Load factor padrão | 0.75 | 1.0 |
+| Hash spreading | Sim (`h ^ (h >>> 16)`) | Não (depende da `std::hash`) |
+| Garantia de iteração | Sem ordem definida | Sem ordem definida |
+| Aceita `null` como chave | Sim (uma vez) | Não (`nullptr` para tipos ponteiro só) |
+| Performance em pior caso | O(log n) | O(n) |
+
+<Aviso>
+O C++ **não treeifica buckets**, então é **mais vulnerável a ataques de colisão proposital** (algoenny pode mandar chaves que colidem sabendo a função hash, degradando para O(n)). Por isso muitos sistemas em C++ usam funções hash com seed aleatória (Google's `absl::flat_hash_map`, por exemplo).
+</Aviso>
+
+---
+
+## Two Sum: o canônico de hash table
+
+**Problema (LeetCode #1)**: dado um array `nums` e um valor `target`, retorne os índices de **dois números que somam target**. Exatamente uma solução existe, e você não pode usar o mesmo elemento duas vezes.
+
+```
+nums = [2, 7, 11, 15], target = 9
+resposta = [0, 1]   // pois 2 + 7 = 9
+```
+
+**Brute force**: dois loops aninhados, testar todos os pares — O(n²).
+
+**Com hash table**: O(n).
+
+### A ideia
+
+Percorra o array uma vez. Para cada `nums[i]`, calcule o **complemento** que faltaria: `target - nums[i]`. Se você **já viu** esse complemento em algum índice anterior `j`, encontrou o par `(j, i)`. Senão, guarda `nums[i] → i` no map e segue.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+
+public int[] twoSum(int[] nums, int target) {
+    Map<Integer, Integer> visto = new HashMap<>();
+    for (int i = 0; i < nums.length; i++) {
+        int complemento = target - nums[i];
+        if (visto.containsKey(complemento)) {
+            return new int[]{ visto.get(complemento), i };
+        }
+        visto.put(nums[i], i);
+    }
+    throw new IllegalArgumentException("Sem solução");
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <unordered_map>
+
+std::vector<int> twoSum(std::vector<int>& nums, int target) {
+    std::unordered_map<int, int> visto;
+    for (int i = 0; i < (int)nums.size(); i++) {
+        int complemento = target - nums[i];
+        auto it = visto.find(complemento);
+        if (it != visto.end()) {
+            return { it->second, i };
+        }
+        visto[nums[i]] = i;
+    }
+    return {};
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n) tempo, O(n) espaço. A troca espaço-por-tempo clássica.
+
+<ComplexidadeBox melhor="O(n)" media="O(n)" pior="O(n)" />
+
+---
+
+## Group Anagrams: hashing de chaves compostas
+
+**Problema (LeetCode #49)**: dada uma lista de strings, agrupe as que são **anagramas** uma da outra.
+
+```
+input  = ["eat", "tea", "tan", "ate", "nat", "bat"]
+output = [["eat","tea","ate"], ["tan","nat"], ["bat"]]
+```
+
+**Insight**: duas strings são anagramas se, e somente se, **ordenando os caracteres** elas viram a mesma string. Então `"eat"` ordenado é `"aet"`, e `"tea"` ordenado também é `"aet"`. **Usa a string ordenada como chave** do hash map.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public List<List<String>> groupAnagrams(String[] strs) {
+    Map<String, List<String>> grupos = new HashMap<>();
+    for (String s : strs) {
+        char[] chars = s.toCharArray();
+        Arrays.sort(chars);
+        String chave = new String(chars);
+        grupos.computeIfAbsent(chave, k -> new ArrayList<>()).add(s);
+    }
+    return new ArrayList<>(grupos.values());
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <algorithm>
+
+std::vector<std::vector<std::string>> groupAnagrams(std::vector<std::string>& strs) {
+    std::unordered_map<std::string, std::vector<std::string>> grupos;
+    for (const auto& s : strs) {
+        std::string chave = s;
+        std::sort(chave.begin(), chave.end());
+        grupos[chave].push_back(s);
+    }
+
+    std::vector<std::vector<std::string>> res;
+    for (auto& [_, grupo] : grupos) {
+        res.push_back(std::move(grupo));
+    }
+    return res;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(N × K log K), onde N é o número de strings e K é o tamanho máximo. O sort dentro do loop domina.
+
+<Insight>
+**Otimização**: em vez de ordenar (O(K log K)), use um array de contagem de letras: `int[] count = new int[26]`. Conte cada caractere e converta o array em string como chave. Reduz para O(N × K). Trade-off: código mais complexo, mas mais rápido para strings longas.
+</Insight>
+
+---
+
+## Quando hash não é a resposta certa
+
+Hash tables têm contraindicações reais. Use **outra estrutura** se:
+
+1. **Você precisa de ordem** → `TreeMap` em Java, `std::map` em C++ (árvore vermelho-preta, O(log n) garantido). Mantém os pares ordenados pela chave.
+
+2. **Você precisa de range queries** ("todos os pares com chave entre 10 e 50") → mesma resposta: `TreeMap`/`std::map`.
+
+3. **Sua chave é tipo primitivo pequeno e o range é conhecido** → array direto. `int[26]` é sempre mais rápido que `HashMap<Character, Integer>` para contar letras minúsculas.
+
+4. **Cache locality crítica** → arrays paralelos batem hash table em quase todo benchmark de leitura sequencial.
+
+5. **Hashing é caro pra sua chave** → ex.: chave é uma string de 1MB; calcular o hash domina. Considere outras representações.
+
+6. **Memória é restrita** → hash tables tipicamente usam **2-4x a memória dos dados em si** (buckets vazios, ponteiros, overhead de nós). `int[]` é compacto.
+
+---
+
+## HashSet e std::unordered_set
+
+Quando você só precisa de **pertinência** (a chave existe?) e não de valores associados, use **set** em vez de map. Mesma estrutura interna, só sem a parte do valor.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.HashSet;
+import java.util.Set;
+
+Set<Integer> visto = new HashSet<>();
+visto.add(42);
+visto.add(7);
+
+if (visto.contains(42)) { /* O(1) */ }
+
+// Caso de uso clássico: deduplicar uma lista
+int[] nums = {1, 2, 2, 3, 4, 4, 5};
+Set<Integer> unicos = new HashSet<>();
+for (int x : nums) unicos.add(x);
+// unicos = {1, 2, 3, 4, 5}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <unordered_set>
+
+std::unordered_set<int> visto;
+visto.insert(42);
+visto.insert(7);
+
+if (visto.count(42)) { /* O(1) */ }
+
+// Deduplicar uma lista
+std::vector<int> nums = {1, 2, 2, 3, 4, 4, 5};
+std::unordered_set<int> unicos(nums.begin(), nums.end());
+// unicos = {1, 2, 3, 4, 5}
+```
+
+</Code>
+</CodeSwap>
+
+---
+
+## Recap
+
+- **Hash tables** entregam O(1) amortizado para put/get/remove **quando a função hash distribui bem**.
+- **Colisões são inevitáveis** — paradoxo do aniversário. A questão é como você as resolve.
+- **Java HashMap** usa separate chaining + **árvore vermelho-preta com 8+ elementos por bucket** (Java 8, JEP 180), entregando pior caso O(log n).
+- **C++ unordered_map** usa só lista, sem treeification — pior caso O(n).
+- **Hash spreading** do Java (`h ^ (h >>> 16)`) é importante porque o índice usa só os bits baixos.
+- **Load factor 0.75** dispara rehash que custa O(n), mas amortiza para O(1) por inserção.
+- **Two Sum** e **Group Anagrams** mostram o padrão "trocar tempo por espaço com hash map".
+- **Não use hash** quando ordem importa, range queries, chaves pequenas em range conhecido, ou memória crítica.
+
+Próxima lição: **Árvores Binárias e BST** — onde HashMap fracassa (precisa de ordem), as árvores brilham. E você vai entender por que `TreeMap` é a estrutura escolhida quando consistência > velocidade.

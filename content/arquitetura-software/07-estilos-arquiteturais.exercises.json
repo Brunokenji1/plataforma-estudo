@@ -1,0 +1,110 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Segundo Mark Richards e Neal Ford no 'Fundamentals of Software Architecture' (O'Reilly 2020/2025), qual é a 'first law of software architecture'?",
+      "opcoes": [
+        "Microservices é sempre melhor que monolitos para sistemas modernos",
+        "Tudo em arquitetura de software é trade-off — não existe 'melhor estilo', existe estilo apropriado pro contexto",
+        "Toda arquitetura deve seguir os princípios SOLID",
+        "Banco de dados é detalhe de implementação, nunca decisão arquitetural"
+      ],
+      "correta": 1,
+      "explicacao": "A 'first law of software architecture' de Richards & Ford é: 'everything in software architecture is a trade-off' — tudo em arquitetura de software é trade-off. Quando alguém afirma 'microservices é melhor que monolito', a pergunta correta é 'melhor pra quê, em que escala, com que time?'. Cada estilo otimiza para um conjunto de qualidades (escalabilidade, deploy independente, simplicidade operacional, time-to-production) sacrificando outras. As outras opções confundem com declarações dogmáticas (A) ou princípios de design de código (C) ou afirmações de Clean Architecture (D), todos pontos válidos em seus contextos, mas nenhum é a lei fundamental de architectural styles."
+    },
+    {
+      "id": "ex2",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual é a diferença ESSENCIAL entre Monolito Tradicional e Modular Monolith?",
+      "opcoes": [
+        "Modular Monolith roda em múltiplas máquinas, monolito tradicional em uma só",
+        "Modular Monolith usa microservices internamente, monolito tradicional não",
+        "Modular Monolith mantém deploy único MAS impõe fronteiras de módulo explícitas e auditáveis (APIs públicas vs interior package-private, módulos não acessam classes internas de outros, banco por módulo)",
+        "Não há diferença real — são sinônimos"
+      ],
+      "correta": 2,
+      "explicacao": "Modular Monolith mantém a vantagem operacional de 'uma única unidade de deploy' (típica do monolito) MAS impõe fronteiras arquiteturais explícitas: cada módulo tem API pública (interfaces expostas) e interior package-private (classes que outros módulos não podem chamar); comunicação cross-module passa só pelas APIs; cada módulo idealmente tem suas próprias tabelas no banco; violações de fronteira são detectadas automaticamente (ArchUnit, jMolecules, Spring Modulith). Foi popularizado por Simon Brown em palestras a partir de 2016 ('Monolithic vs. Microservices is missing the point', Devoxx UK 2016). Case study canônico: Shopify (Kirsten Westeinde, Shopify Engineering Blog 2019) que deliberadamente NÃO foi pra microservices — escolheu modular monolith pra manter ACID e deploy único enquanto resolvia acoplamento."
+    },
+    {
+      "id": "ex3",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Para um time pequeno (4-10 pessoas) iniciando um projeto novo com domínio ainda em descoberta, a recomendação consistente de Sam Newman, Martin Fowler e Simon Brown é começar com microservices para evitar retrabalho futuro.",
+      "correta": false,
+      "explicacao": "Falso — exatamente o OPOSTO. A regra defendida consistentemente por Martin Fowler (post 'MonolithFirst', martinfowler.com/bliki/MonolithFirst.html, 3 de junho de 2015), Sam Newman ('Building Microservices' 2ª ed, O'Reilly agosto 2021) e Simon Brown é 'monolith first': comece como monolito (idealmente modular monolith), evolua, extraia microservices APENAS quando o problema concreto justificar. Razões: (1) fronteiras de Bounded Context só se descobrem com prática, e refatorar entre módulos é MUITO mais fácil que entre microservices; (2) sem maturidade DevOps/SRE, microservices viram pesadelo operacional; (3) custos de infraestrutura, debug distribuído, e network failures são reais e não compensam pra escala pequena. Times pequenos que começam com microservices costumam levar 2-3x mais tempo até a primeira versão produtiva."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre SOA (Service-Oriented Architecture) e Microservices?",
+      "opcoes": [
+        "SOA usa REST e Microservices usa SOAP",
+        "SOA tem ESB centralizado e serviços 'gordos' (cada um cobre domínio inteiro); Microservices tem 'dumb pipes, smart endpoints' (sem ESB) e serviços pequenos (cada um cobre um Bounded Context)",
+        "SOA é mais moderno que Microservices",
+        "SOA roda em cloud, Microservices roda on-premises"
+      ],
+      "correta": 1,
+      "explicacao": "A distinção fundamental está em ONDE mora a inteligência. SOA (anos 2000, formalizado em SOAP/WS-*/BPEL): tem um Enterprise Service Bus (ESB) CENTRAL que faz roteamento, transformação, orquestração, governança. Serviços são relativamente 'gordos' (cada um cobre um domínio inteiro como 'Pedidos', 'Pagamentos', 'Estoque'). Microservices (Newman, 'Building Microservices'): princípio 'dumb pipes, smart endpoints' — comunicação simples (REST/gRPC/mensageria) SEM ESB centralizado, inteligência DENTRO dos serviços. Serviços são pequenos (Bounded Contexts, 2-8 pessoas mantêm). SOA caiu em desgraça porque ESB virou ponto único de falha, governança centralizada virou gargalo, e o ESB acumulou lógica de negócio virando 'novo monolito no meio'. As outras opções confundem com tecnologias específicas (REST vs SOAP é detalhe de implementação, não característica arquitetural)."
+    },
+    {
+      "id": "ex5",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "A 'Lei de Conway' (Melvin Conway, 1968) diz que 'as organizações desenham sistemas que copiam suas estruturas de comunicação' — ou seja, sua arquitetura de software tende a refletir a estrutura dos seus times.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Melvin Conway publicou em abril de 1968, na revista Datamation, o artigo 'How Do Committees Invent?' onde formulou a observação que ficou conhecida como Lei de Conway: 'organizations design systems that are a copy of their communication structure'. Tradução prática: se você tem 4 times trabalhando juntos, vai tender a produzir sistemas que se quebram em 4 partes (uma por time). Implicação pra microservices: você não consegue ter microservices saudáveis sem estrutura organizacional alinhada (squads autônomas, ownership claro). Por isso o livro 'Team Topologies' de Matthew Skelton e Manuel Pais (IT Revolution Press, 2019) virou referência canônica em qualquer adoção séria de microservices — você precisa desenhar times e arquitetura juntos, não separadamente. A 'Conway's Inverse Maneuver' é planejar a organização que produziria a arquitetura desejada."
+    },
+    {
+      "id": "ex6",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual estilo arquitetural é o mais adequado para IDEs como Eclipse, VS Code e IntelliJ IDEA?",
+      "opcoes": [
+        "Layered Architecture (3-tier)",
+        "Microservices",
+        "Microkernel (Plugin Architecture) — core mínimo + plugins que estendem sem modificar o core",
+        "Lambda Architecture"
+      ],
+      "correta": 2,
+      "explicacao": "Microkernel (Plugin Architecture) é o estilo canônico para sistemas extensíveis. Catalogado no POSA Vol 1 (Buschmann et al., Wiley 1996). Estrutura: um NÚCLEO MÍNIMO que provê funcionalidade básica + PLUGINS que estendem sem modificar o núcleo. Exemplos canônicos: Eclipse IDE (core é RCP, tudo é plugin — editor Java, debugger, Git, Maven); VS Code (core mínimo + marketplace de extensões); IntelliJ (PluginManager, extension points); browsers (Chrome/Firefox extensões); WordPress (themes e plugins). Vantagens: extensibilidade sem tocar no core, customização por domínio, ecossistema de terceiros. Desafios: design dos contratos de extensão é difícil, versionamento de plugin é dor crônica (VS Code atualiza, extensões quebram). Não é estilo para aplicação de negócio típica — é estilo de PLATAFORMA."
+    },
+    {
+      "id": "ex7",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Serverless (FaaS) é sempre a escolha mais barata em qualquer cenário de produção, porque você só paga pelo que usa.",
+      "correta": false,
+      "explicacao": "Falso. O modelo de pricing por invocação (custo proporcional a número de invocações + tempo de execução + memória) torna serverless ÓTIMO pra cargas INTERMITENTES com tráfego irregular (webhooks, processamento de uploads, jobs agendados) — onde monolito ou microservices em EC2 ficariam pagando idle. Mas PÉSSIMO pra cargas CONSTANTES e ALTAS. Em volume alto e contínuo, uma instância EC2 reservada ou um cluster Kubernetes sai significativamente mais barato. Outros pontos onde NÃO usar serverless: (1) workloads que exigem latência baixa consistente (cold starts de 100ms-2s são fatais — Java/.NET costumam ser piores que Node/Python/Go); (2) workloads longos (AWS Lambda tem timeout máximo de 15 minutos); (3) aplicações stateful complexas (você acaba fazendo gambiarra com cache externo); (4) requisitos de memória/CPU muito altos. Regra prática: serverless brilha em cargas event-driven com tráfego irregular ou em prototipagem rápida."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre Lambda Architecture (Nathan Marz, 2011) e Kappa Architecture (Jay Kreps, 2014)?",
+      "opcoes": [
+        "Lambda usa AWS Lambda, Kappa usa Azure Functions",
+        "Lambda combina três camadas (batch + speed + serving) com DUAS CODEBASES (batch e streaming mantidas em sincronia); Kappa propõe UMA ÚNICA CAMADA de streaming sobre um log replayável (Kafka), reprocessando via replay de eventos",
+        "Lambda é mais nova que Kappa",
+        "Lambda é estilo arquitetural geral, Kappa é só pra microservices"
+      ],
+      "correta": 1,
+      "explicacao": "Lambda Architecture, proposta por Nathan Marz no post 'How to beat the CAP theorem' (2011) e formalizada no livro 'Big Data: Principles and Best Practices of Scalable Realtime Data Systems' (Marz & James Warren, Manning 2015), combina três camadas: batch layer (Hadoop/MapReduce, alta latência, alta acurácia), speed layer (Storm/streaming, baixa latência, aproximada) e serving layer (merge das duas pra responder queries). Problema fundamental: você mantém DUAS CODEBASES em sincronia, uma pra batch e outra pra streaming — propenso a inconsistências. Kappa Architecture, proposta por Jay Kreps (co-criador do Apache Kafka, hoje CEO da Confluent) no post 'Questioning the Lambda Architecture' (O'Reilly Radar, 2 de julho de 2014), critica essa duplicação e propõe: UMA ÚNICA camada de streaming sobre um log replayável (Kafka), reprocessamento por REPLAY dos eventos quando precisar. Mais simples quando o stream processing framework é maduro o suficiente — daí ter ganhado tração com Kafka Streams, Flink e similares maduros. As outras opções confundem com nome do AWS Lambda (sem relação com Lambda Architecture) ou afirmações invertidas."
+    },
+    {
+      "id": "ex9",
+      "tipo": "multipla-escolha",
+      "pergunta": "Pro projeto Carbon Credit Compensation Platform (Fatec) — 4 pessoas, domínio em descoberta, sem DevOps, decisão prévia in-memory — qual estilo arquitetural é o mais adequado?",
+      "opcoes": [
+        "Microservices, para já praticar o estilo da indústria moderna",
+        "Monolito tradicional, porque é o mais simples",
+        "Modular Monolith, mantendo deploy único MAS impondo fronteiras de Bounded Context explícitas (compensacao/, inventario/, cadastro/, auditoria/) com APIs públicas em api/ e interior em interno/ package-private",
+        "Serverless (FaaS), pra eliminar custo de infraestrutura"
+      ],
+      "correta": 2,
+      "explicacao": "Modular Monolith é a escolha correta pro contexto. Análise dos 5 eixos: (1) Time pequeno (4) — descarta microservices que exige 50+ engenheiros pra valer a pena; (2) Domínio em descoberta — descarta microservices porque fronteiras vão mudar e refatorar entre serviços é muito mais caro que entre módulos; (3) Sem DevOps — descarta microservices/serverless que exigem CI/CD maduro, monitoramento, distributed tracing; (4) In-memory por decisão — descarta serverless que exige stateless e backing services; (5) Mas vocês JÁ TÊM Bounded Contexts identificados das lições 3 e 4 — descarta monolito tradicional, porque jogaria fora todo o trabalho de DDD e produziria 'big ball of mud' nos próximos meses. Modular Monolith preserva: deploy único (trivial de operar), transações in-memory triviais, debug local fácil, regras DDD e Hexagonal das lições anteriores. Quando o grupo quiser extrair serviços no futuro, as fronteiras já estão lá — basta virar módulos em serviços separados."
+    },
+    {
+      "id": "ex10",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Layered Architecture (N-Tier) é o mesmo que Clean Architecture do Uncle Bob — apenas nomenclatura diferente para o mesmo padrão.",
+      "correta": false,
+      "explicacao": "Falso. Embora ambos organizem código em camadas, são padrões DIFERENTES com regras diferentes. Layered (N-Tier) — catalogado no POSA Vol 1 (1996) como 'Layers' — é HORIZONTAL: Presentation → Business → Data Access, com regra 'chamadas só descem'. Cada camada chama só a imediatamente abaixo. Tende a produzir Domain Anêmico (entidades sem comportamento, lógica toda em Service) — problema descrito por Martin Fowler em 'AnemicDomainModel' (25/nov/2003). Clean Architecture (Uncle Bob, post 'The Clean Architecture' de 13/ago/2012 e livro homônimo de 2017) é CONCÊNTRICA: Entities (centro) → Use Cases → Interface Adapters → Frameworks (borda), com Dependency Rule explícita — dependências apontam pra dentro, infraestrutura é detalhe externo. As consequências práticas são opostas: em Layered, mudança vertical custa caro (toca cinco camadas pra adicionar um campo); em Clean, mudança no domínio fica isolada e infraestrutura pode ser trocada sem tocar no core. Layered é o padrão JEE/Java EE clássico empresarial; Clean é evolução pós-2012 alinhada com DDD e Hexagonal."
+    }
+  ]
+}

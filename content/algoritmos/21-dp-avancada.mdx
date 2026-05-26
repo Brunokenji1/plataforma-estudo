@@ -1,0 +1,517 @@
+---
+titulo: "DP Avançada: Árvores, Bitmasks e Dígitos"
+trilha: "algoritmos"
+duracaoMin: 65
+dificuldade: "intermediario"
+referencias:
+  - "Richard E. Bellman (1962), 'Dynamic Programming Treatment of the Travelling Salesman Problem', Journal of the ACM 9(1), pp. 61-63 — paper original com DP para TSP"
+  - "Michael Held, Richard M. Karp (1962), 'A dynamic programming approach to sequencing problems', Journal of SIAM 10(1), pp. 196-210 — Held-Karp algorithm, redescoberta independente"
+  - "Antti Laaksonen, Competitive Programmer's Handbook (CPH), Cap. 10 — Bit Manipulation, Cap. 14 — Tree Algorithms"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulos 14-15 — Dynamic Programming"
+  - "MIT OCW 6.046J (Spring 2015), Lecture 19-21 — DP avançada, Erik Demaine"
+  - "Stanford CS 161 — DP lectures"
+  - "Codeforces educational rounds — DP em árvore, Bitmask, Digit DP"
+  - "USACO Guide — Gold/Platinum DP techniques"
+  - "cp-algorithms.com — Dynamic Programming sections"
+---
+
+## Por que essa lição existe
+
+Na Lição 13 cobrimos os **6 padrões fundamentais** de programação dinâmica: Climbing Stairs, Coin Change, Knapsack 0/1, LIS, LCS, Edit Distance. Esses padrões resolvem talvez 60% dos problemas de DP em entrevistas e em competição.
+
+Os outros 40%? **Variantes mais sofisticadas** que usam a mesma filosofia (subproblemas sobrepostos + subestrutura ótima) com **estados mais elaborados**. Esta lição cobre três famílias que aparecem **constantemente em ICPC**, em entrevistas de big tech, e em problemas reais de otimização:
+
+1. **DP em árvore** (Tree DP) — problemas onde o input é uma árvore e você precisa computar algo recursivamente pela estrutura. Aparece em compiladores (análise de AST), otimização de redes, análise de redes sociais.
+
+2. **Bitmask DP** — usa **inteiros como representação de subconjuntos**. Aparece em TSP (Traveling Salesman), Hamiltonian path, coloração de grafos, e qualquer problema onde N é pequeno (≤ 20-25) e você precisa enumerar subconjuntos eficientemente.
+
+3. **Digit DP** — conta números com certas propriedades em ranges. "Quantos números entre L e R têm soma de dígitos = 7?". Padrão competitivo clássico.
+
+Vou ser denso — cada uma é uma técnica que merece lição própria, mas dá pra cobrir as três se você já tem a base sólida da Lição 13.
+
+---
+
+## Tree DP: programação dinâmica em árvores
+
+Em arrays, DP processa elementos em ordem (esquerda → direita ou bottom-up). Em árvores, a ordem natural é **DFS pós-ordem** — calcula resultados nos filhos primeiro, combina nos pais. A estrutura recursiva da árvore **é a recursão do DP**.
+
+### Padrão 1: Maximum Independent Set em árvore
+
+**Problema**: dada uma árvore de N nós, cada nó tem um valor. Selecione um **conjunto independente** (não pode pegar dois nós adjacentes) que maximize a soma dos valores.
+
+Em grafos gerais, esse problema é **NP-difícil**. Em árvores, dá pra resolver em **O(N)**. A diferença é gritante.
+
+**Estado**: pra cada nó `v`, duas opções — pegar `v` ou não pegar `v`. Define:
+
+- `dp[v][0]` = melhor soma na subárvore de `v`, **sem** pegar `v`
+- `dp[v][1]` = melhor soma na subárvore de `v`, **pegando** `v`
+
+**Recorrência**: pra cada filho `u` de `v`:
+
+- Se **não pegou** `v`: os filhos podem ser pegos ou não — pega o melhor dos dois
+- Se **pegou** `v`: os filhos **não podem ser pegos** — usa só `dp[u][0]`
+
+```
+dp[v][0] = soma sobre filhos u de:    max(dp[u][0], dp[u][1])
+dp[v][1] = valor[v] + soma sobre filhos u de:    dp[u][0]
+```
+
+Resposta final: `max(dp[raiz][0], dp[raiz][1])`.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class TreeDPIndependentSet {
+    private int[] valor;
+    private List<List<Integer>> adj;
+    private long[][] dp;        // dp[v][0] = sem pegar v, dp[v][1] = pegando v
+
+    public long solve(int n, int[] valor, List<List<Integer>> adj) {
+        this.valor = valor;
+        this.adj = adj;
+        this.dp = new long[n][2];
+        dfs(0, -1);                  // raiz = 0, sem pai
+        return Math.max(dp[0][0], dp[0][1]);
+    }
+
+    private void dfs(int v, int pai) {
+        dp[v][0] = 0;
+        dp[v][1] = valor[v];
+        for (int u : adj.get(v)) {
+            if (u == pai) continue;
+            dfs(u, v);
+            dp[v][0] += Math.max(dp[u][0], dp[u][1]);
+            dp[v][1] += dp[u][0];
+        }
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+class TreeDPIndependentSet {
+    std::vector<int> valor;
+    std::vector<std::vector<int>> adj;
+    std::vector<std::array<long long, 2>> dp;
+
+    void dfs(int v, int pai) {
+        dp[v][0] = 0;
+        dp[v][1] = valor[v];
+        for (int u : adj[v]) {
+            if (u == pai) continue;
+            dfs(u, v);
+            dp[v][0] += std::max(dp[u][0], dp[u][1]);
+            dp[v][1] += dp[u][0];
+        }
+    }
+
+public:
+    long long solve(int n, std::vector<int>& v, std::vector<std::vector<int>>& a) {
+        valor = v;
+        adj = a;
+        dp.assign(n, {0, 0});
+        dfs(0, -1);
+        return std::max(dp[0][0], dp[0][1]);
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(N). Cada nó é visitado uma vez, e o trabalho em cada nó é proporcional ao número de filhos. Soma dos graus = 2(N-1) em árvore → O(N) total.
+
+<ComplexidadeBox melhor="O(N)" media="O(N)" pior="O(N)" />
+
+### Padrão 2: Diâmetro da árvore
+
+**Problema**: encontre o **maior caminho** entre quaisquer dois nós da árvore (medindo número de arestas ou soma de pesos).
+
+A definição clássica do problema do diâmetro. Aparece em redes (qual o maior atraso possível?), análise de árvores filogenéticas, e otimização de rede.
+
+**Insight**: o diâmetro passa por **algum nó** como ponto mais alto. Pra cada nó `v`, considere o maior caminho que passa por `v`:
+
+- Pega o **maior** caminho descendente até alguma folha numa direção
+- Pega o **segundo maior** caminho descendente noutra direção
+- Soma os dois
+
+O diâmetro é o máximo desse valor sobre todos os nós.
+
+Pra calcular eficientemente: numa única DFS, mantém pra cada nó `v` a **maior profundidade** atingida na subárvore. Quando processa um nó, combina suas duas maiores profundidades de filhos pra candidato a diâmetro.
+
+```java
+int diametro = 0;
+private int dfs(int v, int pai) {                  // retorna profundidade máxima
+    int maior = 0, segundo = 0;
+    for (int u : adj.get(v)) {
+        if (u == pai) continue;
+        int profUnFilho = dfs(u, v) + 1;
+        if (profUnFilho > maior) {
+            segundo = maior;
+            maior = profUnFilho;
+        } else if (profUnFilho > segundo) {
+            segundo = profUnFilho;
+        }
+    }
+    diametro = Math.max(diametro, maior + segundo);    // diâmetro passa por v
+    return maior;                                       // só a maior sobe pro pai
+}
+```
+
+**Complexidade**: O(N), com uma única DFS.
+
+### Padrão 3: Rerooting (técnica avançada)
+
+E se você quiser uma resposta **pra cada nó**, não só pra raiz? Por exemplo: "pra cada nó `v`, qual a soma das distâncias de `v` pra todos os outros nós?".
+
+Brute force: pra cada nó, fazer uma DFS. Custo O(N²). Inviável pra N grande.
+
+**Rerooting** é a técnica que resolve esse padrão em O(N). A ideia:
+
+1. **Primeira DFS** (bottom-up): calcula valores pra raiz fixa
+2. **Segunda DFS** (top-down): "move" a raiz pra cada filho, atualizando o valor em O(1)
+
+Mover a raiz de `u` pra `v` (filho de `u`) muda apenas duas coisas: o subárvore de `v` ganha o restante do grafo como descendente, e o subárvore que antes era "o resto" perde `v` e ganha `u` como pai.
+
+A matemática exata depende do problema. Pra "soma de distâncias", existe uma fórmula clean que permite atualizar em O(1) por mudança de raiz. Implementação fica em ~30 linhas mas é uma das técnicas mais elegantes da DP em árvore.
+
+**Aplicações**: análise de redes sociais (centralidade), encontrar o "centro" de uma árvore, problemas de roteamento ótimo onde cada nó precisa de uma resposta.
+
+---
+
+## Bitmask DP: subconjuntos como inteiros
+
+A segunda família — uma das mais elegantes e contra-intuitivas em DP.
+
+### A ideia central
+
+Se você tem um conjunto de **até ~20 elementos**, pode representar **qualquer subconjunto** como um inteiro de 32 bits. Cada bit indica se o elemento correspondente está no subconjunto:
+
+```
+n = 5 elementos: {0, 1, 2, 3, 4}
+
+bitmask = 00000  (binário) = 0  → subconjunto vazio {}
+bitmask = 00001  = 1  → {0}
+bitmask = 00101  = 5  → {0, 2}
+bitmask = 11111  = 31 → {0, 1, 2, 3, 4}
+```
+
+**Operações úteis** com bitmasks:
+
+- `mask & (1 << i)` → testa se elemento `i` está no subconjunto
+- `mask | (1 << i)` → adiciona elemento `i`
+- `mask & ~(1 << i)` → remove elemento `i`
+- `__builtin_popcount(mask)` em C++ ou `Integer.bitCount(mask)` em Java → conta bits ligados
+- Itera por todos os subconjuntos: `for (int mask = 0; mask < (1 << n); mask++)`
+
+Com isso, dá pra fazer **DP sobre subconjuntos**: o estado é `dp[mask]` ou `dp[mask][i]`, onde `mask` é o subconjunto e `i` algum índice extra. Limitação prática: precisa de N ≤ ~22 (2^22 ≈ 4 milhões, ainda gerenciável).
+
+### Aplicação clássica: Held-Karp (TSP)
+
+**Problema**: Traveling Salesman Problem (TSP). Dado um grafo completo com pesos, encontre o **ciclo Hamiltoniano** (passa por todos os vértices exatamente uma vez) de **menor custo**.
+
+TSP é **NP-difícil** em geral. Brute force é O(N!) — pra N = 20, isso é 2.4 quintilhões de permutações. Inviável.
+
+Em **1962**, dois grupos publicaram independentemente um algoritmo de DP que reduz pra O(N²·2^N): **Richard Bellman** (paper *"Dynamic Programming Treatment of the Travelling Salesman Problem"*, JACM 9(1)) e **Michael Held & Richard Karp** (paper *"A dynamic programming approach to sequencing problems"*, J. SIAM 10(1)). O algoritmo é chamado **Held-Karp** (ou Bellman-Held-Karp).
+
+Pra N = 20: O(20² × 2^20) ≈ 420 milhões — roda em segundos. Sai de "impossível" pra "tranquilo".
+
+**Estado**: `dp[mask][i]` = menor custo pra visitar todos os vértices em `mask`, terminando no vértice `i` (que precisa estar em `mask`).
+
+**Recorrência**: pra chegar em `i` tendo visitado `mask`, veio de algum `j` em `mask`, sem incluir `i`:
+
+```
+dp[mask][i] = min sobre j em (mask sem i):
+              dp[mask sem i][j] + dist[j][i]
+```
+
+Caso-base: `dp[{0}][0] = 0` (começa no vértice 0, sem visitar mais nada).
+
+Resposta: `min sobre i de dp[full_mask][i] + dist[i][0]` — visitou tudo e volta pra origem.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class HeldKarpTSP {
+
+    public long tsp(int[][] dist) {
+        int n = dist.length;
+        long[][] dp = new long[1 << n][n];
+        for (long[] linha : dp) Arrays.fill(linha, Long.MAX_VALUE / 2);
+        dp[1][0] = 0;                                 // só visitou vértice 0, está nele
+
+        for (int mask = 1; mask < (1 << n); mask++) {
+            if ((mask & 1) == 0) continue;             // sempre começamos no vértice 0
+            for (int i = 0; i < n; i++) {
+                if ((mask & (1 << i)) == 0) continue;  // i precisa estar em mask
+                if (dp[mask][i] == Long.MAX_VALUE / 2) continue;
+
+                for (int j = 0; j < n; j++) {
+                    if ((mask & (1 << j)) != 0) continue;   // j já visitado
+                    int novoMask = mask | (1 << j);
+                    long custo = dp[mask][i] + dist[i][j];
+                    if (custo < dp[novoMask][j]) {
+                        dp[novoMask][j] = custo;
+                    }
+                }
+            }
+        }
+
+        int full = (1 << n) - 1;
+        long resp = Long.MAX_VALUE;
+        for (int i = 1; i < n; i++) {                  // termina em i, volta pra 0
+            resp = Math.min(resp, dp[full][i] + dist[i][0]);
+        }
+        return resp;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <climits>
+#include <algorithm>
+
+long long tsp(const std::vector<std::vector<int>>& dist) {
+    int n = dist.size();
+    const long long INF = LLONG_MAX / 2;
+    std::vector<std::vector<long long>> dp(1 << n, std::vector<long long>(n, INF));
+    dp[1][0] = 0;
+
+    for (int mask = 1; mask < (1 << n); mask++) {
+        if ((mask & 1) == 0) continue;
+        for (int i = 0; i < n; i++) {
+            if ((mask & (1 << i)) == 0) continue;
+            if (dp[mask][i] == INF) continue;
+
+            for (int j = 0; j < n; j++) {
+                if ((mask & (1 << j)) != 0) continue;
+                int novoMask = mask | (1 << j);
+                long long custo = dp[mask][i] + dist[i][j];
+                if (custo < dp[novoMask][j]) {
+                    dp[novoMask][j] = custo;
+                }
+            }
+        }
+    }
+
+    int full = (1 << n) - 1;
+    long long resp = INF;
+    for (int i = 1; i < n; i++) {
+        resp = std::min(resp, dp[full][i] + dist[i][0]);
+    }
+    return resp;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(N²·2^N) tempo, O(N·2^N) memória.
+
+<Insight>
+Held-Karp é um dos algoritmos mais celebrados em otimização combinatória. Foi publicado **duas vezes no mesmo ano** (1962) por grupos independentes — outro caso da Lei de Stigler (relembre da Lição 19). Bellman estava continuando seu trabalho em DP iniciado em 1953; Held e Karp trabalhavam na IBM Research em problemas de **sequencing** (ordenamento ótimo). Apesar de **exponencial**, ainda é o melhor algoritmo exato conhecido pra TSP em geral — **nenhum algoritmo com complexidade menor que O((2-ε)^N) é conhecido**. Tem **prova de que esse limite é apertado** sob suposições de complexidade (Strong Exponential Time Hypothesis, SETH).
+</Insight>
+
+### Outros problemas clássicos de Bitmask DP
+
+Padrão se generaliza pra muitos problemas:
+
+- **Atribuição de tarefas** (Assignment problem): N pessoas, N tarefas, custo de cada pessoa fazer cada tarefa. Minimize custo total.
+- **Hamiltonian path** (existência ou contagem)
+- **Coloração de grafos** com cores limitadas
+- **Partição em subconjuntos** com restrições
+- **Cobertura de conjuntos** (Set Cover) com N pequeno
+- **Problemas de Steiner Tree** em grafos pequenos
+
+Em ICPC e entrevistas, sempre que vê **N ≤ 20-22**, pensa em Bitmask DP imediatamente.
+
+---
+
+## Digit DP: contando números com propriedades
+
+A terceira família — uma das mais úteis em ICPC e menos óbvias.
+
+### O problema típico
+
+> Quantos números no intervalo `[L, R]` têm **soma de dígitos igual a 7**?
+
+Ou variações: "quantos números têm exatamente 3 dígitos pares?", "quantos não contêm o dígito 5?", "quantos são divisíveis por 13?", "quantos têm dígitos em ordem não-decrescente?".
+
+Brute force: itera de `L` até `R`, checa cada um. Pra `R = 10^18`, são quintilhões de iterações. **Inviável.**
+
+**Digit DP** resolve em **O(D · estado · 10)** onde D é o número de dígitos (no máximo ~18-19 pra long). A trick: **trabalha com os dígitos**, não com os números inteiros.
+
+### A ideia
+
+Em vez de contar números, conta **combinações de dígitos** que satisfazem a propriedade. O estado da DP é:
+
+- `pos` = qual posição (dígito) estamos preenchendo
+- `tight` = booleano que indica se ainda estamos "presos" ao limite superior (não pode passar de R)
+- **Algum estado adicional** específico ao problema (soma acumulada, último dígito, etc.)
+
+Geralmente: `count(R) - count(L-1)`, calcula quantos números válidos existem em `[0, R]`, depois subtrai pra `[0, L-1]`. Mais fácil que lidar com `[L, R]` diretamente.
+
+### Exemplo: soma de dígitos = 7
+
+Estado: `dp[pos][soma][tight]` = quantos jeitos de preencher dígitos das posições `pos+1` em diante, com soma acumulada atual = `soma` (limitado a 7), tendo `tight` indicando se ainda estamos presos.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class DigitDPSomaSete {
+    String num;
+    long[][][] memo;
+    final int ALVO = 7;
+
+    public long contarAteN(long n) {
+        if (n < 0) return 0;
+        num = Long.toString(n);
+        memo = new long[num.length()][ALVO + 1][2];
+        for (long[][] a : memo) for (long[] b : a) Arrays.fill(b, -1);
+        return dp(0, 0, 1);
+    }
+
+    private long dp(int pos, int soma, int tight) {
+        if (pos == num.length()) return (soma == ALVO) ? 1 : 0;
+        if (memo[pos][soma][tight] != -1) return memo[pos][soma][tight];
+
+        int limite = (tight == 1) ? (num.charAt(pos) - '0') : 9;
+        long resp = 0;
+
+        for (int d = 0; d <= limite; d++) {
+            if (soma + d > ALVO) break;                 // poda
+            int novoTight = (tight == 1 && d == limite) ? 1 : 0;
+            resp += dp(pos + 1, soma + d, novoTight);
+        }
+        return memo[pos][soma][tight] = resp;
+    }
+
+    public long contarRange(long L, long R) {
+        return contarAteN(R) - contarAteN(L - 1);
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <string>
+#include <vector>
+#include <cstring>
+
+class DigitDPSomaSete {
+    std::string num;
+    long long memo[20][8][2];
+    const int ALVO = 7;
+
+    long long dp(int pos, int soma, int tight) {
+        if (pos == (int)num.size()) return (soma == ALVO) ? 1 : 0;
+        if (memo[pos][soma][tight] != -1) return memo[pos][soma][tight];
+
+        int limite = tight ? (num[pos] - '0') : 9;
+        long long resp = 0;
+        for (int d = 0; d <= limite; d++) {
+            if (soma + d > ALVO) break;
+            int novoTight = (tight && d == limite) ? 1 : 0;
+            resp += dp(pos + 1, soma + d, novoTight);
+        }
+        return memo[pos][soma][tight] = resp;
+    }
+
+public:
+    long long contarAteN(long long n) {
+        if (n < 0) return 0;
+        num = std::to_string(n);
+        std::memset(memo, -1, sizeof(memo));
+        return dp(0, 0, 1);
+    }
+
+    long long contarRange(long long L, long long R) {
+        return contarAteN(R) - contarAteN(L - 1);
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(D · K · 2 · 10) onde D = dígitos (~19 para long), K = valores possíveis do estado extra (8 no exemplo), 10 = base. Total: **algumas centenas de operações**, independente do tamanho do range.
+
+### O conceito "tight"
+
+A parte que mais confunde é o booleano `tight`. Funciona assim:
+
+- Se você está construindo um número ≤ R = `"123"`, e até agora colocou `"12"`, então **só pode pôr 0, 1, 2 ou 3** na próxima posição (tight = 1).
+- Se você colocou `"11"`, agora pode pôr qualquer dígito 0-9 (tight = 0) — você já está abaixo de R, qualquer dígito mantém o número abaixo.
+
+Esse controle de tight é o que torna Digit DP funcional. Sem ele, contaria números maiores que R.
+
+### Aplicações de Digit DP
+
+Padrão **muito comum em ICPC**:
+
+- Contagem de números com soma de dígitos em range específico
+- Números sem dígitos repetidos
+- Números com certas propriedades modulares
+- Contagem de palíndromos
+- "Lucky numbers" (com apenas dígitos 4 e 7, problema clássico da Russian/CIS school)
+- "Magic numbers" com propriedades arbitrárias
+- Problemas com restrições em representações em outras bases (binário, hex)
+
+Em entrevistas tradicionais é menos comum, mas aparece em problemas de "contagem em ranges grandes".
+
+---
+
+## Quando usar cada técnica
+
+| Técnica | Reconhecer pela | Complexidade típica | Limite de tamanho |
+|---|---|---|---|
+| **Tree DP** | Input é árvore + computar valor por nó/subárvore | O(N) ou O(N²) | N ≤ 10^5 ou maior |
+| **Rerooting** | Tree DP "para cada nó como raiz" | O(N) | N ≤ 10^5 |
+| **Bitmask DP** | Subconjuntos importantes, N ≤ ~22 | O(N² · 2^N) ou O(N · 2^N) | N ≤ 20-22 |
+| **Digit DP** | Contagem de números em range grande com propriedades | O(D · estado · base) | Range até 10^18 ou maior |
+
+**Estratégia em ICPC/entrevista**:
+
+1. **N pequeno (≤ 20) + estado parece envolver "quais elementos já considerei"** → Bitmask DP
+2. **Input é árvore + computa algo agregado** → Tree DP
+3. **Contagem de números numa faixa grande com propriedade nos dígitos** → Digit DP
+4. **Range query com updates** → não é DP, mas Segment Tree (Lição 20)
+
+---
+
+## Recap
+
+Estendendo a Lição 13, três famílias avançadas de DP cobrem a maior parte dos problemas "não-óbvios":
+
+**Tree DP** processa árvores em **DFS pós-ordem**, calculando valores nos filhos antes dos pais. Padrões: Maximum Independent Set em árvore (O(N), versus NP-difícil em grafo geral); diâmetro da árvore (uma única DFS guardando duas maiores profundidades por nó); rerooting (técnica avançada pra ter resposta pra cada nó como raiz, em O(N) total).
+
+**Bitmask DP** usa **inteiros como representação de subconjuntos**: cada bit representa um elemento. Permite DP onde o estado é "quais elementos já considerei". Limitação prática: N ≤ ~22. Aplicação canônica: **Held-Karp para TSP**, publicado independentemente em 1962 por **Richard Bellman** (JACM 9(1)) e por **Michael Held & Richard Karp** (J. SIAM 10(1)). Reduz TSP de O(N!) para O(N²·2^N) — viável até N ≈ 20-25. Ainda é o melhor algoritmo exato conhecido pra TSP em geral.
+
+**Digit DP** conta números com propriedades **nos dígitos** em ranges grandes (até 10^18). O estado tem dimensões: `pos` (posição do dígito), `tight` (preso ao limite superior), e algo específico ao problema (soma, último dígito, paridade, etc.). Complexidade: independente do tamanho do range — depende só da quantidade de dígitos (~19 pra long).
+
+Como **reconhecer** cada uma:
+- **Tree DP** → input é árvore, computa agregação
+- **Bitmask DP** → N ≤ 22, estado envolve "quais escolhi"
+- **Digit DP** → contagem em range grande de números com propriedade nos dígitos
+
+Com essa lição e a Lição 13, você tem **todo o ferramental de DP** que aparece em ICPC e entrevistas. SOS DP (Sum over Subsets), DP em SCC, e padrões mais especializados existem, mas são variações dos princípios cobertos aqui.
+
+A trilha de algoritmos está **muito robusta**. Próximas direções: **Geometria Computacional** (convex hull, line sweep), **Fluxo em Redes** (Ford-Fulkerson, Edmonds-Karp, matching bipartido), **Number Theory pra ICPC** (sieve, modular exp, CRT), **String matching avançado** (suffix arrays, Z-function), ou **mudar de trilha** completamente — Bancos de Dados, SO, Redes, Arquitetura. Manda qual direção quer seguir.

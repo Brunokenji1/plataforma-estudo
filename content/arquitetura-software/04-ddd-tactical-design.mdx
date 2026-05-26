@@ -1,0 +1,675 @@
+---
+titulo: "DDD — Design Tático"
+descricao: "Entities, Value Objects, Aggregates, Repositories, Factories, Domain Services e Specifications. Aplicação concreta no Carbon Credit Compensation Platform."
+---
+
+A lição anterior fechou o estratégico: Bounded Contexts, Context Map, padrões de integração. Tudo isso é o esqueleto do sistema, o mapa de como as partes se relacionam. Agora vamos pra dentro de um Bounded Context e olhar como o código se estrutura.
+
+DDD tático é o conjunto de padrões pra construir o interior de cada contexto. Os blocos foram catalogados por Eric Evans em 2003 e refinados por Vaughn Vernon na série "Effective Aggregate Design" de 2011 (Vernon, "Effective Aggregate Design", dddcommunity.org/library/vernon_2011/, Creative Commons 2011), que depois virou o capítulo 10 do "Implementing Domain-Driven Design" (Addison-Wesley, 2013).
+
+Esta lição cobre os sete blocos principais: Entity, Value Object, Aggregate, Repository, Factory, Domain Service e Specification. Cada um resolve um problema específico.
+
+## Do estratégico ao tático
+
+A lição anterior parou no Context Map do Carbon Credit Compensation Platform:
+
+- **Compensação de Créditos** (Core)
+- **Cadastro de Emissores** (Supporting)
+- **Inventário de Créditos** (Supporting)
+- **Notificações** e **Relatórios** (Generic)
+
+Cada um desses é um Bounded Context com seu próprio modelo. Os padrões táticos descrevem o que tem **dentro** de cada modelo. Não fazem sentido entre contextos, só dentro deles.
+
+<Aviso>
+Erro comum: aplicar padrões táticos sem ter feito o trabalho estratégico. Você pode ter Aggregates, Value Objects e Repositories impecáveis num modelo que mistura conceitos de três contextos diferentes. O código vai parecer DDD na superfície e produzir uma classe `Pedido` de 80 campos. O valor real vem da combinação dos dois níveis.
+</Aviso>
+
+## Entity: identidade que sobrevive ao tempo
+
+Uma Entity é um objeto cuja identidade persiste independente dos atributos. Dois objetos podem ter os mesmos valores em todos os campos e ainda assim serem entidades diferentes; um único objeto pode mudar todos os campos ao longo do tempo e continuar sendo a mesma entidade.
+
+A pergunta de teste vem do próprio Evans (2003, capítulo 5, seção "ENTITIES"). Ele formula assim: *"Does the user of the application care if I am the same person I was at age five?"* — em português livre, o usuário do sistema se importa se este objeto é o mesmo de antes? Se a continuidade ao longo do tempo importa pro domínio, é Entity. Se só importa o estado atual dos atributos, é Value Object.
+
+Formas comuns de definir identidade:
+
+- Atributo único do domínio (número de conta bancária, CNPJ, código IATA de aeroporto)
+- Combinação de atributos (nome + data de nascimento + local de nascimento, quando nenhum único é suficiente)
+- ID gerado pelo sistema (UUID, sequência de banco)
+- ID criado pelo usuário (placa de veículo, identificador escolhido manualmente)
+
+Confusão de identidade leva a corrupção de dados. Se duas entidades acabarem com o mesmo ID, ou se a identidade mudar durante o ciclo de vida, o sistema deixa de saber quem é quem.
+
+No Carbon Credit, exemplos de Entity:
+
+- `Emissor`: tem CNPJ como identidade. Pode mudar de nome, endereço, contato; continua sendo o mesmo emissor.
+- `CreditoCarbono`: tem serial number único emitido pela certificadora (VCS, Gold Standard). Mesmo crédito mantém identidade independente de quem o detém no momento.
+- `CompensacaoEmissao`: tem UUID gerado pelo sistema no momento da criação.
+
+## Value Object: definido pelo que é
+
+Um Value Object é o oposto: importa só o que ele contém. Dois Value Objects com os mesmos atributos são intercambiáveis. Você não diferencia "esta nota de R$ 10" da "aquela nota de R$ 10"; valem a mesma coisa, são fungíveis.
+
+Três regras práticas (Evans, 2003, capítulo 5):
+
+1. **Imutável**. Uma vez criado, não muda. Pra "alterar", você cria outro Value Object e descarta o antigo.
+2. **Igualdade por valor**. Dois Value Objects com os mesmos atributos são iguais. Em Java, isso quer dizer override de `equals()` e `hashCode()` baseado nos campos.
+3. **Sem identidade própria**. Você não pergunta "qual Money é esse?". Pergunta "quanto vale?".
+
+Vantagens concretas:
+
+- **Thread-safe por construção**: imutáveis não precisam de sincronização
+- **Cache trivial**: pode compartilhar a mesma instância em todo lugar
+- **Validação garantida**: se o construtor recusou estado inválido, ele continua válido pra sempre
+- **Substituição limpa**: passar `new Money(BigDecimal.valueOf(50), "BRL")` é mais claro que mexer em dois campos de um objeto mutável
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Entity: identidade importa
+public class Emissor {
+    private final CNPJ cnpj;          // identidade
+    private String razaoSocial;        // atributos mutáveis
+    private Endereco enderecoFiscal;
+    private StatusEmissor status;
+
+    public Emissor(CNPJ cnpj, String razaoSocial, Endereco endereco) {
+        this.cnpj = Objects.requireNonNull(cnpj);
+        this.razaoSocial = Objects.requireNonNull(razaoSocial);
+        this.enderecoFiscal = Objects.requireNonNull(endereco);
+        this.status = StatusEmissor.PENDENTE_KYC;
+    }
+
+    public void atualizarEndereco(Endereco novo) {
+        this.enderecoFiscal = Objects.requireNonNull(novo);
+    }
+
+    // Igualdade por identidade, não por atributos
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Emissor outro)) return false;
+        return cnpj.equals(outro.cnpj);
+    }
+
+    @Override
+    public int hashCode() {
+        return cnpj.hashCode();
+    }
+}
+
+// Value Object: imutável, igualdade por atributos
+public record Money(BigDecimal valor, String moeda) {
+    public Money {
+        Objects.requireNonNull(valor);
+        Objects.requireNonNull(moeda);
+        if (valor.signum() < 0) {
+            throw new IllegalArgumentException("Money não pode ser negativo");
+        }
+        if (moeda.length() != 3) {
+            throw new IllegalArgumentException("Moeda deve ser ISO 4217 (3 letras)");
+        }
+    }
+
+    public Money somar(Money outro) {
+        if (!this.moeda.equals(outro.moeda)) {
+            throw new IllegalArgumentException("Moedas diferentes");
+        }
+        return new Money(this.valor.add(outro.valor), this.moeda);
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+// Entity: identidade importa
+class Emissor {
+    CNPJ cnpj_;                      // identidade
+    std::string razaoSocial_;         // atributos mutáveis
+    Endereco enderecoFiscal_;
+    StatusEmissor status_;
+
+public:
+    Emissor(CNPJ cnpj, std::string razaoSocial, Endereco endereco)
+        : cnpj_(std::move(cnpj))
+        , razaoSocial_(std::move(razaoSocial))
+        , enderecoFiscal_(std::move(endereco))
+        , status_(StatusEmissor::PendenteKYC) {}
+
+    void atualizarEndereco(Endereco novo) {
+        enderecoFiscal_ = std::move(novo);
+    }
+
+    // Igualdade por identidade
+    bool operator==(const Emissor& outro) const {
+        return cnpj_ == outro.cnpj_;
+    }
+};
+
+// Value Object: imutável, igualdade por valor
+class Money {
+    int64_t centavos_;
+    std::string moeda_;
+
+public:
+    Money(int64_t centavos, std::string moeda)
+        : centavos_(centavos), moeda_(std::move(moeda)) {
+        if (centavos < 0) throw std::invalid_argument("Money negativo");
+        if (moeda_.size() != 3) throw std::invalid_argument("ISO 4217");
+    }
+
+    Money somar(const Money& outro) const {
+        if (moeda_ != outro.moeda_) {
+            throw std::invalid_argument("moedas diferentes");
+        }
+        return Money(centavos_ + outro.centavos_, moeda_);
+    }
+
+    int64_t centavos() const { return centavos_; }
+    const std::string& moeda() const { return moeda_; }
+
+    bool operator==(const Money& o) const = default;
+};
+```
+
+</Code>
+
+</CodeSwap>
+
+Repara que o `Money` em Java usa `BigDecimal` e em C++ usa `int64_t` em centavos. Nunca `double` pra dinheiro: ponto flutuante perde precisão de forma silenciosa e o financeiro acha um centavo de diferença na conciliação.
+
+## Aggregate: a unidade de consistência
+
+Aqui está o conceito mais difícil de DDD tático, e também o de maior valor quando bem feito.
+
+Um Aggregate é um grupo de objetos tratado como unidade pra mudanças de dados, com uma única raiz de acesso externo. A raiz é uma Entity com identidade global; os objetos internos só fazem sentido dentro do agregado.
+
+Três regras estruturais (Evans, 2003, capítulo 6):
+
+- Objetos externos só podem referenciar a raiz
+- A raiz controla e garante os invariantes de todo o agregado
+- Operações que cruzam a fronteira do agregado passam pela raiz
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-agg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
+    </marker>
+  </defs>
+
+  <rect x="240" y="60" width="280" height="260" rx="16" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1.5" strokeDasharray="6 4" strokeOpacity="0.5" />
+  <text x="380" y="48" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.6">FRONTEIRA DO AGREGADO</text>
+
+  <ellipse cx="380" cy="110" rx="90" ry="32" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2.5" />
+  <text x="380" y="108" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="600">CompensacaoEmissao</text>
+  <text x="380" y="124" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.65">[ root ]</text>
+
+  <rect x="265" y="190" width="100" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="315" y="212" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Item</text>
+  <text x="315" y="228" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Compensacao</text>
+
+  <rect x="395" y="190" width="100" height="50" rx="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+  <text x="445" y="212" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Item</text>
+  <text x="445" y="228" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Compensacao</text>
+
+  <rect x="320" y="265" width="120" height="40" rx="6" fill="none" stroke="currentColor" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="3 2" />
+  <text x="380" y="289" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fillOpacity="0.75">HistoricoEventos</text>
+
+  <line x1="350" y1="138" x2="315" y2="190" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" />
+  <line x1="410" y1="138" x2="445" y2="190" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" />
+  <line x1="380" y1="142" x2="380" y2="265" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.2" strokeDasharray="3 2" />
+
+  <rect x="40" y="80" width="130" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1" strokeOpacity="0.45" />
+  <text x="105" y="105" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fillOpacity="0.75">Cliente externo</text>
+  <text x="105" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">(outro Aggregate)</text>
+
+  <line x1="170" y1="110" x2="285" y2="110" stroke="currentColor" strokeOpacity="0.7" strokeWidth="2" markerEnd="url(#seta-agg)" />
+  <text x="200" y="100" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">só via root</text>
+
+  <rect x="40" y="220" width="130" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1" strokeOpacity="0.45" strokeDasharray="3 2" />
+  <text x="105" y="245" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fillOpacity="0.75">Acesso direto</text>
+  <text x="105" y="262" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fillOpacity="0.75">a Item: BLOQUEADO</text>
+
+  <line x1="170" y1="240" x2="260" y2="215" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="4 4" />
+  <line x1="178" y1="232" x2="190" y2="244" stroke="#dc2626" strokeWidth="2" />
+  <line x1="190" y1="232" x2="178" y2="244" stroke="#dc2626" strokeWidth="2" />
+</svg>
+
+No diagrama acima, `CompensacaoEmissao` é a raiz; `ItemCompensacao` e `HistoricoEventos` vivem dentro do agregado. Qualquer código que precise alterar um `ItemCompensacao` faz isso passando pela raiz: a raiz expõe métodos como `adicionarItem(...)` e `removerItem(...)` que garantem que invariantes do agregado inteiro sejam respeitados.
+
+A motivação não é arquitetural-estética. É consistência. Sem essa regra, dois lugares do código podem alterar o mesmo agregado em paralelo, cada um mantendo seu invariante local mas quebrando um invariante global.
+
+Vernon formulou quatro **rules of thumb** pra design de agregados na série "Effective Aggregate Design" de 2011, que viraram referência canônica. Vou cobrir as quatro em sequência.
+
+### Regra 1: modelar verdadeiras invariantes em fronteiras de consistência
+
+A primeira pergunta antes de desenhar um agregado é: *quais regras do negócio precisam ser verdadeiras no momento exato em que uma transação termina?* Essas são as **verdadeiras invariantes** — e elas definem onde a fronteira do agregado deve passar.
+
+Exemplo no Carbon Credit: a soma das toneladas dos `ItemCompensacao` não pode ultrapassar o `totalToneladas` da `CompensacaoEmissao`. Essa regra precisa ser garantida atomicamente — se você adiciona um item, a verificação acontece na mesma transação. Logo, `ItemCompensacao` faz parte do mesmo agregado que `CompensacaoEmissao`.
+
+Contraexemplo: "o emissor precisa ter KYC aprovado pra criar compensações". Isso é uma regra do negócio, mas não precisa ser garantida atomicamente entre `Emissor` e `CompensacaoEmissao`. É verificada na factory da compensação, lendo o emissor de um repository. Logo, `Emissor` é outro agregado.
+
+Vernon (2011, Part I) é direto: "model true invariants in consistency boundaries" — só o que precisa ser verdadeiro JUNTO numa transação fica no mesmo agregado. O resto vira agregado separado.
+
+### Regra 2: design agregados pequenos
+
+Vernon (2011, Part I) é direto: agregados grandes são quase sempre erro de modelagem. O instinto inicial é colocar tudo que se relaciona dentro do mesmo agregado. O resultado: locks longos, transações que carregam centenas de objetos, conflitos de concorrência em qualquer operação.
+
+Heurística: olhe pra cada associação e pergunte "preciso garantir invariante atômico aqui?". Se não, separe em agregados diferentes. Quando você duvidar, Vernon recomenda começar com agregados pequenos e juntar depois se descobrir uma invariante real — é mais fácil juntar do que separar.
+
+### Regra 3: referenciar outros agregados por identidade
+
+Quando um agregado precisa apontar pra outro, a referência é pelo **ID**, não pelo objeto inteiro.
+
+No Carbon Credit: a `CompensacaoEmissao` precisa saber quais créditos ela reservou. A tentação é guardar `List<CreditoCarbono>` direto. Errado. O correto é `List<CreditoId>`. Quando precisar dos detalhes do crédito, pede ao repository.
+
+Por quê? Três motivos práticos:
+
+1. **Limita o tamanho do agregado em memória**. Você não carrega o grafo inteiro pra cada operação.
+2. **Evita confusão de quem é dono do quê**. `CompensacaoEmissao` não pode acidentalmente alterar um `CreditoCarbono` que pertence a outro agregado.
+3. **Permite consistência eventual entre agregados**. Mudanças em `CreditoCarbono` não precisam ser atomicamente refletidas na `CompensacaoEmissao`.
+
+### Regra 4: consistência eventual fora da fronteira
+
+Dentro de um agregado, consistência é imediata e atômica. Fora da fronteira, é eventual: numa transação você altera **um** agregado; outras mudanças necessárias acontecem via eventos de domínio em transações separadas.
+
+Isso bate de frente com o instinto de quem aprendeu transações ACID em banco relacional, mas é o que permite o sistema escalar. Vernon (2013, capítulo 10) discute em detalhe; o princípio prático: se você sente vontade de envolver dois agregados na mesma transação, provavelmente eles deveriam ser um agregado só (e aí a Regra 1 te diz se a invariante é real), ou a operação deveria ser modelada como evento de domínio.
+
+## Repository: a coleção que parece memória
+
+Repository é a abstração de acesso a agregados persistidos. A interface tem que parecer com uma coleção em memória; a implementação esconde se o storage é Postgres, MongoDB, in-memory ou arquivo.
+
+Regras (Evans, 2003, capítulo 6):
+
+- Só agregados (raízes) têm Repository. Objetos internos do agregado não.
+- A interface mora na camada de domínio. A implementação, na infraestrutura.
+- O Repository não vaza detalhes de persistência pro domínio. Nada de `Connection`, `EntityManager` ou `MongoCollection` na assinatura dos métodos.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Interface no domínio
+package com.carbon.compensacao.dominio;
+
+public interface RepositorioCompensacoes {
+    Optional<CompensacaoEmissao> buscarPorId(CompensacaoId id);
+    List<CompensacaoEmissao> buscarPorEmissor(CNPJ cnpj);
+    void salvar(CompensacaoEmissao compensacao);
+    void remover(CompensacaoId id);
+}
+
+// Implementação in-memory (pro projeto da Fatec, sem banco)
+package com.carbon.compensacao.infraestrutura;
+
+public class RepositorioCompensacoesEmMemoria implements RepositorioCompensacoes {
+    private final Map<CompensacaoId, CompensacaoEmissao> dados = new ConcurrentHashMap<>();
+
+    @Override
+    public Optional<CompensacaoEmissao> buscarPorId(CompensacaoId id) {
+        return Optional.ofNullable(dados.get(id));
+    }
+
+    @Override
+    public List<CompensacaoEmissao> buscarPorEmissor(CNPJ cnpj) {
+        return dados.values().stream()
+                    .filter(c -> c.emissor().equals(cnpj))
+                    .toList();
+    }
+
+    @Override
+    public void salvar(CompensacaoEmissao c) {
+        dados.put(c.id(), c);
+    }
+
+    @Override
+    public void remover(CompensacaoId id) {
+        dados.remove(id);
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace carbon::compensacao::dominio {
+
+class RepositorioCompensacoes {
+public:
+    virtual ~RepositorioCompensacoes() = default;
+    virtual std::optional<CompensacaoEmissao>
+        buscarPorId(const CompensacaoId& id) = 0;
+    virtual std::vector<CompensacaoEmissao>
+        buscarPorEmissor(const CNPJ& cnpj) = 0;
+    virtual void salvar(const CompensacaoEmissao& c) = 0;
+    virtual void remover(const CompensacaoId& id) = 0;
+};
+
+} // namespace carbon::compensacao::dominio
+
+namespace carbon::compensacao::infraestrutura {
+
+class RepositorioCompensacoesEmMemoria
+    : public dominio::RepositorioCompensacoes {
+    std::unordered_map<CompensacaoId, dominio::CompensacaoEmissao> dados_;
+    mutable std::mutex mutex_;
+
+public:
+    std::optional<dominio::CompensacaoEmissao>
+    buscarPorId(const CompensacaoId& id) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = dados_.find(id);
+        if (it == dados_.end()) return std::nullopt;
+        return it->second;
+    }
+
+    std::vector<dominio::CompensacaoEmissao>
+    buscarPorEmissor(const CNPJ& cnpj) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::vector<dominio::CompensacaoEmissao> resultado;
+        for (const auto& [_, comp] : dados_) {
+            if (comp.emissor() == cnpj) resultado.push_back(comp);
+        }
+        return resultado;
+    }
+
+    void salvar(const dominio::CompensacaoEmissao& c) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dados_[c.id()] = c;
+    }
+
+    void remover(const CompensacaoId& id) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dados_.erase(id);
+    }
+};
+
+} // namespace carbon::compensacao::infraestrutura
+```
+
+</Code>
+
+</CodeSwap>
+
+A camada de domínio (`compensacao.dominio`) só conhece a **interface** `RepositorioCompensacoes`. Quem amarra ela à implementação é a injeção de dependência (Spring `@Bean`, container DI no C++, fábrica manual). Isso é exatamente a Dependency Rule da Clean Architecture aplicada a um caso concreto.
+
+## Factory: criação que não pode falhar pela metade
+
+Quando criar um agregado envolve mais que `new`, você precisa de Factory. "Mais que new" inclui:
+
+- Validar invariantes que cruzam múltiplos campos
+- Construir objetos internos do agregado em ordem específica
+- Garantir que o agregado nasça em estado válido — ou não nasça
+- Esconder detalhes complexos do código cliente
+
+A regra de ouro (Evans, 2003): criação é **atômica**. Ou o agregado fica completo e válido, ou a Factory lança exceção. Nada de retornar um agregado parcial pro código cliente "terminar".
+
+Onde colocar:
+
+- **Factory method na própria classe** (estático): quando a criação é específica do agregado e não envolve serviços externos. Exemplo: `CompensacaoEmissao.iniciar(emissor, totalToneladas)`.
+- **Factory como objeto separado**: quando a criação envolve coordenação com outros agregados, regras complexas, ou múltiplas variantes. Exemplo: uma `FabricaDeCompensacao` que recebe um `Emissor`, valida KYC, escolhe certificadoras compatíveis e produz a `CompensacaoEmissao`.
+
+```java
+// Factory method estático no próprio agregado
+public class CompensacaoEmissao {
+    private final CompensacaoId id;
+    private final CNPJ emissor;
+    private final BigDecimal totalToneladas;
+    private final List<ItemCompensacao> itens;
+    private StatusCompensacao status;
+    private final List<EventoDominio> eventos;
+
+    private CompensacaoEmissao(CompensacaoId id, CNPJ emissor, BigDecimal toneladas) {
+        this.id = id;
+        this.emissor = emissor;
+        this.totalToneladas = toneladas;
+        this.itens = new ArrayList<>();
+        this.status = StatusCompensacao.RASCUNHO;
+        this.eventos = new ArrayList<>();
+        this.eventos.add(new CompensacaoIniciada(id, emissor, toneladas, Instant.now()));
+    }
+
+    public static CompensacaoEmissao iniciar(Emissor emissor, BigDecimal toneladas) {
+        if (emissor.status() != StatusEmissor.ATIVO) {
+            throw new EmissorNaoAtivo(emissor.cnpj());
+        }
+        if (toneladas.signum() <= 0) {
+            throw new IllegalArgumentException("toneladas deve ser positivo");
+        }
+        if (toneladas.scale() > 4) {
+            throw new IllegalArgumentException("precisão máxima de 4 casas decimais");
+        }
+        return new CompensacaoEmissao(
+            CompensacaoId.gerar(),
+            emissor.cnpj(),
+            toneladas
+        );
+    }
+}
+```
+
+O construtor é privado — ninguém de fora pode criar uma `CompensacaoEmissao` sem passar pelos invariantes definidos em `iniciar()`. O agregado nasce com ID, lista de eventos contendo o `CompensacaoIniciada`, e status `RASCUNHO`. Não existe "compensação em estado inválido".
+
+## Domain Service: quando não há dono natural
+
+Algumas operações de domínio não pertencem naturalmente a nenhuma Entity nem Value Object. Quando colocar a operação numa Entity força que ela conheça mais coisa do que deveria, o sinal é claro: a operação é um Service de domínio.
+
+Três características (Evans, 2003, capítulo 5):
+
+1. A operação representa um conceito do domínio (não é só plumbing técnico)
+2. A operação envolve múltiplos objetos do domínio
+3. A operação é **stateless** — não guarda estado entre chamadas
+
+O exemplo clássico: transferência entre contas bancárias. A transferência não pertence à conta origem (ela só sabe debitar) nem à conta destino (ela só sabe creditar). Pertence ao serviço `TransferenciaService`, que coordena as duas.
+
+No Carbon Credit, o caso óbvio é `MotorDeCompensacao`: ele recebe uma `CompensacaoEmissao` e um filtro de critérios, consulta o `RepositorioCreditos`, escolhe os melhores créditos disponíveis, e devolve uma lista de `ItemCompensacao` pra serem adicionados ao agregado.
+
+```java
+public class MotorDeCompensacao {
+    private final RepositorioCreditos repositorioCreditos;
+    private final PoliticaSelecaoCreditos politica;
+
+    public MotorDeCompensacao(RepositorioCreditos rc, PoliticaSelecaoCreditos p) {
+        this.repositorioCreditos = rc;
+        this.politica = p;
+    }
+
+    public List<ItemCompensacao> selecionarCreditos(
+            CompensacaoEmissao compensacao,
+            CriteriosCompensacao criterios) {
+        List<CreditoCarbono> disponiveis =
+            repositorioCreditos.buscarDisponiveis(criterios);
+
+        List<CreditoCarbono> selecionados =
+            politica.escolher(disponiveis, compensacao.totalToneladas());
+
+        return selecionados.stream()
+                          .map(c -> new ItemCompensacao(
+                              c.id(),
+                              c.toneladasDisponiveis(),
+                              Instant.now()
+                          ))
+                          .toList();
+    }
+}
+```
+
+O `MotorDeCompensacao` é stateless: cada chamada é independente. Recebe os agregados que precisa, faz o trabalho, retorna o resultado. Não guarda nada entre invocações.
+
+<Aviso>
+Cuidado pra não transformar tudo em Service. Quando você cria `EmissorService`, `CreditoService`, `CompensacaoService` com toda a lógica neles, deixando as classes do domínio como meros sacos de getters/setters, você caiu no anti-pattern do **Anemic Domain Model**, descrito por Martin Fowler em "AnemicDomainModel" (martinfowler.com/bliki/AnemicDomainModel.html, 25 de novembro de 2003). Service é exceção, não regra. A maioria do comportamento mora nos próprios objetos do domínio.
+</Aviso>
+
+## Specification: regra de negócio como objeto
+
+Specifications são regras booleanas encapsuladas em objetos. Servem pra três coisas (Evans, 2003, capítulo 9):
+
+- Validar: "este objeto satisfaz a regra?"
+- Selecionar: filtrar uma coleção pelos que satisfazem
+- Construir condicionalmente: aplicar comportamento diferente conforme a regra
+
+Quando vira útil:
+
+- A regra precisa ser reusada em vários lugares
+- A regra precisa ser composta com outras (AND, OR, NOT)
+- A regra precisa ser nomeada no domínio ("crédito elegível pra compensação tier-1")
+
+```java
+public interface Specification<T> {
+    boolean satisfeitaPor(T candidato);
+
+    default Specification<T> e(Specification<T> outra) {
+        return c -> this.satisfeitaPor(c) && outra.satisfeitaPor(c);
+    }
+
+    default Specification<T> ou(Specification<T> outra) {
+        return c -> this.satisfeitaPor(c) || outra.satisfeitaPor(c);
+    }
+
+    default Specification<T> nao() {
+        return c -> !this.satisfeitaPor(c);
+    }
+}
+
+public class CreditoElegivelParaCompensacao implements Specification<CreditoCarbono> {
+    @Override
+    public boolean satisfeitaPor(CreditoCarbono c) {
+        return c.status() == StatusCredito.DISPONIVEL
+            && c.toneladasDisponiveis().signum() > 0
+            && c.validadeAte().isAfter(LocalDate.now());
+    }
+}
+
+// Uso: composição
+Specification<CreditoCarbono> elegivelTierPremium =
+    new CreditoElegivelParaCompensacao()
+        .e(new CreditoComCertificacaoGoldStandard())
+        .e(new CreditoComPadrao(PadraoCarbono.VCS).nao());
+```
+
+A vantagem real aparece quando você precisa expressar "crédito elegível, certificado por Gold Standard, mas não no padrão VCS" em SQL, em validação de UI, em filtro de busca, e em log de auditoria. Sem Specification, você reescreve a mesma lógica em quatro lugares. Com Specification, você nomeia a regra uma vez e reusa.
+
+## Aplicação no Carbon Credit
+
+Vamos juntar tudo num agregado real do Carbon Credit. O agregado `CompensacaoEmissao` tem:
+
+- **Raiz**: `CompensacaoEmissao` (Entity, identidade `CompensacaoId`)
+- **Entities internas**: `ItemCompensacao` (identidade local — só significativa dentro do agregado)
+- **Value Objects**: `Money`, `CompensacaoId`, `Toneladas`, `EventoDominio`
+- **Invariante crítico**: `soma(itens.toneladas) <= totalToneladas` (não pode reservar mais do que foi pedido)
+- **Referência a outro agregado**: `ItemCompensacao` aponta pra `CreditoCarbono` por `CreditoId`, não por objeto
+
+```java
+public class CompensacaoEmissao {
+    private final CompensacaoId id;
+    private final CNPJ emissor;
+    private final BigDecimal totalToneladas;
+    private final List<ItemCompensacao> itens;
+    private StatusCompensacao status;
+    private final List<EventoDominio> eventos;
+
+    // Construtor privado + factory method estático (visto acima)
+
+    public void reservarCredito(CreditoId creditoId, BigDecimal toneladas) {
+        if (status != StatusCompensacao.RASCUNHO) {
+            throw new CompensacaoNaoEditavel(this.id, this.status);
+        }
+        if (somaReservada().add(toneladas).compareTo(totalToneladas) > 0) {
+            throw new CapacidadeExcedida(this.id, totalToneladas, somaReservada(), toneladas);
+        }
+        ItemCompensacao novo = new ItemCompensacao(creditoId, toneladas, Instant.now());
+        this.itens.add(novo);
+        this.eventos.add(new CreditoReservado(id, creditoId, toneladas, Instant.now()));
+    }
+
+    public void efetivar() {
+        if (status != StatusCompensacao.RASCUNHO) {
+            throw new CompensacaoNaoEditavel(this.id, this.status);
+        }
+        if (somaReservada().compareTo(totalToneladas) != 0) {
+            throw new CompensacaoIncompleta(this.id, totalToneladas, somaReservada());
+        }
+        this.status = StatusCompensacao.EFETIVADA;
+        this.eventos.add(new CompensacaoEfetivada(id, Instant.now()));
+    }
+
+    private BigDecimal somaReservada() {
+        return itens.stream()
+                    .map(ItemCompensacao::toneladas)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public CompensacaoId id() { return id; }
+    public CNPJ emissor() { return emissor; }
+    public StatusCompensacao status() { return status; }
+    public List<ItemCompensacao> itens() { return List.copyOf(itens); }
+    public List<EventoDominio> eventosNaoPublicados() { return List.copyOf(eventos); }
+}
+```
+
+Repara nos detalhes:
+
+- O construtor é privado. Só `iniciar()` (factory method) cria. Garantia: toda `CompensacaoEmissao` nasce válida.
+- Os métodos públicos (`reservarCredito`, `efetivar`) verificam invariantes ANTES de mudar estado. Se a invariante falhasse depois, o agregado ficaria inconsistente.
+- A referência a `CreditoCarbono` é via `CreditoId`. Você não passa o objeto inteiro.
+- `itens()` devolve uma cópia imutável. Quem está de fora não consegue modificar a lista direto pra burlar os invariantes.
+- O agregado registra eventos de domínio (`CreditoReservado`, `CompensacaoEfetivada`) que outros contextos podem consumir depois (consistência eventual entre agregados).
+
+Pro grupo do projeto Fatec, isso significa estrutura concreta:
+
+```
+src/main/java/com/grupo/carboncredit/compensacao/
+├── dominio/
+│   ├── CompensacaoEmissao.java        ← Aggregate Root
+│   ├── ItemCompensacao.java            ← Entity interna
+│   ├── CompensacaoId.java              ← Value Object
+│   ├── Toneladas.java                  ← Value Object
+│   ├── StatusCompensacao.java          ← Enum (parte do domínio)
+│   ├── eventos/
+│   │   ├── EventoDominio.java          ← Interface
+│   │   ├── CompensacaoIniciada.java
+│   │   ├── CreditoReservado.java
+│   │   └── CompensacaoEfetivada.java
+│   ├── RepositorioCompensacoes.java    ← Interface
+│   ├── MotorDeCompensacao.java         ← Domain Service
+│   └── specs/
+│       └── CreditoElegivelParaCompensacao.java
+├── aplicacao/
+│   └── ServicoDeCompensacao.java       ← Application Service (coordena casos de uso)
+└── infraestrutura/
+    └── RepositorioCompensacoesEmMemoria.java
+```
+
+A divisão por pacotes não é estética. Ela materializa a Dependency Rule: `aplicacao` depende de `dominio`; `infraestrutura` depende de `dominio`; `dominio` não depende de ninguém.
+
+## Quando NÃO usar DDD tático
+
+Os padrões táticos têm custo. Pra cada operação CRUD trivial, você está pagando em cerimônia de modelagem que talvez não traga retorno. Sinais de que DDD tático é overkill pra um contexto específico:
+
+- O contexto é Generic Subdomain (Notificações, Relatórios). Usa biblioteca, não modela.
+- O contexto é cadastro simples sem invariantes interessantes. Um CRUD com `@Entity` JPA resolve.
+- A regra de negócio cabe num único método de uma única classe. Não force Aggregate só porque "é DDD".
+- O time não tem disposição pra manter Ubiquitous Language disciplinada. Sem isso, os padrões táticos viram só nomes pomposos pra estrutura comum.
+
+A regra prática: aplique DDD tático onde aplicou design estratégico de verdade — no Core Domain e nos Supporting Subdomains que têm complexidade real. Pro resto, código direto basta.
+
+## Próximos passos
+
+A próxima lição entra em Hexagonal Architecture (Alistair Cockburn, 2005) e Ports & Adapters. É a formalização arquitetural do que você já viu na prática: o domínio no centro, adaptadores nas pontas, e o protocolo de comunicação entre eles. É também onde Spring Boot e seus equivalentes encontram seu lugar correto na estrutura — não no centro, mas como adaptadores.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Evans, Eric. *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley Professional, 2003. Capítulos 5, 6, 9. ISBN 0-321-12521-5.
+- Vernon, Vaughn. "Effective Aggregate Design" (Part I, II, III). dddcommunity.org/library/vernon_2011/, 2011. Creative Commons Attribution-NoDerivs 3.0. As quatro *rules of thumb* canônicas: Model True Invariants in Consistency Boundaries; Design Small Aggregates; Reference Other Aggregates By Identity; Use Eventual Consistency Outside the Boundary.
+- Vernon, Vaughn. *Implementing Domain-Driven Design*. Addison-Wesley Professional, 2013. Capítulo 10 (baseado na série de 2011). ISBN 978-0-321-83457-7.
+- Fowler, Martin. "AnemicDomainModel". martinfowler.com/bliki/AnemicDomainModel.html, 25 de novembro de 2003.
+- Evans, Eric; Avram, Abel. *Domain-Driven Design Quickly*. InfoQ Enterprise Software Development Series, 2006.

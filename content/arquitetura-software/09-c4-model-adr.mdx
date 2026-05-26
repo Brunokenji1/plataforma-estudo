@@ -1,0 +1,523 @@
+---
+titulo: "C4 Model + ADR: Documentação Arquitetural"
+descricao: "Como documentar arquitetura de software de forma que outras pessoas (e o seu eu futuro) entendam. C4 Model do Simon Brown para diagramar, Architecture Decision Records do Michael Nygard para registrar decisões."
+---
+
+As oito lições anteriores cobriram como **desenhar** software (princípios, Clean, DDD, Hexagonal, EDA, estilos, resiliência). Esta lição cobre algo igualmente importante e geralmente negligenciado: como **comunicar** esse design pra outras pessoas — sua equipe atual, novos integrantes, stakeholders, entrevistadores em uma vaga, ou seu eu daqui a 6 meses que esqueceu por que tomou aquela decisão.
+
+Documentação arquitetural cobre duas perguntas diferentes:
+
+1. **O que o sistema É?** → diagramas que mostram a estrutura, componentes e como se relacionam. Resposta: **C4 Model** do Simon Brown.
+2. **Por que o sistema é assim?** → registro das decisões importantes e o raciocínio por trás delas. Resposta: **Architecture Decision Records (ADR)** do Michael Nygard.
+
+Os dois são complementares. C4 sem ADR é "vejo a estrutura mas não entendo por que está assim". ADR sem C4 é "entendo o raciocínio mas não vejo a estrutura". Juntos cobrem 90% da documentação arquitetural que realmente importa.
+
+<Insight>
+A maioria das equipes documenta arquitetura mal por dois motivos opostos. Ou documenta de menos (zero diagramas, zero ADRs, conhecimento todo na cabeça de duas pessoas seniores) e perde tudo quando elas saem. Ou documenta demais (Word de 80 páginas que ninguém lê, UML de 14 diagramas para um CRUD) e o documento envelhece num drive até virar ficção. C4 e ADR resolvem isso com **documentação leve, versionada junto com o código, focada em comunicar — não em ser completa**.
+</Insight>
+
+## Por que UML clássico não resolve
+
+Antes do C4, a referência canônica era UML — Unified Modeling Language, padronizada pela OMG nos anos 90. UML define 14 tipos de diagrama (Class, Sequence, Activity, State Machine, Component, Deployment, Use Case, Object, Communication, Composite Structure, Package, Timing, Interaction Overview, Profile). É exaustivo. Cobre tudo.
+
+E é exatamente esse o problema: **UML cobre tudo mas a maioria das equipes não usa quase nada**. Em pesquisas de mercado, apenas Class Diagram e Sequence Diagram aparecem com frequência razoável. Os outros 12 são quase esquecidos.
+
+Os problemas práticos de UML clássico:
+
+- **Notação rígida e cara de aprender**. Class Diagram sozinho tem composição (losango preto), agregação (losango branco), associação, dependência, generalização, realização — cada um com semântica precisa. A maioria dos desenvolvedores não distingue agregação de composição na prática.
+- **Ferramentas pesadas**. Enterprise Architect, Rational Rose, Visual Paradigm — todos custam dinheiro, não versionam direito com Git, e geram XMI gigante.
+- **Não escala em níveis de abstração**. Você tem um Class Diagram para alto nível? Ou só para classes? Como você mostra a relação entre "sistema bancário" e "sistema de pagamentos externos" em UML — usa Deployment Diagram? Component Diagram? Use Case? A resposta não é óbvia.
+- **Vira documento separado do código**. O Class Diagram mostra a estrutura que **deveria** existir. O código mostra a que **realmente** existe. Eles divergem na primeira semana e ninguém atualiza.
+
+Eric Evans no DDD original (2003) também critica essa visão pesada de UML — ele sugere usar UML como ferramenta de comunicação leve, sem cerimônia, mas a indústria nunca abraçou isso na prática.
+
+## C4 Model: a hierarquia de abstração que faltava
+
+O C4 Model foi criado pelo arquiteto de software Simon Brown entre 2006 e 2011, baseado em UML e no "4+1 architectural view model" de Philippe Kruchten (IEEE Software, 1995). O lançamento do site oficial sob Creative Commons e o artigo "The C4 Model for Software Architecture" publicado na InfoQ em 25 de junho de 2018 popularizaram a técnica. Site oficial: c4model.com.
+
+A ideia central é organizar a arquitetura em **4 níveis de abstração hierárquicos**, do mais abstrato pro mais concreto — os "4 Cs":
+
+1. **Context** (Contexto) — o sistema visto como uma caixa preta, junto com seus usuários e sistemas externos
+2. **Container** — quais aplicações/processos compõem o sistema (web app, mobile app, banco, API, fila, microservice)
+3. **Component** — quais componentes lógicos existem dentro de cada container
+4. **Code** — classes, interfaces, estrutura interna de um componente (opcional, raramente necessário)
+
+A analogia útil que Brown usa: pensa em **Google Maps**. Você começa no zoom mais alto (planeta Terra), depois zoom no continente, depois no país, depois na cidade, depois na rua. Cada nível tem o que importa pra aquele nível de detalhe e **não mostra detalhes dos níveis abaixo**. Mesma coisa em C4 — cada diagrama é um nível de zoom.
+
+<svg viewBox="0 0 720 480" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-c4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
+    </marker>
+  </defs>
+
+  <rect x="60" y="30" width="600" height="90" rx="10" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="2" />
+  <text x="80" y="58" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="15" fontWeight="700">Nível 1 — Context</text>
+  <text x="80" y="78" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Audiência: todos (técnicos e não-técnicos)</text>
+  <text x="80" y="94" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Pergunta: como o sistema se encaixa no mundo? Quem usa? Com que outros sistemas conversa?</text>
+  <text x="80" y="110" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">Elementos: 1 caixa do sistema + atores + sistemas externos</text>
+
+  <rect x="60" y="135" width="600" height="90" rx="10" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="2" />
+  <text x="80" y="163" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="15" fontWeight="700">Nível 2 — Container</text>
+  <text x="80" y="183" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Audiência: equipe técnica, arquitetos, desenvolvedores</text>
+  <text x="80" y="199" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Pergunta: quais aplicações/processos compõem o sistema? Que stack cada um usa?</text>
+  <text x="80" y="215" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">Elementos: web/mobile apps, APIs, bancos, filas, caches — com tecnologia explícita</text>
+
+  <rect x="60" y="240" width="600" height="90" rx="10" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="2" />
+  <text x="80" y="268" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="15" fontWeight="700">Nível 3 — Component</text>
+  <text x="80" y="288" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Audiência: desenvolvedores da própria equipe</text>
+  <text x="80" y="304" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Pergunta: dentro de UM container, quais componentes lógicos existem?</text>
+  <text x="80" y="320" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">Elementos: controllers, services, repositories — agrupados por função</text>
+
+  <rect x="60" y="345" width="600" height="90" rx="10" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="2" strokeDasharray="6,4" />
+  <text x="80" y="373" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="15" fontWeight="700">Nível 4 — Code (opcional)</text>
+  <text x="80" y="393" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Audiência: desenvolvedor lendo o código</text>
+  <text x="80" y="409" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Pergunta: como UM componente é estruturado internamente?</text>
+  <text x="80" y="425" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">Elementos: classes, interfaces — raramente desenhado (deixa pro código)</text>
+
+  <text x="690" y="80" textAnchor="end" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.6" fontWeight="600">menos detalhe</text>
+  <text x="690" y="395" textAnchor="end" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.6" fontWeight="600">mais detalhe</text>
+  <line x1="685" y1="90" x2="685" y2="385" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" markerEnd="url(#seta-c4)" />
+
+  <text x="360" y="465" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.7">cada nível é um "zoom" — não mistura detalhe de níveis abaixo</text>
+</svg>
+
+### Os elementos da notação C4
+
+A notação é deliberadamente **simples e flexível**. Brown sugere mas não obriga — você usa qualquer ferramenta de desenho (até no Excalidraw, Whimsical, Draw.io). Os elementos básicos:
+
+- **Pessoa** (figura humana, geralmente desenhada como um boneco palito): um ator do sistema. Exemplo: "Operador do banco", "Cliente final"
+- **Sistema de Software** (caixa retangular): o sistema que estamos descrevendo (no Context) ou sistemas externos (no Context e Container)
+- **Container** (caixa retangular com label de tecnologia): uma unidade deployável separada — web app, mobile app, API, banco, fila, microservice
+- **Component** (caixa retangular dentro de um Container): agrupamento lógico de funcionalidades — controllers, services, repositories
+- **Setas de relacionamento**: cada relacionamento tem **direção**, **descrição** ("envia pedidos para", "consulta cotação em") e **tecnologia/protocolo** ("HTTPS/JSON", "JDBC", "AMQP")
+
+Cada caixa tem:
+- **Nome curto** ("Sistema de Compensação", "API REST")
+- **Tipo entre colchetes ou notação visual** ("[Container: Spring Boot]")
+- **Descrição em 1-2 linhas**
+
+**O que NÃO desenhar**: instâncias múltiplas do mesmo container (esse é o nível 5, Deployment, separado); detalhes de classe dentro de Component; setas sem descrição (toda seta precisa de verbo + tecnologia).
+
+### Nível 1 — Context (exemplo prático)
+
+Imagina um sistema de compensação de crédito de carbono (o Carbon Credit das lições anteriores). O Context diagram fica:
+
+```
+[Cliente Corporativo]                                [Auditor Ambiental]
+        │                                                    │
+        │ submete compensação                                │ revisa relatórios
+        ▼                                                    ▼
+   ┌────────────────────────────────────────────────────────────────┐
+   │                                                                │
+   │           SISTEMA DE COMPENSAÇÃO DE CRÉDITOS                   │
+   │           [Software System]                                    │
+   │                                                                │
+   │           Permite que empresas compensem suas                  │
+   │           emissões comprando créditos verificados              │
+   │                                                                │
+   └────────────────────────────────────────────────────────────────┘
+              │                                    │
+              │ valida CNPJ via                    │ envia confirmação via
+              ▼                                    ▼
+   ┌─────────────────────┐               ┌─────────────────────┐
+   │  API Receita        │               │  Serviço de         │
+   │  Federal            │               │  Email (SendGrid)   │
+   │  [External System]  │               │  [External System]  │
+   └─────────────────────┘               └─────────────────────┘
+```
+
+Repara que **nenhum detalhe técnico aparece nesse nível**. Não fala em Spring Boot, não fala em Postgres, não fala em microservices. É a vista do CEO ou do PM — quem usa, com que sistemas externos conversa, o que faz.
+
+### Nível 2 — Container (exemplo prático)
+
+Quando você "dá zoom" na caixa do sistema, vê os containers:
+
+```
+                          ┌────────────────────────────┐
+                          │  Cliente Corporativo       │
+                          └─────────────┬──────────────┘
+                                        │ HTTPS
+                                        ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │                                                                  │
+   │   SISTEMA DE COMPENSAÇÃO                                         │
+   │                                                                  │
+   │   ┌──────────────┐    ┌────────────────────┐   ┌─────────────┐   │
+   │   │ Web App      │───▶│  API Backend       │──▶│ Banco       │   │
+   │   │ [SPA: React] │ HTTPS│ [Spring Boot 3] │ JDBC│ [Postgres]│   │
+   │   └──────────────┘    └─────────┬──────────┘   └─────────────┘   │
+   │                                 │                                │
+   │                                 │ HTTPS/JSON                     │
+   │                                 ▼                                │
+   │                       ┌────────────────────┐                     │
+   │                       │  Fila de Eventos   │                     │
+   │                       │  [RabbitMQ]        │                     │
+   │                       └────────────────────┘                     │
+   │                                                                  │
+   └──────────────────────────────────────────────────────────────────┘
+                            │                       │
+                            │ HTTPS                 │ SMTP
+                            ▼                       ▼
+                  ┌─────────────────┐     ┌──────────────────┐
+                  │ API Receita     │     │ SendGrid         │
+                  │ Federal         │     │                  │
+                  └─────────────────┘     └──────────────────┘
+```
+
+Agora aparecem tecnologias específicas (React, Spring Boot, Postgres, RabbitMQ) e protocolos de comunicação (HTTPS, JDBC, SMTP). Essa é a vista que **arquitetos e desenvolvedores novos** precisam pra entender o sistema rapidamente.
+
+### Nível 3 — Component (exemplo prático)
+
+Dando zoom no "API Backend":
+
+```
+   ┌─────────────────────────────────────────────────────────────────┐
+   │                                                                 │
+   │   API BACKEND [Spring Boot 3]                                   │
+   │                                                                 │
+   │   ┌──────────────┐    ┌────────────────────┐   ┌────────────┐   │
+   │   │ Compensação  │───▶│  Inventário        │──▶│ Cadastro   │   │
+   │   │ Module       │    │  Module            │   │ Module     │   │
+   │   │              │    │                    │   │            │   │
+   │   │ Use Cases +  │    │ Buscar créditos +  │   │ CRUD       │   │
+   │   │ Agregados    │    │ Reservar           │   │ Emissores  │   │
+   │   └──────┬───────┘    └─────────┬──────────┘   └────────────┘   │
+   │          │                      │                               │
+   │          │ publica eventos      │                               │
+   │          ▼                      │                               │
+   │   ┌──────────────┐              │                               │
+   │   │ Auditoria    │◀─────────────┘                               │
+   │   │ Module       │                                              │
+   │   └──────────────┘                                              │
+   │                                                                 │
+   └─────────────────────────────────────────────────────────────────┘
+```
+
+Esse nível é pra quem **vai mexer no código**. Mostra a estrutura interna dos Bounded Contexts (que vocês desenharam nas lições 3 e 4) materializados como módulos (Lição 7 — Modular Monolith).
+
+### Nível 4 — Code (raramente necessário)
+
+O nível 4 é UML Class Diagram ou similar. Brown explicitamente recomenda **não desenhar** esse nível na maioria dos casos — o código IDE já é a documentação. Você desenha Nível 4 só quando tem um componente especialmente complexo que precisa de explicação visual (algoritmo de matching, máquina de estados sofisticada).
+
+## Diagramas suplementares
+
+Além dos 4 níveis principais, o C4 define dois diagramas suplementares úteis:
+
+**Deployment Diagram** — mostra onde cada container roda fisicamente. Onde fica o load balancer, em quantos pods o backend roda em produção, qual região do AWS, etc. Útil quando a topologia de deploy importa.
+
+**Runtime/Dynamic Diagram** — mostra o fluxo de uma operação específica passando pelos containers/components. Tipo um Sequence Diagram, mas usando elementos do C4. Útil pra explicar fluxos críticos ("o que acontece quando uma compensação é efetivada").
+
+## Ferramentas para criar C4
+
+Você não precisa de ferramenta específica. **Qualquer ferramenta de desenho serve**. Mas vale conhecer as opções:
+
+**Diagram-as-code** (mais recomendado para projetos sérios):
+
+- **Structurizr** — ferramenta oficial do próprio Simon Brown, SaaS pago + DSL open source pra modelar arquitetura como código. Você descreve o sistema em uma DSL textual, ela gera os 4 diagramas. Versiona junto com o código.
+- **PlantUML com C4-PlantUML** (github.com/plantuml-stdlib/C4-PlantUML) — biblioteca grátis que adiciona macros C4 ao PlantUML. Exemplo:
+
+```plantuml
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(cliente, "Cliente Corporativo", "Empresa que precisa compensar emissões")
+System_Boundary(sistema, "Sistema de Compensação") {
+  Container(web, "Web App", "React", "SPA para usuários")
+  Container(api, "API Backend", "Spring Boot 3", "Lógica de negócio")
+  ContainerDb(db, "Banco", "Postgres", "Armazena compensações")
+}
+System_Ext(receita, "API Receita Federal", "Validação de CNPJ")
+
+Rel(cliente, web, "Usa", "HTTPS")
+Rel(web, api, "Chama", "HTTPS/JSON")
+Rel(api, db, "Lê/escreve", "JDBC")
+Rel(api, receita, "Valida CNPJ via", "HTTPS")
+@enduml
+```
+
+- **Mermaid** — sintaxe leve, renderiza direto no GitHub e GitLab markdown. Tem suporte experimental a C4 desde 2022.
+
+**Ferramentas visuais** (mais rápidas pra rascunhos):
+
+- **Draw.io** (diagrams.net) — gratuito, tem shapes prontos de C4
+- **Excalidraw** — desenho mão-livre, ótimo pra Context diagrams rápidos
+- **Lucidchart, Whimsical** — pagos, fáceis de usar
+
+A regra prática: pra documentação que vive no repositório do código (e versiona junto), use diagram-as-code (PlantUML, Structurizr, Mermaid). Pra rascunhos de design rápidos em meeting, use Excalidraw ou whiteboard físico.
+
+## Architecture Decision Records (ADR)
+
+C4 mostra **o que** o sistema é. ADR explica **por que** o sistema é assim. Sem essa segunda peça, novos integrantes não entendem decisões e tendem a refazê-las erradas.
+
+O conceito foi formalizado por Michael Nygard (o mesmo autor do *Release It!* da Lição 8) no post "Documenting Architecture Decisions" publicado no blog da Cognitect em **15 de novembro de 2011** (cognitect.com/blog/2011/11/15/documenting-architecture-decisions). Em 2018, a Thoughtworks colocou ADR na categoria **Adopt** do Technology Radar — o nível máximo de recomendação. Virou padrão da indústria.
+
+O problema que ADR resolve:
+
+> *"Por que escolhemos Postgres em vez de MongoDB?"* — pergunta um dev novo.
+
+Sem ADR, a resposta é: "Acho que foi porque o time tinha experiência com Postgres" / "Tinha um benchmark numa apresentação interna" / "Era a recomendação do consultor que entrou em 2024" / "Não sei, tava lá quando cheguei". Três meses depois, alguém propõe migrar pra MongoDB porque não conhece a razão original — e descobre, da pior maneira, que tinha um requisito de transações ACID complexas que o time esqueceu.
+
+Com ADR, a resposta é: "Está no ADR-007 do repositório. Foi por causa do requisito de transações ACID multi-tabela na compensação, e por experiência do time. Considerou-se MongoDB mas foi rejeitado pelo modelo de consistência eventual ser inadequado pro domínio."
+
+### O template Nygard (canônico)
+
+Nygard propôs um template minimalista que virou padrão da indústria. Cada ADR é um arquivo Markdown de meia página até 2 páginas, numerado sequencialmente:
+
+```markdown
+# ADR-007: Uso de PostgreSQL como banco principal
+
+## Status
+
+Accepted
+
+## Context
+
+O Sistema de Compensação precisa armazenar compensações de carbono e
+seus itens (créditos reservados, eventos de domínio) de forma persistente
+e consistente. Requisitos importantes:
+
+- Transações ACID atravessando múltiplas tabelas (compensação + itens + eventos
+  na mesma transação para garantir invariantes do agregado)
+- Consultas relacionais complexas para dashboards (JOIN entre compensações,
+  emissores e créditos)
+- Time tem experiência sólida com SQL e Postgres especificamente
+- Volume estimado de 10k compensações/dia nos próximos 18 meses (escala
+  trivial pra qualquer RDBMS moderno)
+
+## Decision
+
+Vamos usar PostgreSQL 16 como banco principal de persistência. Schema
+relacional clássico com tabelas separadas por Bounded Context (cada módulo
+do monolito modular tem seu próprio conjunto de tabelas, sem JOINs
+cross-module).
+
+## Consequences
+
+### Positivas
+
+- Garantia ACID nativa atende invariantes dos agregados (Lição 4 de DDD)
+- Time produtivo desde dia 1 (sem curva de aprendizado)
+- Tooling maduro (DBeaver, pg_dump, replicação, monitoring)
+- Postgres tem JSON column type para campos flexíveis quando necessário
+
+### Negativas
+
+- Necessidade futura de escalar leitura pode exigir read replicas
+- Schema migrations precisam ser disciplinadas (vamos usar Flyway)
+
+### Riscos
+
+- Se o domínio evoluir para padrões de leitura muito divergentes da escrita,
+  pode ser necessário introduzir CQRS (Lição 6) com read model em outro banco.
+```
+
+Cinco seções, sempre nessa ordem:
+
+- **Title**: ADR-NNN: descrição curta (ex: "ADR-007: Uso de PostgreSQL como banco principal")
+- **Status**: Proposed / Accepted / Deprecated / Superseded by ADR-NNN
+- **Context**: qual era a situação? Quais eram os requisitos? Quais alternativas estavam na mesa?
+- **Decision**: qual foi a decisão? Em uma ou duas frases claras.
+- **Consequences**: o que muda como resultado dessa decisão? Positivas, negativas, riscos.
+
+### Estados (status) e ciclo de vida
+
+ADRs têm 4 estados básicos que formam o ciclo de vida:
+
+- **Proposed**: alguém propôs essa decisão, está em revisão. Discussão aberta.
+- **Accepted**: aceita pela equipe. Implementação em andamento ou completa. Esse é o estado "ativo".
+- **Deprecated**: a decisão não vale mais, mas não foi substituída por outra. Raro.
+- **Superseded by ADR-NNN**: a decisão foi substituída por outra ADR mais recente. **Importante**: você NÃO deleta a ADR antiga. Marca como Superseded e linka pra nova. O histórico permanece — alguém pode precisar entender por que a decisão antiga deu errado.
+
+A imutabilidade é fundamental. Depois de Accepted, uma ADR vira **histórico**. Mudou de ideia? Crie ADR-008 que supersede ADR-007. Nunca edite ADR-007 retroativamente — isso destrói o valor da prática.
+
+### O que merece um ADR (e o que NÃO merece)
+
+Erro comum: criar ADR pra tudo. Resulta em 200 ADRs onde 180 são triviais ("usamos Lombok"), 15 são cosméticas ("Tailwind ou Bootstrap"), e 5 são as decisões que importavam de verdade — mas perdidas no ruído. A coleção vira inútil.
+
+**Mereçem ADR** (decisões de alta alavancagem, irreversíveis ou caras de reverter):
+
+- Escolhas de estilo arquitetural (microservices vs monolith modular)
+- Escolha de banco de dados principal
+- Padrões transversais (autenticação, observabilidade, fila de mensagens)
+- Modelo de consistência (forte vs eventual em sistemas distribuídos)
+- Decisões de domínio importantes (qual Bounded Context fica responsável pelo que)
+- Decisões que limitam ou habilitam decisões futuras
+
+**NÃO mereçem ADR**:
+
+- Escolhas locais reversíveis (Lombok ou não)
+- Convenções de código (vai pro `CONTRIBUTING.md` ou `.editorconfig`)
+- Decisões de implementação interna a um componente
+- Mudanças pontuais que não afetam outros componentes
+
+A regra mental: *se essa decisão estiver errada, quanto custa reverter?* Se a resposta é "1 hora", não precisa de ADR. Se a resposta é "1 mês de retrabalho ou impossível", definitivamente precisa.
+
+### Onde guardar e como organizar
+
+A prática consolidada é guardar ADRs **dentro do próprio repositório do código**, em uma pasta dedicada. Versionamento Git automático, revisão via Pull Request, e a ADR está sempre próxima do código que ela governa.
+
+Estrutura típica:
+
+```
+projeto/
+├── src/
+├── docs/
+│   └── adr/
+│       ├── README.md                    ← índice e overview do processo
+│       ├── 0001-record-architecture-decisions.md   ← meta-ADR sobre usar ADRs
+│       ├── 0002-monolito-modular.md
+│       ├── 0003-bounded-contexts.md
+│       ├── 0004-spring-boot-3.md
+│       ├── 0005-postgres-banco-principal.md
+│       ├── 0006-resilience4j-circuit-breaker.md
+│       └── 0007-padrao-eventos-dominio.md
+└── README.md
+```
+
+A primeira ADR sempre é a **meta-ADR**: registra a própria decisão de usar ADRs. Soa estranho, mas é prática padrão — segue o exemplo do próprio Nygard no post original.
+
+Ferramentas que ajudam (todas opcionais):
+
+- **adr-tools** (github.com/npryce/adr-tools) — CLI de Nat Pryce. Comandos: `adr init`, `adr new "Título"`, `adr link 5 Supersedes 3`. Cria ADRs com template Nygard automaticamente.
+- **Markdown ADR (MADR)** — variante mais estruturada do template Nygard, popular em alguns projetos. Mantém o espírito.
+- **Plugins de IDE** — IntelliJ, VS Code têm extensões pra gerar ADRs.
+
+A versão mais simples: crie uma pasta `docs/adr/`, copie o template Nygard, comece a usar. Você não precisa de tooling sofisticado pra começar — precisa do hábito.
+
+### Linkando ADRs a partir do código
+
+Uma técnica importante (mas frequentemente esquecida): **referencie ADRs no código** nos pontos onde elas se aplicam. Isso transforma a ADR de "documento perdido na pasta docs" em "conhecimento ativo".
+
+```java
+/**
+ * Repositório de compensações usando PostgreSQL.
+ *
+ * Decisão de usar Postgres documentada em docs/adr/0005-postgres-banco-principal.md
+ * Decisão de banco por módulo (sem JOINs cross-module) em docs/adr/0008-banco-por-bounded-context.md
+ */
+@Repository
+public class RepositorioCompensacoesPostgres implements RepositorioCompensacoes {
+    // ...
+}
+```
+
+Quando alguém abrir esse arquivo em 6 meses e se perguntar "por que está assim?", o link pra ADR está ali. Sem ele, a ADR existe mas é invisível no momento que importa.
+
+## C4 + ADR no Carbon Credit
+
+Para o projeto Carbon Credit Compensation Platform (Fatec — Bruno, Murilo, Fabiano, Pedro Chaves), aplicar C4 + ADR tem três benefícios concretos:
+
+**1. Apresentação na avaliação final**. Vocês precisam apresentar o projeto pra professor/avaliadores. Um Context Diagram + um Container Diagram + 3-5 ADRs principais comunicam o sistema em 10 minutos com muito mais clareza do que slides genéricos.
+
+**2. Onboarding entre vocês**. Bruno está mais à frente em DDD, Murilo em outro tópico, Fabiano e Pedro Chaves em outras partes. C4 dá vocabulário comum — "no Component diagram do módulo de Compensação, o agregado fica..."
+
+**3. Portfólio profissional**. C4 + ADR num repo público do GitHub é diferencial em vagas. Mostra maturidade arquitetural raríssima entre estudantes.
+
+### O que produzir agora
+
+**C4 mínimo viável** (faça em 1-2 horas, vale o esforço):
+
+- **Context diagram**: caixa única "Sistema de Compensação" + atores (empresa emissora, auditor, operador) + sistemas externos hipotéticos (validação CNPJ, email)
+- **Container diagram**: web (se houver UI), API backend Spring Boot, e mesmo sem banco, marque "Estado em memória" como container (ou esquema futuro)
+- **Component diagram** do módulo de Compensação (Core Domain): use cases, agregados, repositórios in-memory, publisher de eventos
+
+Use **PlantUML com C4-PlantUML** (gratuito, versiona com Git) ou **Excalidraw** (visual, rápido).
+
+**ADRs mínimas pro projeto** (5-7 ADRs suficientes):
+
+```
+docs/adr/
+├── 0001-record-architecture-decisions.md
+├── 0002-monolito-modular-com-bounded-contexts.md
+├── 0003-ddd-tatico-aggregates-repositories.md
+├── 0004-hexagonal-architecture-ports-adapters.md
+├── 0005-persistencia-in-memory-deferida.md   ← decisão consciente do grupo
+├── 0006-domain-events-com-publisher-simples.md
+└── 0007-sem-microservices-no-escopo-atual.md
+```
+
+Especialmente importante: **ADR-0005 (persistência in-memory deferida)** registra a decisão consciente do grupo de não persistir agora. Sem esse registro, alguém revisando o código no futuro pensa que vocês esqueceram de adicionar banco. Com a ADR, fica claro que foi decisão deliberada com justificativa.
+
+Exemplo de ADR-0005 pro Carbon Credit:
+
+```markdown
+# ADR-0005: Persistência in-memory deferida para fase futura
+
+## Status
+
+Accepted
+
+## Context
+
+O projeto Carbon Credit Compensation Platform é desenvolvido no contexto
+da disciplina ESIII (Engenharia de Software III) da Fatec Cruzeiro, com
+escopo definido pra Avaliação 2. Quatro pessoas no time, 60 dias para
+entrega, foco em demonstrar conhecimento de Domain-Driven Design e
+arquitetura hexagonal.
+
+A persistência em banco de dados relacional traria custos:
+- Setup de Postgres + Flyway para migrations
+- Mapeamento JPA dos agregados (sem perder o modelo DDD)
+- Testes integrados com Testcontainers
+- Tempo significativo do prazo da disciplina
+
+Por outro lado, o foco pedagógico é o modelo de domínio, não persistência.
+
+## Decision
+
+O projeto manterá toda a persistência em memória (Map e List Java) através
+de implementações dos Repository ports definidos pelo domínio. As classes
+RepositorioCompensacoesEmMemoria, RepositorioCreditosEmMemoria, etc.
+implementam as interfaces do domínio sem nenhum banco real.
+
+A arquitetura hexagonal (Lição 5) garante que essa decisão é reversível
+sem tocar no domínio — basta criar implementações JPA dos mesmos ports.
+
+## Consequences
+
+### Positivas
+
+- Time foca em modelagem de domínio, não em infraestrutura
+- Setup do projeto trivial (sem docker-compose, sem schema)
+- Testes 100% in-memory, executam em milissegundos
+- Demonstra a vantagem prática de Hexagonal (Lição 5)
+
+### Negativas
+
+- Estado perdido a cada reinício da aplicação
+- Não demonstra integração com banco real
+- Limitação clara para uso em produção real
+
+### Próximos passos / superseded
+
+Quando o projeto evoluir (possivelmente em disciplina futura de Banco de
+Dados II ou Trabalho de Graduação), esta ADR será superseded por uma nova
+que documenta a escolha de banco e mapeamento. Os ports do domínio NÃO mudam.
+```
+
+Esse formato comunica: decisão consciente, contexto claro, alternativas consideradas, consequências honestas. Um avaliador lendo isso entende imediatamente que vocês sabem o que estão fazendo.
+
+## Próximos passos
+
+Esta foi a Lição 9 da trilha de Arquitetura. Cobriu como **comunicar** o design que as lições 1-8 ensinaram a fazer. As próximas opções de extensão:
+
+1. **L10 — Modular Monolith aprofundado com Spring Modulith**: framework Spring que automatiza a verificação das regras de modularização que vocês desenharam na Lição 7 + comunicação entre módulos via eventos (Lição 6) integrada
+2. Outras trilhas (Java/Spring, ICPC, Linux, freelance)
+
+A trilha de Arquitetura agora cobre 9 lições formando um arco completo: **desenhar** (L1-L8) + **comunicar** (L9). Falta opcionalmente uma lição de **enforcement automatizado em Java** (L10 — Spring Modulith), que fecharia o ciclo de teoria + prática + ferramentas.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Brown, Simon. *The C4 model for visualising software architecture*. c4model.com (Creative Commons, site oficial). Livro homônimo no Leanpub. Versão InfoQ: "The C4 Model for Software Architecture", InfoQ, 25 de junho de 2018.
+- Brown, Simon. *Software Architecture for Developers*. Leanpub, 2012 (atualizado continuamente). Volume 2 dedicado a visualização e C4.
+- Kruchten, Philippe. "Architectural Blueprints — The '4+1' View Model of Software Architecture". *IEEE Software*, vol. 12, no. 6, novembro de 1995. Base teórica do C4.
+- Structurizr — ferramenta oficial do Simon Brown, structurizr.com. SaaS + DSL open source para diagram-as-code.
+- C4-PlantUML — biblioteca open source em github.com/plantuml-stdlib/C4-PlantUML.
+- Nygard, Michael. "Documenting Architecture Decisions". Cognitect blog, 15 de novembro de 2011. cognitect.com/blog/2011/11/15/documenting-architecture-decisions. Post original que formalizou o conceito de ADR e o template canônico.
+- adr-tools — CLI de Nat Pryce em github.com/npryce/adr-tools. Comandos `adr init`, `adr new`, `adr link`.
+- adr.github.io — site comunitário consolidando práticas e templates (Nygard, MADR e outros).
+- Richards, Mark; Ford, Neal. *Fundamentals of Software Architecture: An Engineering Approach*. O'Reilly Media, 2020/2025. Apêndice dedicado ao C4 Model como referência canônica em livro técnico.
+- Thoughtworks Technology Radar — colocou Lightweight Architecture Decision Records (ADR) na categoria Adopt em 2018, consolidando a prática como padrão da indústria.

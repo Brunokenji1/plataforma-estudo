@@ -1,0 +1,598 @@
+---
+titulo: "Ordenação: Por Que Arrays.sort é Três Algoritmos Disfarçados de Um"
+trilha: "algoritmos"
+duracaoMin: 55
+dificuldade: "intermediario"
+referencias:
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulos 2 (Insertion Sort), 7 (Quicksort), 8 (Sorting in Linear Time)"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Capítulo 2 (Sorting) — Princeton"
+  - "Vladimir Yaroslavskiy (2009), 'Replacement of Quicksort in java.util.Arrays with new Dual-Pivot Quicksort', core-libs-dev mailing list"
+  - "Wild, Nebel, Neininger (2014), 'Average Case and Distributional Analysis of Java 7's Dual Pivot Quicksort', arXiv:1304.0988"
+  - "Tim Peters (2002), 'listsort.txt' no CPython — descrição original do TimSort"
+  - "Peter McIlroy (1993), 'Optimistic Sorting and Information Theoretic Complexity' — base teórica do TimSort"
+  - "David Musser (1997), 'Introspective Sorting and Selection Algorithms' — introsort, base do std::sort em C++"
+  - "Oracle OpenJDK 21 — DualPivotQuicksort.java e ComparableTimSort.java"
+---
+
+## O "hello world" dos algoritmos complexos
+
+Ordenação é o problema mais bem estudado em ciência da computação. Cinquenta anos de pesquisa, dezenas de variantes, e mesmo assim você ainda vê discussões novas sobre o tema toda semana em conferências de algoritmos.
+
+A razão é simples: ordenar é um pré-passo de quase tudo. Banco de dados ordena pra fazer joins eficientes. Compiladores ordenam tabelas de símbolos. Renderizadores 3D ordenam triângulos por profundidade. Mecanismos de busca ordenam resultados por relevância. Sistemas de ranking, médias móveis, mediana em janela — todos dependem de ordenação rápida.
+
+Por isso vale entender bem o que está rolando quando você escreve `Arrays.sort(arr)` em Java ou `std::sort(v.begin(), v.end())` em C++. Spoiler: **nenhum dos dois roda um único algoritmo**. Os dois são híbridos cuidadosamente engenheirados que misturam três ou mais técnicas dependendo do tamanho da entrada, do tipo dos dados, e do quão pré-ordenado o array já está.
+
+Esta lição vai destrinchar a família inteira, dos básicos didáticos até as inovações dos anos 2000 (dual-pivot quicksort do Yaroslavskiy, TimSort do Tim Peters) que rodam dentro das suas chamadas de `sort()`.
+
+---
+
+## O mapa da família inteira
+
+Antes de mergulhar, uma tabela mental que você vai querer guardar:
+
+| Algoritmo | Pior caso | Médio | Melhor | Estável | In-place |
+|---|---|---|---|---|---|
+| Bubble Sort | O(n²) | O(n²) | O(n) | Sim | Sim |
+| Selection Sort | O(n²) | O(n²) | O(n²) | Não | Sim |
+| Insertion Sort | O(n²) | O(n²) | O(n) | Sim | Sim |
+| Merge Sort | O(n log n) | O(n log n) | O(n log n) | Sim | Não (O(n) extra) |
+| Quick Sort | O(n²) | O(n log n) | O(n log n) | Não | Sim |
+| Heap Sort | O(n log n) | O(n log n) | O(n log n) | Não | Sim |
+| TimSort | O(n log n) | O(n log n) | O(n) | Sim | Não (O(n) extra) |
+| Counting Sort | O(n + k) | O(n + k) | O(n + k) | Sim | Não |
+| Radix Sort | O(d × n) | O(d × n) | O(d × n) | Sim | Não |
+
+Onde:
+- **Estável**: elementos iguais mantêm a ordem original entre si (importa quando ordenando por múltiplas chaves)
+- **In-place**: ordena dentro do próprio array sem precisar de memória auxiliar significativa
+- **k** = range dos valores no Counting Sort
+- **d** = número de dígitos no Radix Sort
+
+Os três primeiros da lista (Bubble, Selection, Insertion) são O(n²) — não use em produção exceto em casos muito específicos. Os do meio (Merge, Quick, Heap, TimSort) são os adultos da família. Os dois últimos rompem a barreira O(n log n) explorando propriedades dos dados.
+
+---
+
+## Insertion sort: o que sobrevive em produção
+
+Insertion sort funciona como você organiza cartas na mão durante uma partida. Você pega uma carta nova e a insere no lugar certo entre as que já estão organizadas, empurrando as outras pra direita.
+
+Comportamento característico: é **lento em arrays grandes desordenados** mas **rapidíssimo em arrays pequenos** ou **quase ordenados**. Por isso é o único algoritmo "elementar" que aparece dentro de implementações sérias — toda implementação de quicksort ou TimSort usa insertion sort pra ordenar pedaços pequenos (tipicamente menos de 16-32 elementos).
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static void insertionSort(int[] arr) {
+    for (int i = 1; i < arr.length; i++) {
+        int chave = arr[i];
+        int j = i - 1;
+        // empurra elementos maiores pra direita
+        while (j >= 0 && arr[j] > chave) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        arr[j + 1] = chave;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+void insertionSort(std::vector<int>& arr) {
+    for (size_t i = 1; i < arr.size(); i++) {
+        int chave = arr[i];
+        int j = i - 1;
+        // empurra elementos maiores pra direita
+        while (j >= 0 && arr[j] > chave) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        arr[j + 1] = chave;
+    }
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n²) no pior caso (array em ordem reversa), O(n) no melhor caso (array já ordenado — o while interno nunca executa). Esse "O(n) no melhor caso" é a propriedade explorada pelo TimSort, que veremos adiante.
+
+<ComplexidadeBox melhor="O(n)" media="O(n²)" pior="O(n²)" />
+
+<Insight>
+Por que insertion sort vence quicksort em arrays pequenos? Porque o quicksort tem overhead grande de função recursiva, partição, manutenção de pivot. Em arrays de 10-30 elementos, esse overhead supera o ganho assintótico. Java e C++ ambos usam insertion sort como caso-base de seus algoritmos principais.
+</Insight>
+
+---
+
+## Merge sort: divisão e conquista clássica
+
+Merge sort é o primeiro algoritmo de ordenação que rompe a barreira O(n²). A ideia é genuinamente bonita: se você sabe ordenar arrays pequenos, e sabe juntar (fazer merge) de dois arrays ordenados em um único array ordenado, você sabe ordenar qualquer array.
+
+**A receita**:
+1. Divide o array em duas metades
+2. Ordena cada metade recursivamente
+3. Junta (faz merge) as duas metades ordenadas
+
+O caso-base é arrays de tamanho 1 (trivialmente ordenados).
+
+### Como o merge funciona
+
+A operação de merge é o coração do algoritmo. Dado dois arrays ordenados `A` e `B`, produza um terceiro array `C` ordenado contendo todos os elementos dos dois.
+
+Pense em duas pilhas de cartas ordenadas viradas pra baixo na mesa. Você compara a carta de cima das duas pilhas. A menor vai pra pilha resultante. Repete até esvaziar as duas. Linear no total de elementos.
+
+```
+A = [1, 4, 7, 9]
+B = [2, 3, 5, 8]
+
+passo: comparar 1 e 2 → escolhe 1. C = [1]
+passo: comparar 4 e 2 → escolhe 2. C = [1, 2]
+passo: comparar 4 e 3 → escolhe 3. C = [1, 2, 3]
+passo: comparar 4 e 5 → escolhe 4. C = [1, 2, 3, 4]
+passo: comparar 7 e 5 → escolhe 5. C = [1, 2, 3, 4, 5]
+passo: comparar 7 e 8 → escolhe 7. C = [1, 2, 3, 4, 5, 7]
+passo: comparar 9 e 8 → escolhe 8. C = [1, 2, 3, 4, 5, 7, 8]
+A esvaziou → resta só 9. C = [1, 2, 3, 4, 5, 7, 8, 9]
+```
+
+### Trace do merge sort
+
+Pra `[5, 2, 4, 6, 1, 3, 2, 6]`:
+
+```
+Original:          [5, 2, 4, 6, 1, 3, 2, 6]
+Divide ao meio:    [5, 2, 4, 6]  |  [1, 3, 2, 6]
+Divide cada um:    [5, 2] [4, 6]   [1, 3] [2, 6]
+Divide até 1:      [5][2][4][6]   [1][3][2][6]
+Merge pares:       [2, 5][4, 6]   [1, 3][2, 6]
+Merge mais:        [2, 4, 5, 6]    [1, 2, 3, 6]
+Merge final:       [1, 2, 2, 3, 4, 5, 6, 6]
+```
+
+A profundidade da árvore de recursão é log n (cada nível divide pela metade). Cada nível faz O(n) de trabalho (o merge percorre todos os elementos). Total: **O(n log n)**.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static void mergeSort(int[] arr) {
+    if (arr.length <= 1) return;
+    int meio = arr.length / 2;
+    int[] esq = Arrays.copyOfRange(arr, 0, meio);
+    int[] dir = Arrays.copyOfRange(arr, meio, arr.length);
+
+    mergeSort(esq);
+    mergeSort(dir);
+    merge(arr, esq, dir);
+}
+
+private static void merge(int[] dest, int[] esq, int[] dir) {
+    int i = 0, j = 0, k = 0;
+    while (i < esq.length && j < dir.length) {
+        if (esq[i] <= dir[j]) dest[k++] = esq[i++];
+        else                   dest[k++] = dir[j++];
+    }
+    while (i < esq.length) dest[k++] = esq[i++];
+    while (j < dir.length) dest[k++] = dir[j++];
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+void merge(std::vector<int>& dest,
+           const std::vector<int>& esq,
+           const std::vector<int>& dir) {
+    size_t i = 0, j = 0, k = 0;
+    while (i < esq.size() && j < dir.size()) {
+        if (esq[i] <= dir[j]) dest[k++] = esq[i++];
+        else                   dest[k++] = dir[j++];
+    }
+    while (i < esq.size()) dest[k++] = esq[i++];
+    while (j < dir.size()) dest[k++] = dir[j++];
+}
+
+void mergeSort(std::vector<int>& arr) {
+    if (arr.size() <= 1) return;
+    size_t meio = arr.size() / 2;
+    std::vector<int> esq(arr.begin(), arr.begin() + meio);
+    std::vector<int> dir(arr.begin() + meio, arr.end());
+
+    mergeSort(esq);
+    mergeSort(dir);
+    merge(arr, esq, dir);
+}
+```
+
+</Code>
+</CodeSwap>
+
+### O custo da estabilidade e da memória
+
+Merge sort tem duas propriedades importantes:
+
+**É estável.** O `<=` no merge garante que se dois elementos têm a mesma chave, o que veio da metade esquerda fica antes. Estabilidade importa quando você ordena objetos por múltiplas chaves. Imagine que você quer ordenar uma lista de alunos primeiro por nome, depois por nota. Se você ordena por nome primeiro e depois ordena por nota com algoritmo estável, alunos com a mesma nota mantêm a ordem alfabética. Com algoritmo instável, essa ordem se perde.
+
+**Não é in-place.** Cada merge precisa de um buffer auxiliar do tamanho do que está sendo mesclado. Para arrays grandes, isso significa O(n) de memória extra. Em comparação, quicksort ordena no próprio array sem auxiliar.
+
+<Aviso>
+O Merge Sort pode ser implementado in-place, mas o algoritmo fica significativamente mais complexo e o gasto de tempo aumenta. Implementações sérias quase sempre aceitam o O(n) extra de memória pela simplicidade e performance.
+</Aviso>
+
+---
+
+## Quick sort: rápido na média, perigoso no pior
+
+Quick sort é o algoritmo mais usado em ordenação interna desde os anos 60. Inventado por Tony Hoare em 1959, ele é O(n log n) na média mas pode degenerar pra O(n²) em casos patológicos.
+
+**A receita**:
+1. Escolhe um elemento do array como **pivot**
+2. Reordena (faz **partition**) o array de modo que tudo menor que o pivot fique à esquerda, tudo maior fique à direita
+3. Aplica quick sort recursivamente nas duas metades
+
+A diferença pro merge sort é importante: aqui o trabalho fica na **partição** (antes da recursão), enquanto no merge sort ele fica no **merge** (depois da recursão). Por isso quick sort é in-place — ele rearranja durante a partição e não precisa de buffer.
+
+### A escolha do pivot
+
+O pivot ideal seria a mediana exata, dividindo o array em duas metades iguais. Mas calcular a mediana é caro (O(n) por nível, anularia o ganho). Estratégias comuns:
+
+1. **Primeiro elemento**: ruim em arrays já ordenados (pivot sempre é o menor, partição vira O(n) com uma metade de tamanho 0).
+2. **Elemento aleatório**: bom na maioria dos casos, garante O(n log n) esperado mas não no pior caso.
+3. **Mediana de três** (primeiro, meio, último): escolhe a mediana desses 3 como pivot. Reduz drasticamente a chance de pior caso.
+4. **Mediana exata**: melhor teoricamente, mas custo da seleção anula o benefício na prática.
+
+### Lomuto vs Hoare partition
+
+Existem dois esquemas clássicos de partição:
+
+**Lomuto** (mais fácil de explicar): usa um índice `i` pra marcar a fronteira do "lado menor", percorre o array uma vez, troca elementos menores que o pivot pra esquerda.
+
+**Hoare** (original, mais rápido): dois índices que se aproximam das extremidades, trocam pares de elementos fora de lugar. Faz menos swaps que Lomuto em média (três vezes menos, segundo Sedgewick), mas o invariante é mais delicado.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Quick sort com partição Lomuto e pivot = último elemento
+public static void quickSort(int[] arr, int lo, int hi) {
+    if (lo < hi) {
+        int p = partition(arr, lo, hi);
+        quickSort(arr, lo, p - 1);
+        quickSort(arr, p + 1, hi);
+    }
+}
+
+private static int partition(int[] arr, int lo, int hi) {
+    int pivot = arr[hi];
+    int i = lo - 1;
+    for (int j = lo; j < hi; j++) {
+        if (arr[j] <= pivot) {
+            i++;
+            int t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        }
+    }
+    int t = arr[i + 1]; arr[i + 1] = arr[hi]; arr[hi] = t;
+    return i + 1;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+int partition(std::vector<int>& arr, int lo, int hi) {
+    int pivot = arr[hi];
+    int i = lo - 1;
+    for (int j = lo; j < hi; j++) {
+        if (arr[j] <= pivot) {
+            i++;
+            std::swap(arr[i], arr[j]);
+        }
+    }
+    std::swap(arr[i + 1], arr[hi]);
+    return i + 1;
+}
+
+void quickSort(std::vector<int>& arr, int lo, int hi) {
+    if (lo < hi) {
+        int p = partition(arr, lo, hi);
+        quickSort(arr, lo, p - 1);
+        quickSort(arr, p + 1, hi);
+    }
+}
+```
+
+</Code>
+</CodeSwap>
+
+### Pior caso O(n²)
+
+Acontece quando o pivot escolhido é sempre o menor (ou maior) elemento da subseção atual. Por exemplo, sempre escolher o último elemento num array já ordenado: a partição sempre divide em 0 e n-1 elementos. A recursão vira uma cadeia de profundidade n, com trabalho O(n) em cada nível. Total: O(n²).
+
+Esse é um problema real. Em 1995, McIlroy publicou um paper mostrando como construir entradas patológicas pra qualquer implementação de quicksort com pivot determinístico. A defesa é **randomizar a escolha do pivot** ou **misturar com heap sort** quando a profundidade da recursão fica grande demais — assunto da próxima seção sobre Introsort.
+
+---
+
+## Dual-pivot quicksort: o padrão Java moderno
+
+Em 2009, um desenvolvedor russo até então desconhecido chamado **Vladimir Yaroslavskiy** mandou um e-mail pra mailing list do core Java propondo uma nova versão do quicksort com **dois pivots em vez de um**. A reação inicial foi de ceticismo — quicksort já tinha 50 anos de literatura, e estudos anteriores de dual-pivot tinham concluído que **não havia ganho de performance**. Como esse cara aparece do nada com uma versão melhor?
+
+Yaroslavskiy mandou benchmarks. A Oracle rodou os próprios benchmarks. Dois anos depois, em 2011, o Java 7 saiu com a implementação dele substituindo o quicksort tradicional como algoritmo padrão pra arrays de tipos primitivos.
+
+### Como Yaroslavskiy quebrou 50 anos de literatura
+
+A ideia: em vez de um pivot único que divide o array em duas regiões, use **dois pivots** que dividem em três:
+
+```
+| menor que P1 | entre P1 e P2 | maior que P2 |
+```
+
+Depois recursão em cada região.
+
+O resultado teórico, demonstrado anos depois por Wild, Nebel e Neininger (2014), é que essa versão faz em média **1.9n ln n comparações**, contra **2n ln n** do single-pivot clássico — cerca de **5% menos**.
+
+Mas o resultado mais surpreendente é prático. Apesar de fazer **mais swaps** (cerca de 30% mais que o single-pivot), o dual-pivot é **20-30% mais rápido** no wall clock. Por quê?
+
+**Cache locality.** O dual-pivot tem padrões de acesso a memória que aproveitam melhor o cache L1 do processador moderno. Os autores do paper resumem: "*The efficiency of Yaroslavskiy's algorithm in practice is caused by advanced features of modern processors*".
+
+<Insight>
+Esse é um dos exemplos mais claros de quanto Big O esconde. Dois algoritmos ambos O(n log n), mas um é 20% mais rápido por causa de detalhes de arquitetura de CPU que a notação não captura. **Análise teórica é só metade da história. Benchmarks na arquitetura real são a outra metade.**
+</Insight>
+
+### A partição em 3 regiões
+
+A engenharia interna do dual-pivot é mais sutil que single-pivot. Estrutura geral em pseudocódigo:
+
+```
+DualPivotPartition(arr, lo, hi):
+    se arr[lo] > arr[hi]: troca arr[lo] e arr[hi]
+    P1 = arr[lo]    // pivot menor
+    P2 = arr[hi]    // pivot maior
+
+    less = lo + 1   // limite superior da região "< P1"
+    great = hi - 1  // limite inferior da região "> P2"
+    k = less        // índice corrente
+
+    enquanto k <= great:
+        se arr[k] < P1:
+            troca arr[k] e arr[less]
+            less++
+        senão se arr[k] > P2:
+            enquanto k < great e arr[great] > P2: great--
+            troca arr[k] e arr[great]
+            great--
+            se arr[k] < P1:
+                troca arr[k] e arr[less]
+                less++
+        k++
+
+    coloca P1 em arr[less - 1] e P2 em arr[great + 1]
+    return less - 1, great + 1
+```
+
+Depois ordena recursivamente as três regiões. A versão real do OpenJDK ainda tem otimizações adicionais (insertion sort em pedaços pequenos, escolha cuidadosa dos índices para pivots), mas o esqueleto é esse.
+
+---
+
+## TimSort: o algoritmo para o mundo real
+
+Em 2002, **Tim Peters**, engenheiro de software e committer de longa data do Python, propôs um novo algoritmo de ordenação pra biblioteca padrão do Python. Ele se inspirou num paper de Peter McIlroy de 1993 ("Optimistic Sorting and Information Theoretic Complexity") que tinha uma ideia provocativa: **dados reais raramente são totalmente desordenados**.
+
+Listas de produtos ordenadas por categoria e depois precisando ordenar dentro de cada categoria. Logs ordenados por timestamp com alguns out-of-order isolados. Resultados de buscas anteriores que já vieram parcialmente ordenados. McIlroy argumentava que algoritmos de ordenação deveriam **adaptar-se** a essa característica em vez de tratar todo array como aleatório.
+
+TimSort entrega isso. E é tão bom que:
+
+- **Python** usa desde 2002 (era o algoritmo padrão até a versão 3.10; em 3.11+ foi substituído por Powersort, uma variante)
+- **Java SE 7** (2011) adotou TimSort pra ordenar arrays de **objetos** (não-primitivos)
+- **Android** usa
+- **V8** (motor JavaScript do Chrome) usa
+- **Swift** usa
+- **Rust** usa
+
+Quando você escreve `array.sort()` em Python, JavaScript, Swift, ou Rust — está rodando TimSort. **É o algoritmo mais usado do mundo neste momento.**
+
+### Natural runs
+
+A descoberta-chave: arrays reais têm muitos **trechos já ordenados**, chamados de **natural runs**. Em vez de ignorar isso e quebrar tudo em pares pra fazer merge (como mergesort clássico), TimSort **detecta esses trechos** e usa eles como ponto de partida.
+
+Exemplo de array:
+```
+[1, 3, 5, 7,  2, 4,  9, 11, 13, 15,  6, 8, 10]
+ └──── run 1 ────┘└─run 2─┘└──── run 3 ────┘└─run 4─┘
+```
+
+Quatro natural runs. TimSort identifica esses trechos, ordena os pequenos com insertion sort (que é rápido em arrays pequenos), e depois faz merge dos runs em ordem cuidadosa.
+
+### Como TimSort funciona em alto nível
+
+1. **Determina um `minrun`** entre 32 e 64 baseado no tamanho do array. Pra array de tamanho N, escolhe um minrun tal que N/minrun seja potência de 2 (otimiza merges balanceados).
+
+2. **Percorre o array procurando runs.** Se o run encontrado é menor que `minrun`, **estende ele com insertion sort** até atingir `minrun`.
+
+3. **Empilha os runs encontrados.** Mantém invariantes que garantem que os runs no topo da pilha estejam em tamanhos balanceados.
+
+4. **Faz merge dos runs** seguindo regras de balanceamento (se o run X é menor que o run Y + run Z combinados, força um merge entre eles).
+
+5. **Galloping mode**: durante o merge, se um dos runs está "vencendo" consistentemente (7+ elementos consecutivos vêm dele), o algoritmo entra em modo galope: usa busca binária pra avançar grandes saltos de uma vez em vez de comparar elemento por elemento.
+
+Resultado: **O(n) no melhor caso** (array já ordenado, identifica como um único run e termina sem merge), **O(n log n) no pior caso**, e na prática extremamente rápido em dados parcialmente ordenados.
+
+<Aviso>
+TimSort tem um bug famoso descoberto em 2015 pelos pesquisadores Stijn de Gouw et al. Um invariante de balanceamento da pilha de runs estava errado, e em casos extremos a pilha podia estourar. O bug foi corrigido no Python, Java e Android. Detalhe interessante: o bug foi encontrado tentando provar formalmente a corretude do algoritmo em Isabelle/HOL. Mais um caso de "verificação formal pegando bugs que testes não pegaram".
+</Aviso>
+
+---
+
+## Como Arrays.sort do Java decide
+
+O `Arrays.sort` de Java mantém uma decisão dupla baseada no tipo dos dados:
+
+```
+arr é tipo PRIMITIVO (int[], long[], double[], etc.)
+    → DualPivotQuicksort (Yaroslavskiy)
+    → Em pedaços pequenos (< 47 elementos): Insertion Sort
+
+arr é tipo OBJETO (Integer[], String[], MeuObjeto[])
+    → TimSort (variante de ComparableTimSort ou TimSort)
+    → Em pedaços pequenos (< 32 elementos): Binary Insertion Sort
+```
+
+Por que essa distinção? **Estabilidade.**
+
+Pra primitivos, estabilidade é irrelevante: dois `int 5` são indistinguíveis, não há "ordem original" pra preservar. Então Java otimiza por velocidade pura com dual-pivot quicksort.
+
+Pra objetos, estabilidade importa muito. Se você ordena uma lista de `Pessoa` por idade, e duas têm 30 anos, você quer que a ordem original entre elas seja preservada — talvez você já tinha ordenado por nome antes. TimSort garante isso; quicksort não.
+
+A escolha do Oracle foi: **velocidade extrema pra primitivos, estabilidade preservada pra objetos**.
+
+---
+
+## std::sort em C++: introsort
+
+C++ tem sua própria solução híbrida desde o ISO C++11. O `std::sort` usa **Introsort**, criado por **David Musser** em 1997. Combinação de três algoritmos:
+
+1. **Quicksort** (rápido na média) como algoritmo principal
+2. **Heapsort** (O(n log n) garantido) como fallback quando a profundidade da recursão excede `2 × log₂(n)` — protege contra o pior caso O(n²) do quicksort
+3. **Insertion sort** em sub-arrays pequenos (tipicamente < 16 elementos)
+
+Introsort **não é estável**. Pra ordenação estável em C++, use `std::stable_sort` (que internamente é um mergesort otimizado).
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Arrays.sort em Java decide automaticamente:
+int[] primitivos = {5, 2, 8, 1, 9};
+Arrays.sort(primitivos);
+// Internamente: DualPivotQuicksort
+
+Integer[] objetos = {5, 2, 8, 1, 9};
+Arrays.sort(objetos);
+// Internamente: TimSort
+
+// Comparador customizado: também usa TimSort
+Arrays.sort(objetos, Comparator.reverseOrder());
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <algorithm>
+#include <vector>
+
+std::vector<int> v = {5, 2, 8, 1, 9};
+std::sort(v.begin(), v.end());
+// Internamente: Introsort (Quicksort + Heapsort + Insertion sort)
+
+// Para ordenação estável (mantém ordem de elementos iguais):
+std::stable_sort(v.begin(), v.end());
+// Internamente: variante de Merge sort
+
+// Com comparador customizado:
+std::sort(v.begin(), v.end(), std::greater<int>());
+```
+
+</Code>
+</CodeSwap>
+
+---
+
+## Estabilidade: o conceito subestimado
+
+Estabilidade parece detalhe de letra miúda, mas pega muita gente desprevenida em entrevistas e em código de produção.
+
+**Definição formal**: um algoritmo de ordenação é estável se, para quaisquer dois elementos com chaves iguais, eles mantêm a ordem relativa original após a ordenação.
+
+**Exemplo prático**: você tem uma lista de alunos com nome e nota. Quer mostrar primeiro alfabético por nome, e depois ordenar por nota. Como?
+
+1. Ordena por nome (qualquer algoritmo)
+2. Ordena por nota com algoritmo **estável**
+
+Resultado: alunos com mesma nota aparecem em ordem alfabética. Se você usar algoritmo instável no segundo passo, a ordem alfabética se perde dentro de cada grupo de notas iguais.
+
+```
+Antes:                Depois ordenar por nota (estável):
+[(Ana, 8),            [(Pedro, 7),
+ (Bruno, 9),           (Ana, 8),       ← preservou Ana antes de João
+ (João, 8),            (João, 8),      ← preservou Bruno antes
+ (Pedro, 7)]           (Bruno, 9)]
+```
+
+**Quais algoritmos são estáveis?** Merge Sort, Insertion Sort, Bubble Sort, TimSort, Counting Sort. **Quais não são?** Quick Sort, Heap Sort, Selection Sort, dual-pivot quicksort.
+
+<Insight>
+Em SQL, `ORDER BY a, b` é equivalente a "ordenar por b com algoritmo estável depois de ordenar por a". A maioria dos bancos de dados usa internamente um merge sort externo justamente porque é estável e funciona bem com discos.
+</Insight>
+
+---
+
+## Sair do O(n log n) com counting sort e radix sort
+
+Existe um teorema clássico: qualquer algoritmo de ordenação **baseado em comparações** tem pior caso pelo menos O(n log n). A prova é simples — existem n! permutações possíveis do array, e uma árvore de decisões binárias precisa de profundidade log₂(n!) ≈ n log n pra distinguir entre elas.
+
+Mas e se você **não precisar comparar**? E se a estrutura dos dados permitir uma ordenação por contagem?
+
+### Counting Sort
+
+Funciona quando os valores estão num **range pequeno e conhecido** (digamos, 0 a k). Em vez de comparar elementos, conta quantos de cada valor existem.
+
+```java
+public static int[] countingSort(int[] arr, int k) {
+    int[] count = new int[k + 1];
+    for (int x : arr) count[x]++;       // conta ocorrências
+
+    int[] resultado = new int[arr.length];
+    int idx = 0;
+    for (int v = 0; v <= k; v++) {
+        while (count[v]-- > 0) resultado[idx++] = v;   // copia cada valor v vezes
+    }
+    return resultado;
+}
+```
+
+**Complexidade**: O(n + k). Se k é da ordem de n, fica O(n). É genuinamente linear.
+
+**Quando usar**: ordenar idades de pessoas (k = 120), notas de prova (k = 100), pixels em uma imagem (k = 256). Inviável quando k é gigante (ordenar floats em range ilimitado).
+
+### Radix Sort
+
+Pra inteiros grandes ou strings, você pode usar Radix Sort: ordena dígito por dígito (ou caractere por caractere) usando Counting Sort em cada passada.
+
+```
+Inteiros: [170, 45, 75, 90, 802, 24, 2, 66]
+
+Passada 1 (unidades): [170, 90, 802, 2, 24, 45, 75, 66]
+Passada 2 (dezenas):  [802, 2, 24, 45, 66, 170, 75, 90]
+Passada 3 (centenas): [2, 24, 45, 66, 75, 90, 170, 802]
+```
+
+**Complexidade**: O(d × n), onde d é o número de dígitos. Para inteiros de 32 bits, d = 32 (em base 2) ou 10 (em base decimal). Se n é grande e d é pequeno, vence O(n log n).
+
+<Aviso>
+Counting e Radix sort só funcionam em chaves discretas e finitas. Não dá pra usar em floats arbitrários ou objetos complexos. Por isso `Arrays.sort` e `std::sort` não usam essas técnicas como default — eles precisam ser gerais. Mas em problemas específicos (ICPC, contagens em jogos, indexação de buscas), counting/radix sort entregam ganhos enormes.
+</Aviso>
+
+---
+
+## Recap
+
+Ordenação não é um problema só. É uma família de problemas, e a resposta certa depende do tamanho, do tipo dos dados, e do que você sabe sobre a distribuição.
+
+Os algoritmos básicos (bubble, selection, insertion) são O(n²) e ficam fora de produção. A exceção é o **insertion sort**, que é rápido em arrays pequenos e por isso aparece como caso-base dentro de implementações sérias.
+
+**Merge sort** é a divisão e conquista canônica: O(n log n) garantido, estável, mas precisa de memória extra. **Quick sort** é mais rápido na prática mas tem pior caso O(n²) — daí surgiram híbridos como **Introsort** (C++) e **DualPivotQuicksort** (Java pra primitivos).
+
+**TimSort** representa uma mudança de filosofia: em vez de assumir dados aleatórios, explora a estrutura parcialmente ordenada que aparece no mundo real. É estável, rápido em dados quase ordenados, e domina hoje as bibliotecas-padrão de Python, Java (pra objetos), JavaScript, Swift, Rust e Android.
+
+**Estabilidade** importa quando você ordena por múltiplas chaves. Bancos de dados, SQL com múltiplos ORDER BY, e qualquer cenário de "ordenar por X e depois por Y" depende disso.
+
+**Counting e Radix sort** quebram a barreira O(n log n) quando os dados têm range pequeno ou estrutura de dígitos. Não são gerais, mas em casos certos são imbatíveis.
+
+Próxima lição: **Busca Binária** — não só a versão básica que todo mundo conhece, mas as variações que aparecem em ICPC (lower bound, upper bound, busca na resposta) e os erros sutis que pegam até desenvolvedores experientes.

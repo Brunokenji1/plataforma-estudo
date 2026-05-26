@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quem criou o C4 Model e quando ele foi popularizado?",
+      "opcoes": [
+        "Martin Fowler em 2003, no livro Patterns of Enterprise Application Architecture",
+        "Simon Brown, criado entre 2006 e 2011 com base em UML e no '4+1 architectural view model' de Philippe Kruchten; popularizado pelo lançamento do site c4model.com (Creative Commons) e pelo artigo 'The C4 Model for Software Architecture' na InfoQ em 25 de junho de 2018",
+        "Robert C. Martin em 2012, junto com o post 'The Clean Architecture'",
+        "A OMG (Object Management Group) em 2009 como evolução do UML 2.0"
+      ],
+      "correta": 1,
+      "explicacao": "O C4 Model foi criado pelo arquiteto de software Simon Brown ENTRE 2006 e 2011, baseado em duas fontes anteriores: (1) UML (Unified Modeling Language); (2) o '4+1 architectural view model' de Philippe Kruchten, publicado no IEEE Software vol 12 nº 6 em novembro de 1995. A técnica foi popularizada com o lançamento do site oficial c4model.com sob licença Creative Commons, e principalmente pelo artigo 'The C4 Model for Software Architecture' publicado na InfoQ em 25 de junho de 2018. Simon Brown também é autor do livro 'Software Architecture for Developers' (Leanpub, 2012, continuamente atualizado) e fundador do Structurizr (ferramenta SaaS pra diagram-as-code). As outras opções confundem com Fowler (que tem outros trabalhos importantes em arquitetura, mas não criou C4), Uncle Bob (Clean Architecture, 2012) e a OMG (que padroniza UML, não C4)."
+    },
+    {
+      "id": "ex2",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quais são os 4 níveis do C4 Model e a ordem do mais ABSTRATO pro mais CONCRETO?",
+      "opcoes": [
+        "Class → Component → Container → Context (do mais detalhado pro mais abstrato)",
+        "Context (sistema como caixa preta + usuários/sistemas externos) → Container (aplicações/processos que compõem o sistema, com stack tecnológico) → Component (componentes lógicos dentro de UM container) → Code (classes/interfaces, raramente desenhado)",
+        "Architecture → Design → Implementation → Code",
+        "Use Case → Domain → Service → Repository"
+      ],
+      "correta": 1,
+      "explicacao": "Os 4 Cs do C4 Model em ordem do MAIS ABSTRATO pro MAIS CONCRETO: (1) CONTEXT — o sistema visto como caixa preta, junto com seus usuários (atores) e sistemas externos com que conversa. Audiência: TODOS (técnicos e não-técnicos, incluindo PM, stakeholders). Não tem detalhes técnicos. (2) CONTAINER — quais aplicações/processos compõem o sistema (web app, mobile, API, banco, fila, microservice), COM tecnologia explícita ([Spring Boot], [Postgres], [RabbitMQ]) e protocolos de comunicação (HTTPS, JDBC, AMQP). Audiência: arquitetos e desenvolvedores. (3) COMPONENT — dando zoom em UM container, quais componentes lógicos existem (controllers, services, repositories, agrupados por função). Audiência: devs da equipe. (4) CODE — classes, interfaces, estrutura interna de UM componente. UML Class Diagram ou similar. Brown explicitamente recomenda NÃO desenhar esse nível na maioria dos casos — o código IDE já é a documentação. A analogia útil é Google Maps: zoom do planeta → continente → país → cidade → rua. Cada nível tem o que importa pra aquele nível, sem misturar detalhes dos níveis abaixo."
+    },
+    {
+      "id": "ex3",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "No Container Diagram do C4, é recomendado mostrar APENAS as caixas (web app, API, banco) sem indicar tecnologias específicas como 'Spring Boot' ou 'Postgres', porque tecnologia é detalhe de implementação.",
+      "correta": false,
+      "explicacao": "Falso — é exatamente o OPOSTO. No Container Diagram (Nível 2), a tecnologia DEVE aparecer explicitamente. Cada container tem label tecnológico: [Container: Spring Boot 3], [Container: React SPA], [ContainerDb: PostgreSQL], [Container: RabbitMQ]. As setas de relacionamento também têm protocolo/tecnologia: 'HTTPS/JSON', 'JDBC', 'AMQP', 'SMTP'. RAZÃO: o Container Diagram é a vista que arquitetos e DESENVOLVEDORES NOVOS precisam pra entender o sistema rapidamente. Saber que a API é Spring Boot e o banco é Postgres é INFORMAÇÃO CRÍTICA pra alguém que vai mexer no sistema. O nível onde tecnologia NÃO aparece é o CONTEXT (Nível 1), que é a vista do CEO/PM — abstração de mais alto nível, sem detalhes técnicos. Brown distingue explicitamente: Context é 'agnóstico de tecnologia', Container é 'concreto sobre tecnologia'. Confundir os dois é um dos erros mais comuns de quem está aprendendo C4."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quem formalizou o conceito de Architecture Decision Records (ADR) e quando?",
+      "opcoes": [
+        "Simon Brown em 2018, junto com o C4 Model",
+        "Eric Evans em 2003, no livro de DDD",
+        "Michael Nygard (mesmo autor do 'Release It!') no post 'Documenting Architecture Decisions' publicado no blog da Cognitect em 15 de novembro de 2011",
+        "Martin Fowler em 2015, no post 'MonolithFirst' do bliki"
+      ],
+      "correta": 2,
+      "explicacao": "Michael Nygard — o mesmo autor do 'Release It!' (da Lição 8 sobre Resilience Patterns) — formalizou o conceito de ADR no post 'Documenting Architecture Decisions' publicado no blog da Cognitect em 15 de novembro de 2011. URL canônica: cognitect.com/blog/2011/11/15/documenting-architecture-decisions. O template Nygard (5 seções: Title, Status, Context, Decision, Consequences) virou padrão da indústria e está praticamente inalterado desde então. Em 2018, a Thoughtworks colocou 'Lightweight Architecture Decision Records' na categoria ADOPT do Technology Radar — o nível máximo de recomendação. Site comunitário em adr.github.io consolida práticas e templates derivados (MADR, etc). Nat Pryce criou o adr-tools (github.com/npryce/adr-tools), CLI canônica com comandos 'adr init', 'adr new', 'adr link'. As outras opções confundem com autores importantes mas que não criaram ADR — Brown criou C4, Fowler escreveu sobre arquitetura mas não cunhou o termo ADR."
+    },
+    {
+      "id": "ex5",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quais são as 5 seções canônicas do template Nygard de ADR?",
+      "opcoes": [
+        "Introdução, Objetivos, Metodologia, Resultados, Conclusão",
+        "Problema, Solução Técnica, Código, Testes, Deploy",
+        "Title (ADR-NNN: descrição), Status (Proposed/Accepted/Deprecated/Superseded), Context (situação e requisitos), Decision (qual foi a decisão), Consequences (positivas, negativas, riscos)",
+        "Resumo Executivo, Análise de Mercado, Plano de Ação, Cronograma, Orçamento"
+      ],
+      "correta": 2,
+      "explicacao": "O template Nygard (1ª publicado no post de 15/nov/2011 e praticamente inalterado desde então) tem 5 seções SEMPRE nessa ordem: (1) TITLE — 'ADR-NNN: descrição curta' (ex: 'ADR-007: Uso de PostgreSQL como banco principal'); (2) STATUS — Proposed (em revisão), Accepted (ativa, implementada ou em implementação), Deprecated (não vale mais, sem substituta), Superseded by ADR-NNN (substituída por outra mais recente, com link); (3) CONTEXT — qual era a situação? Quais requisitos? Quais alternativas estavam na mesa?; (4) DECISION — qual foi a decisão? Em 1-2 frases claras; (5) CONSEQUENCES — o que muda como resultado? Positivas, negativas, riscos. Cada ADR é um arquivo Markdown de meia a 2 páginas, numerado sequencialmente, guardado no repositório do código em docs/adr/. A imutabilidade é FUNDAMENTAL: depois de Accepted, vira histórico — mudou de ideia? Crie ADR-008 que supersede ADR-007. NUNCA edite ADR-007 retroativamente. As outras opções confundem com seções acadêmicas de TCC (A), templates de PR (B) ou business case (D)."
+    },
+    {
+      "id": "ex6",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Quando uma decisão arquitetural muda (ex: depois de 1 ano você decide trocar Postgres por MongoDB), a prática correta é editar a ADR original substituindo o conteúdo pela nova decisão, mantendo o histórico no Git.",
+      "correta": false,
+      "explicacao": "Falso. A IMUTABILIDADE das ADRs depois de Accepted é fundamental — sem ela, a prática toda perde valor. A forma CORRETA: (1) criar NOVA ADR (ex: ADR-008) documentando a nova decisão; (2) marcar a ADR antiga (ADR-007) com status 'Superseded by ADR-008' linkando pra nova; (3) NUNCA editar ADR-007 retroativamente removendo conteúdo. RAZÃO: o histórico permanece. Alguém daqui a 3 anos pode precisar entender por que a decisão antiga foi tomada, por que mudou, qual o contexto da época. Editar destruiria essa rastreabilidade — você teria só a 'verdade atual' sem entender a evolução. Não basta confiar no Git: muita gente lê ADRs renderizadas em UI (GitHub markdown, Confluence), não vai no log. A ADR antiga supersedida continua sendo CONTEÚDO ATIVO da documentação — só com status diferente. Padrão de adr-tools até tem comando 'adr link 8 Supersedes 7' que cria os links bidirecionais automaticamente."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual o critério prático pra decidir se uma decisão merece ou não uma ADR?",
+      "opcoes": [
+        "Criar ADR pra tudo — incluindo escolha de libs, convenções de código, formato de commit",
+        "Criar ADR só quando o CTO/arquiteto sênior pedir",
+        "Mereçem ADR decisões de ALTA ALAVANCAGEM, irreversíveis ou caras de reverter (estilo arquitetural, banco principal, modelo de consistência, autenticação, observabilidade, Bounded Contexts). NÃO mereçem ADR escolhas locais reversíveis (Lombok ou não), convenções de código (vai pro CONTRIBUTING.md) ou decisões internas a um componente. Regra mental: se essa decisão estiver errada, quanto custa reverter? Se '1 hora', não precisa ADR. Se '1 mês de retrabalho ou impossível', precisa",
+        "Criar ADR apenas pra decisões obrigatórias por compliance/regulação"
+      ],
+      "correta": 2,
+      "explicacao": "Erro clássico: criar ADR pra tudo. Resulta em 200 ADRs onde 180 são triviais ('usamos Lombok'), 15 são cosméticas ('Tailwind ou Bootstrap'), e 5 são as decisões que importavam de verdade — mas perdidas no ruído. A coleção vira inútil e o time para de confiar nela. Critério prático: MEREÇEM ADR — escolhas de estilo arquitetural (microservices vs monolith modular), escolha de banco principal, padrões transversais (autenticação, observabilidade, mensageria), modelo de consistência (forte vs eventual), decisões de domínio importantes (qual Bounded Context fica responsável por quê), decisões que limitam/habilitam decisões futuras. NÃO MEREÇEM ADR — escolhas locais reversíveis (Lombok ou não), convenções de código (vai pro CONTRIBUTING.md ou .editorconfig), decisões de implementação interna a um componente, mudanças pontuais que não afetam outros componentes. Regra mental simples: 'se essa decisão estiver errada, quanto custa reverter?'. Resposta '1 hora' → não precisa de ADR. Resposta '1 mês de retrabalho ou impossível' → definitivamente precisa de ADR. A opção A é o anti-pattern descrito; B descarta autonomia do time; D é específica demais."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "Onde e como guardar ADRs num projeto, segundo a prática consolidada?",
+      "opcoes": [
+        "Num drive corporativo separado, em arquivos Word, mantidos pelo arquiteto sênior",
+        "Numa wiki externa tipo Confluence com permissões restritas, separada do código",
+        "Numa pasta 'docs/adr/' DENTRO do próprio repositório do código, em arquivos Markdown numerados sequencialmente (0001, 0002...), versionados com Git, revisados via Pull Request. Primeira ADR sempre é a 'meta-ADR' (0001-record-architecture-decisions.md) que registra a própria decisão de usar ADRs. Referenciar ADRs no código via comentários nos pontos onde se aplicam",
+        "Em comentários espalhados no código, sem estrutura formal"
+      ],
+      "correta": 2,
+      "explicacao": "A prática consolidada (Nygard 2011 + adoção da indústria) é guardar ADRs DENTRO do próprio repositório do código, em pasta dedicada 'docs/adr/'. Estrutura típica: arquivos Markdown numerados sequencialmente (0001-record-architecture-decisions.md, 0002-monolito-modular.md, 0003-bounded-contexts.md, 0004-spring-boot-3.md...). Vantagens: (1) Versionamento Git AUTOMÁTICO, com histórico completo; (2) Revisão via Pull Request — discussão arquitetural acontece no PR antes de aceitar; (3) ADR sempre PRÓXIMA do código que ela governa — alta probabilidade de ser lida; (4) Diff entre versões antigas e novas fica visível no Git. A primeira ADR sempre é a META-ADR (0001-record-architecture-decisions.md) que registra a própria decisão de usar ADRs — soa estranho mas é prática padrão (segue o exemplo do próprio Nygard no post original). Técnica adicional importante: REFERENCIAR ADRs no código via comentários onde se aplicam (ex: '// Decisão de usar Postgres documentada em docs/adr/0005-...'). Sem isso, a ADR existe mas é invisível no momento que importa. As outras opções pecam por: (A) Word não versiona bem, drive separado vira ficção; (B) Confluence separa documento de código, divergem rápido; (D) sem estrutura formal não funciona como decisão registrada."
+    },
+    {
+      "id": "ex9",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "C4 Model e UML são alternativas mutuamente exclusivas — você escolhe uma e descarta a outra completamente.",
+      "correta": false,
+      "explicacao": "Falso. Simon Brown construiu o C4 Model EM CIMA do UML, não contra ele. Mais especificamente, baseado em UML + 4+1 view model de Kruchten. Na prática: (1) O nível 4 do C4 (Code) frequentemente é desenhado COMO UM UML Class Diagram (quando vale a pena desenhar — raramente, segundo o próprio Brown); (2) Sequence Diagrams (UML) podem complementar o Runtime/Dynamic Diagram do C4 pra mostrar fluxos específicos; (3) O Container Diagram tem semelhanças com Component Diagram UML, mas com vocabulário mais claro. A diferença é que C4 é MAIS LEVE e MAIS HIERÁRQUICO que UML clássico. UML define 14 tipos de diagramas — a maioria das equipes só usa Class e Sequence na prática. C4 define 4 níveis hierárquicos com notação flexível (sem semântica rígida de composição vs agregação que confunde devs). Você pode (e times maduros fazem) misturar: C4 pros 3 níveis principais (Context, Container, Component), UML Sequence Diagrams pra fluxos específicos, e a estrutura interna no código direto (sem Class Diagram). Não é exclusão, é complemento — usar a ferramenta apropriada pra cada nível de abstração."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Pro projeto Carbon Credit Compensation Platform (Fatec), qual a aplicação prática de C4 + ADR antes da apresentação final?",
+      "opcoes": [
+        "Não vale o esforço — projeto educacional não precisa de documentação formal",
+        "Produzir documentação UML completa de 30 páginas pra impressionar o avaliador",
+        "C4 mínimo (Context + Container + Component diagram do módulo Compensação) usando PlantUML+C4-PlantUML ou Excalidraw + 5-7 ADRs principais (uso de DDD, modular monolith, hexagonal, persistência in-memory deferida, domain events com publisher simples, sem microservices no escopo). Especial atenção pra ADR-0005 (persistência in-memory deferida) que registra decisão CONSCIENTE do grupo — sem isso, alguém pensa que esqueceram do banco",
+        "Apenas slides do PowerPoint com bullets — diagrama dá trabalho demais"
+      ],
+      "correta": 2,
+      "explicacao": "C4 mínimo viável (1-2 horas de esforço) tem três benefícios concretos pro projeto Fatec: (1) APRESENTAÇÃO na avaliação final — Context + Container + Component diagram + 3-5 ADRs comunicam o sistema em 10 minutos com muito mais clareza do que slides genéricos; (2) ONBOARDING entre o time — Bruno está mais à frente em DDD, Murilo em outro tópico, Fabiano e Pedro Chaves em outras partes; C4 dá vocabulário comum; (3) PORTFÓLIO profissional — C4 + ADR num repo público GitHub é diferencial em vagas, mostra maturidade arquitetural raríssima entre estudantes. Estrutura sugerida: docs/adr/0001-record-architecture-decisions.md, 0002-monolito-modular-com-bounded-contexts.md, 0003-ddd-tatico-aggregates-repositories.md, 0004-hexagonal-architecture-ports-adapters.md, 0005-persistencia-in-memory-deferida.md (CRÍTICA — registra decisão consciente do grupo), 0006-domain-events-com-publisher-simples.md, 0007-sem-microservices-no-escopo-atual.md. Ferramentas: PlantUML com C4-PlantUML (gratuito, versiona com Git) ou Excalidraw (rápido, visual). As outras opções pecam por: (A) descarta o valor pedagógico e de portfólio; (B) UML completa de 30 páginas é exatamente o anti-pattern que C4 resolve — ninguém lê; (D) slides não substituem documentação versionada com o código."
+    }
+  ]
+}

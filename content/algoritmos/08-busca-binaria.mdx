@@ -1,0 +1,554 @@
+---
+titulo: "Busca Binária: O Bug Que Sobreviveu 20 Anos"
+trilha: "algoritmos"
+duracaoMin: 55
+dificuldade: "intermediario"
+referencias:
+  - "Joshua Bloch (2006), 'Extra, Extra — Read All About It: Nearly All Binary Searches and Mergesorts are Broken', Google Research Blog"
+  - "Jon Bentley, Programming Pearls, 2ª ed. (2000), Cap. 4 — Writing Correct Programs"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 2.3 — Designing Algorithms"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 1.1 — Binary Search"
+  - "Princeton Competitive Programming notes (Fall 2024) — Binary search and the answer"
+  - "Antti Laaksonen, Competitive Programmer's Handbook, Cap. 5"
+  - "cppreference.com — std::lower_bound, std::upper_bound"
+  - "Oracle Java SE 21 — Arrays.binarySearch, Collections.binarySearch"
+---
+
+## Um algoritmo enganosamente simples
+
+Busca binária é o primeiro algoritmo "esperto" que todo estudante de computação aprende. A ideia é tão intuitiva que parece impossível errar: divide o array no meio, vê se o que você procura está acima ou abaixo, descarta a metade que não interessa, repete. Logaritmo no tamanho do array. Fim.
+
+Bem, sobre não ter como errar. **Jon Bentley**, um dos mais respeitados pesquisadores de algoritmos da história, escreveu uma versão "comprovadamente correta" de busca binária em 1986 no livro **Programming Pearls**. Era exibida em palestras, ensinada em CMU, copiada por toda a indústria. Em 2006, **Joshua Bloch**, autor do `java.util.Collections` na JDK, descobriu que **a versão estava bugada**. Mais constrangedor: ele mesmo tinha copiado o bug pra dentro do Java.
+
+Vinte anos com o bug em código de produção, em bibliotecas distribuídas pra milhões de máquinas, e ninguém percebeu. O título do post original do Bloch no Google Research Blog é icônico: *"Nearly All Binary Searches and Mergesorts are Broken"*. Em português: quase todas as buscas binárias estão quebradas.
+
+Essa lição vai cobrir a busca binária do começo: a versão clássica, o bug famoso, as variações que aparecem em ICPC (lower bound, upper bound), e a técnica mais poderosa derivada dela — **busca binária na resposta**. No fim você vai entender por que esse algoritmo aparentemente simples merece uma lição inteira pra ele.
+
+---
+
+## A intuição com um jogo de adivinhação
+
+Imagina o seguinte jogo: eu escolho um número entre 1 e 1.000.000. Você tem que adivinhar. Cada vez que você chuta, eu respondo "maior", "menor" ou "acertou".
+
+**Estratégia 1**: chuta 1, 2, 3, 4... no pior caso, 1 milhão de tentativas. Linear.
+
+**Estratégia 2**: chuta sempre o meio do intervalo possível.
+- Chuta 500.000. Resposta: "maior".
+- Agora sei que está entre 500.001 e 1.000.000. Chuta o meio: 750.000.
+- Resposta: "menor". Está entre 500.001 e 749.999. Chuta 625.000.
+- ... e assim por diante.
+
+A cada palpite, **divido o intervalo pela metade**. Quantas divisões até chegar num intervalo de tamanho 1? Log₂(1.000.000) ≈ **20**. Vinte palpites no máximo. Pra 1 bilhão, ~30 palpites. Pra 1 trilhão, ~40.
+
+Essa é a essência da busca binária. **Logaritmo é uma das coisas mais bonitas em ciência da computação** — você dobra o tamanho do problema e paga só mais um passo. Crescer de 1 milhão pra 1 trilhão de elementos? Só 20 comparações a mais. O computador nem sua.
+
+---
+
+## A versão clássica
+
+A pré-condição é importante: **o array precisa estar ordenado**. Sem ordenação, busca binária não funciona — você precisa saber pra qual lado descartar.
+
+A receita:
+
+1. Mantém dois ponteiros `lo` e `hi` delimitando o intervalo de busca atual
+2. Calcula `mid = (lo + hi) / 2`
+3. Compara `arr[mid]` com o alvo:
+   - Se igual, achou
+   - Se `arr[mid] < alvo`, o alvo está na metade direita: `lo = mid + 1`
+   - Se `arr[mid] > alvo`, o alvo está na metade esquerda: `hi = mid - 1`
+4. Repete enquanto `lo <= hi`
+5. Se sair do loop sem encontrar, o alvo não está no array
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Versão clássica que TODO MUNDO ESCREVE — e que tem um bug famoso
+public static int buscaBinariaBugada(int[] arr, int alvo) {
+    int lo = 0;
+    int hi = arr.length - 1;
+
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;       // ← AQUI ESTÁ O BUG
+        if (arr[mid] == alvo) {
+            return mid;
+        } else if (arr[mid] < alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// Versão clássica que TODO MUNDO ESCREVE — e que tem um bug famoso
+int buscaBinariaBugada(const std::vector<int>& arr, int alvo) {
+    int lo = 0;
+    int hi = (int)arr.size() - 1;
+
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;       // ← AQUI ESTÁ O BUG
+        if (arr[mid] == alvo) {
+            return mid;
+        } else if (arr[mid] < alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+```
+
+</Code>
+</CodeSwap>
+
+Esse código funciona perfeitamente em arrays "normais" de tamanho razoável. Roda em todos os testes. Passa em entrevistas. **E carrega uma bomba-relógio.**
+
+---
+
+## O bug que sobreviveu 20 anos
+
+Olha a linha problemática:
+
+```java
+int mid = (lo + hi) / 2;
+```
+
+Parece inocente, certo? Some os dois ponteiros, divide por dois, pega o meio. **Falha quando `lo + hi` excede o valor máximo de um `int`.**
+
+Em Java, `int` tem 32 bits, máximo 2^31 - 1 = **2.147.483.647** (cerca de 2.1 bilhões). Se você está buscando em um array com mais de **1 bilhão de elementos** (`2^30`), e o alvo está perto do final, em algum ponto `lo` e `hi` vão estar ambos perto de `2^30`. A soma deles ultrapassa `2^31 - 1`, **overflow**, e em Java a soma vira **negativa**.
+
+Negativa dividida por 2 continua negativa. `arr[mid]` com `mid` negativo lança `ArrayIndexOutOfBoundsException`. Em C, o comportamento é indefinido — pode crashar, pode retornar lixo, pode parecer funcionar e quebrar no test case errado em produção.
+
+Como esse bug passou despercebido por 20 anos? Porque **em 1986, arrays de 1 bilhão de elementos eram literalmente inconcebíveis**. Os computadores da época tinham megabytes de RAM. O Bentley provou a correção matemática do algoritmo assumindo aritmética inteira ideal, ignorando overflow porque não fazia sentido pensar em entradas tão grandes. Em 2006, no Google, isso virou rotina.
+
+### A correção
+
+A solução é evitar a soma. Em vez de calcular o meio como média, calcula como início + metade da distância:
+
+```java
+int mid = lo + (hi - lo) / 2;
+```
+
+Matematicamente: `lo + (hi - lo) / 2 = lo + hi/2 - lo/2 = (lo + hi) / 2`. O resultado é o mesmo, **mas a soma intermediária nunca acontece**. `hi - lo` é sempre positivo (caímos no caso `lo > hi` antes de inverter), `(hi - lo) / 2` é menor que `hi`, somar com `lo` dá no máximo `hi`. Sem overflow.
+
+A alternativa do Java é usar `>>> 1` (unsigned right shift), que trata o overflow como número positivo:
+
+```java
+int mid = (lo + hi) >>> 1;   // só Java/Kotlin têm esse operador
+```
+
+### A versão correta
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public static int buscaBinaria(int[] arr, int alvo) {
+    int lo = 0;
+    int hi = arr.length - 1;
+
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;  // safe: sem overflow
+        if (arr[mid] == alvo) {
+            return mid;
+        } else if (arr[mid] < alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+int buscaBinaria(const std::vector<int>& arr, int alvo) {
+    int lo = 0;
+    int hi = (int)arr.size() - 1;
+
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;  // safe: sem overflow
+        if (arr[mid] == alvo) {
+            return mid;
+        } else if (arr[mid] < alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+```
+
+</Code>
+</CodeSwap>
+
+<Insight>
+O blog do Bloch fechou com uma lição que vale ouro: *"We programmers need all the help we can get, and we should never assume otherwise. Careful design is great. Testing is great. Formal methods are great. Code reviews are great. Static analysis is great. But none of these things alone are sufficient to eliminate bugs."* Bentley **provou** matematicamente a correção. Passou em testes. Foi revisado por dezenas de pesquisadores. E o bug continuou lá. **Estar certo no papel não garante estar certo na máquina real.**
+</Insight>
+
+---
+
+## Os quatro lugares onde a busca binária dá errado
+
+Mesmo com a aritmética correta, busca binária tem **outros quatro pontos** onde implementações falham. Conhecer todos te salva em entrevistas e ICPC.
+
+### 1. Condição do while: `<` ou `<=`?
+
+```java
+while (lo <= hi)   // funciona com hi = length - 1 (limite fechado)
+while (lo < hi)    // funciona com hi = length (limite aberto)
+```
+
+Os dois funcionam, mas **misturar é desastre**. Se você usa `lo <= hi`, mas inicializa `hi = arr.length` (em vez de `length - 1`), vai acessar fora do array no primeiro `mid`. Escolhe um estilo e mantém consistente.
+
+### 2. Atualização dos ponteiros: `mid` ou `mid ± 1`?
+
+```java
+lo = mid + 1;   // exclui o mid (ele não é a resposta)
+lo = mid;       // inclui o mid (pode causar loop infinito!)
+```
+
+Quando `arr[mid] != alvo`, o `mid` definitivamente não é a resposta — pode ser excluído. Por isso `mid + 1` ou `mid - 1`. Se você escrever `lo = mid` (sem o +1), e `mid` é o mesmo do passo anterior, o loop nunca termina.
+
+**Loop infinito** é o segundo bug mais comum em busca binária, depois do overflow. Sintoma: programa trava em entrada grande.
+
+### 3. Off-by-one no `hi` inicial
+
+```java
+int hi = arr.length;        // ⚠️ se usa while (lo < hi)
+int hi = arr.length - 1;    // ✅ se usa while (lo <= hi)
+```
+
+Erra um e seu código segfaulta em arrays com 1 ou 2 elementos.
+
+### 4. Tipos signed vs unsigned em C++
+
+Em C++, `vec.size()` retorna `size_t` (unsigned). Se você faz subtração `vec.size() - 1` e o vetor está vazio, o resultado **dá overflow pra um número GIGANTESCO**. Por isso o `(int)arr.size() - 1` no código acima — força conversão pra signed primeiro.
+
+```cpp
+// ⚠️ Cuidado em C++
+size_t hi = vec.size() - 1;   // se vec é vazio, hi = 18446744073709551615
+```
+
+---
+
+## Lower Bound e Upper Bound: as variações úteis
+
+Busca binária pura responde "o elemento existe?". Mas em problemas reais você frequentemente quer mais:
+
+- **lower_bound**: índice do **primeiro elemento >= alvo**
+- **upper_bound**: índice do **primeiro elemento > alvo**
+
+Diferença sutil mas importante: em `[1, 2, 2, 2, 3, 5]`:
+- `lower_bound(2)` retorna **1** (o primeiro 2)
+- `upper_bound(2)` retorna **4** (o primeiro 3, ou seja, posição depois dos 2s)
+
+Quantos `2` existem? `upper_bound(2) - lower_bound(2) = 4 - 1 = 3`. **Conta de elementos iguais em O(log n)**.
+
+Onde inserir um elemento mantendo o array ordenado? Em `lower_bound(novo_valor)`. **Inserção que preserva ordem em O(log n)**.
+
+### Implementação manual de lower_bound
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// Retorna o ÍNDICE do primeiro elemento >= alvo
+// Se nenhum elemento é >= alvo, retorna arr.length
+public static int lowerBound(int[] arr, int alvo) {
+    int lo = 0;
+    int hi = arr.length;            // limite aberto: usa < ao invés de <=
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (arr[mid] < alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid;                // mantém o candidato
+        }
+    }
+    return lo;                       // lo == hi nesse ponto
+}
+
+// Upper bound: primeiro elemento > alvo
+public static int upperBound(int[] arr, int alvo) {
+    int lo = 0;
+    int hi = arr.length;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (arr[mid] <= alvo) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+// C++ tem std::lower_bound e std::upper_bound prontos:
+#include <algorithm>
+
+std::vector<int> arr = {1, 2, 2, 2, 3, 5};
+
+auto lb = std::lower_bound(arr.begin(), arr.end(), 2);
+// lb aponta pra arr[1], primeiro 2
+
+auto ub = std::upper_bound(arr.begin(), arr.end(), 2);
+// ub aponta pra arr[4], o 3 (logo após os 2s)
+
+int countDois = ub - lb;             // = 3
+int posicaoPraInserir = lb - arr.begin();
+
+// Implementação manual equivalente:
+int lowerBound(const std::vector<int>& arr, int alvo) {
+    int lo = 0, hi = arr.size();     // limite aberto
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (arr[mid] < alvo) lo = mid + 1;
+        else                 hi = mid;
+    }
+    return lo;
+}
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+Detalhe sutil: no `lowerBound` o `hi` foi inicializado com `arr.length` (não `arr.length - 1`). É um caso onde **a busca pode retornar uma posição que não existe no array**: se nenhum elemento é >= alvo, a resposta correta é `arr.length` (posição "depois do fim"), indicando "insira no final". Mudar essa convenção exige cuidado com a condição do while e a atualização dos ponteiros.
+</Aviso>
+
+### O equivalente Java
+
+Java tem `Arrays.binarySearch`, mas o comportamento dele é um pouco confuso:
+
+```java
+int idx = Arrays.binarySearch(arr, 5);
+
+// Se 5 está no array: idx é a posição (não garante qual ocorrência se houver duplicatas!)
+// Se 5 não está no array: idx é -(ponto_de_insercao + 1), um número negativo
+```
+
+Pra extrair o ponto de inserção quando o elemento não existe: `-(idx + 1)`. Comportamento estranho, mas é o que tem. **Em código sério, prefira escrever sua própria lower_bound** — você ganha previsibilidade.
+
+---
+
+## Busca binária na resposta: a técnica mais poderosa
+
+Aqui a coisa fica interessante. Tudo o que vimos até agora foi busca binária em um array ordenado. Mas a técnica é mais geral que isso.
+
+**A ideia**: se você consegue **decidir rapidamente se uma resposta candidata é válida ou não**, pode usar busca binária no **espaço das respostas possíveis**.
+
+Esse padrão tem nome em comunidades de competição: **"binary search the answer"** ou **"BSA"**. É a técnica que distingue um competidor mediano de um bom.
+
+### O padrão geral
+
+Você precisa de duas coisas:
+
+1. Um **espaço de respostas monotônico**: se a resposta `R` é válida, todas as respostas `> R` (ou `< R`) também são. Ou ao contrário.
+2. Uma função `check(R)` que decide em tempo razoável (digamos, O(n) ou O(n log n)) se uma resposta `R` é viável.
+
+Com isso, busca binária no espaço de respostas em **O(log(range) × check_cost)**.
+
+### Problema clássico: Aggressive Cows / Allocate Books
+
+**Problema** (variante do famoso "Aggressive Cows" da SPOJ): você tem `n` livros com `pages[i]` páginas cada, e precisa distribuir entre `m` estudantes de forma contígua (cada estudante recebe um intervalo contíguo de livros). Quer **minimizar a quantidade máxima de páginas** que algum estudante recebe.
+
+Por exemplo, com livros `[10, 20, 30, 40]` e 2 estudantes:
+- Distribuição `[10] + [20, 30, 40]`: estudantes recebem 10 e 90. Máximo = 90.
+- Distribuição `[10, 20] + [30, 40]`: estudantes recebem 30 e 70. Máximo = 70.
+- Distribuição `[10, 20, 30] + [40]`: estudantes recebem 60 e 40. Máximo = 60.
+
+Resposta: 60.
+
+**Como atacar com busca binária na resposta?** A resposta `R` é o "máximo de páginas". Pergunta: existe uma distribuição válida onde nenhum estudante recebe mais que `R` páginas?
+
+Se `R = 60`, sim, dá pra distribuir (60 + 40). Se `R = 50`, não dá: o livro de 40 cabe, mas pra somar até 50 com livros contíguos, [10, 20] é 30, +30 é 60 > 50. Quebra.
+
+**Função check**: dado um limite `R`, simula uma distribuição greedy: pega livros contíguos até a soma encostar em `R`, então passa pro próximo estudante. Conta quantos estudantes precisou. Se `<= m`, a resposta `R` é viável.
+
+**Monotonicidade**: se `R` é viável, qualquer `R' > R` também é (cabem mais livros por estudante). Então o espaço de respostas tem o formato `[infeasible, infeasible, ..., feasible, feasible, ...]`. Procuramos a **menor** resposta viável: lower_bound no espaço de respostas.
+
+**Range de busca**:
+- Mínimo: `max(pages)` — não dá pra ter resposta menor que o maior livro individual
+- Máximo: `sum(pages)` — um único estudante pega tudo
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class AlocacaoLivros {
+
+    // check: dado limite R, m estudantes conseguem distribuir os livros?
+    private static boolean conseguiDistribuir(int[] pages, int m, int R) {
+        int estudantesUsados = 1;
+        int paginasAtuais = 0;
+        for (int p : pages) {
+            if (p > R) return false;     // livro maior que o limite, impossível
+            if (paginasAtuais + p > R) {
+                estudantesUsados++;
+                paginasAtuais = p;
+                if (estudantesUsados > m) return false;
+            } else {
+                paginasAtuais += p;
+            }
+        }
+        return true;
+    }
+
+    public static int minimoMaximoPaginas(int[] pages, int m) {
+        if (m > pages.length) return -1;   // não tem livros suficientes
+
+        int lo = 0, hi = 0;
+        for (int p : pages) {
+            lo = Math.max(lo, p);   // resposta mínima: maior livro individual
+            hi += p;                // resposta máxima: soma total
+        }
+
+        // Busca binária na resposta
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            if (conseguiDistribuir(pages, m, mid)) {
+                hi = mid;          // mid é viável, tenta valor menor
+            } else {
+                lo = mid + 1;      // mid não é viável, precisa maior
+            }
+        }
+        return lo;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <numeric>
+
+bool conseguiDistribuir(const std::vector<int>& pages, int m, int R) {
+    int estudantesUsados = 1;
+    int paginasAtuais = 0;
+    for (int p : pages) {
+        if (p > R) return false;
+        if (paginasAtuais + p > R) {
+            estudantesUsados++;
+            paginasAtuais = p;
+            if (estudantesUsados > m) return false;
+        } else {
+            paginasAtuais += p;
+        }
+    }
+    return true;
+}
+
+int minimoMaximoPaginas(const std::vector<int>& pages, int m) {
+    if ((int)pages.size() < m) return -1;
+
+    int lo = *std::max_element(pages.begin(), pages.end());
+    int hi = std::accumulate(pages.begin(), pages.end(), 0);
+
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (conseguiDistribuir(pages, m, mid)) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n log(sum)) — `n` é o número de livros, `sum` é a soma de todas as páginas. Pra `n = 10^5` e `sum = 10^9`, são ~30 iterações de busca × 10^5 da check = **3 × 10^6** operações. Tranquilo dentro do tempo de juiz online.
+
+<ComplexidadeBox melhor="O(n)" media="O(n log(sum))" pior="O(n log(sum))" />
+
+<Insight>
+Repara o padrão: o problema NÃO MENCIONA busca binária. Ele pede uma otimização ("minimizar o máximo"). O insight é perceber que (a) a função "é viável distribuir com limite R" tem comportamento monotônico em R, e (b) é fácil checar. Daí virou busca binária. **Reconhecer esse padrão é o que separa um problema "impossível" de uma solução elegante de 20 linhas.**
+</Insight>
+
+### Outros problemas clássicos de BSA
+
+A mesma técnica resolve:
+
+- **Aggressive Cows** (SPOJ): distribuir vacas em estábulos minimizando a distância máxima entre elas. Resposta: a maior distância mínima possível.
+- **Capacity to Ship Packages Within D Days** (LeetCode 1011): qual a menor capacidade de navio que consegue enviar todos os pacotes em D dias?
+- **Koko Eating Bananas** (LeetCode 875): qual a menor velocidade de comer que ainda permite acabar todos os bananas no tempo dado?
+- **Split Array Largest Sum** (LeetCode 410): basicamente o mesmo problema do Aggressive Cows com nome diferente.
+- **Median of Two Sorted Arrays** (LeetCode 4): busca binária mais sofisticada, mas o esqueleto é o mesmo.
+
+Cada um deles é uma variação do mesmo esqueleto: **identifica a quantidade a otimizar, escreve a função check, faz binary search na resposta**. Quando você reconhece o padrão, esses problemas viram quase mecânicos.
+
+---
+
+## Busca binária em estruturas que não são arrays
+
+A técnica funciona em qualquer espaço com **busca binária por uma resposta crescente/decrescente**. Aplicações:
+
+### Em árvores balanceadas
+
+`TreeMap` em Java, `std::map` em C++ — busca, inserção e remoção em O(log n) graças à árvore vermelho-preta interna. Cada operação é, na essência, uma busca binária guiada pela estrutura da árvore.
+
+### Em índices de banco de dados
+
+Bancos como PostgreSQL e MySQL usam **B-Trees** (árvores balanceadas otimizadas pra disco) como índice. Busca em uma tabela com 1 bilhão de linhas? Cerca de 4-5 acessos a disco em uma B-Tree de fator 100. Sem o índice, full table scan. A diferença é literalmente entre instantâneo e impraticável.
+
+### Em busca de ponto fixo
+
+Encontrar onde uma função monotônica cruza zero. Você usa busca binária num intervalo `[lo, hi]` com `f(lo) < 0 < f(hi)`. Logaritmo no inverso da precisão. Aparece em métodos numéricos, simulação física, otimização.
+
+### Em problemas de teoria dos números
+
+"Achar o maior `k` tal que `k³ <= n`": busca binária em `k`. "Achar a menor potência de 2 maior ou igual a `n`": busca binária. Sempre que você consegue testar uma resposta rapidamente, busca binária funciona.
+
+---
+
+## Quando NÃO usar busca binária
+
+Por completude:
+
+1. **Array não ordenado.** Busca binária assume ordenação. Em array desordenado, busca linear é a opção (ou ordena primeiro se você vai fazer muitas buscas).
+
+2. **Lista ligada.** Busca binária precisa de **acesso aleatório em O(1)** ao elemento do meio. Em `LinkedList`, chegar no meio é O(n) — não compensa.
+
+3. **Array muito pequeno.** Pra arrays com menos de 10-20 elementos, busca linear pode ser **mais rápida na prática** por causa de cache locality e branch prediction. Bibliotecas como o LLVM usam threshold internamente.
+
+4. **Comparação cara.** Se cada comparação custa O(k), busca binária é O(k log n) — pode perder pra alternativas se houver estruturas mais inteligentes (hash tables, por exemplo).
+
+---
+
+## Recap
+
+Busca binária parece simples, mas tem armadilhas reais. A linha `mid = (lo + hi) / 2` carregou um bug de overflow por 20 anos antes de Joshua Bloch encontrar em 2006. A correção é `lo + (hi - lo) / 2`.
+
+Os erros mais comuns em implementação: condição do while inconsistente, atualização errada dos ponteiros (causa loop infinito), off-by-one no `hi` inicial, e mistura signed/unsigned em C++.
+
+**Lower bound** e **upper bound** são as variações úteis: primeiro elemento >= alvo e primeiro elemento > alvo. Permitem contar ocorrências, encontrar ponto de inserção, e várias outras manipulações em O(log n).
+
+**Busca binária na resposta** é a técnica mais poderosa derivada do conceito básico. Sempre que você consegue (a) limitar o espaço de respostas e (b) checar rapidamente se uma resposta é viável, busca binária funciona. Aggressive Cows, Allocate Books, Capacity to Ship Packages — todos seguem o mesmo esqueleto.
+
+Por baixo dos panos, busca binária é o motor de árvores balanceadas, índices de banco de dados, e muitas estruturas avançadas. **Entender bem esse algoritmo aparentemente simples destrava uma família inteira de soluções.**
+
+Próxima lição: **Árvores Binárias e BST**. Vamos ver como árvores generalizam o conceito de busca binária, por que `TreeMap` mantém ordem onde `HashMap` falha, e como balancear árvores pra garantir o O(log n) mesmo no pior caso.

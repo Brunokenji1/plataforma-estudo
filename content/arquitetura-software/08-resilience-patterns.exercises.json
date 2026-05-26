@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual livro é a referência canônica que estabeleceu o vocabulário moderno dos Stability Patterns (Timeouts, Circuit Breaker, Bulkhead, Fail Fast, Steady State)?",
+      "opcoes": [
+        "'Clean Architecture' de Robert C. Martin (2017)",
+        "'Designing Data-Intensive Applications' de Martin Kleppmann (2017)",
+        "'Release It! Design and Deploy Production-Ready Software' de Michael T. Nygard (Pragmatic Bookshelf, 1ª ed março/2007, 2ª ed janeiro/2018)",
+        "'Domain-Driven Design' de Eric Evans (2003)"
+      ],
+      "correta": 2,
+      "explicacao": "'Release It!' do Michael T. Nygard, publicado pela Pragmatic Bookshelf em março de 2007 (ISBN 978-0-9787392-1-8) com segunda edição em janeiro de 2018, é a referência canônica dos Stability Patterns. O capítulo 5 da primeira edição cataloga: Timeouts (5.1), Circuit Breaker (5.2), Bulkheads (5.3), Steady State (5.4), Fail Fast (5.5), Handshaking (5.6), Test Harness (5.7), Decoupling Middleware (5.8). Antes de Nygard, esses padrões existiam como folclore tribal (engenheiros experientes faziam algo parecido) mas SEM vocabulário comum. A contribuição central foi dar NOMES que viraram universais — você consegue dizer 'preciso de um Circuit Breaker aqui' e a indústria inteira entende. As outras opções são livros importantes mas com escopo diferente (Clean = arquitetura interna, Data-Intensive = sistemas distribuídos em geral, DDD = modelagem)."
+    },
+    {
+      "id": "ex2",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Em sistemas distribuídos modernos, é aceitável deixar chamadas HTTP a serviços externos sem timeout configurado quando a operação é considerada 'rápida' pelo time.",
+      "correta": false,
+      "explicacao": "Falso. A regra de Nygard no cap 5.1 do 'Release It!' é categórica: TODA chamada que cruza um limite de processo precisa ter timeout, SEMPRE, sem exceção. O problema é que muitos clients HTTP (Java RestTemplate sem configuração, alguns HttpClient defaults) historicamente esperam INDEFINIDAMENTE. Em produção, uma dependência lenta acaba pendurando todas as threads do servidor. Você precisa configurar DOIS timeouts: (1) connect timeout (tempo pra estabelecer conexão TCP, tipicamente 1-5s); (2) read timeout (tempo pra resposta após conectado, depende da operação — 2s pra GET de cotação, 30s pra processamento de PDF). A regra prática de Nygard: se você não consegue justificar um timeout específico, use 5 segundos como default. É melhor errar com timeout curto (fácil de aumentar) do que com timeout longo (esconde problemas até virarem catástrofe). 'Considerar a operação rápida' não substitui ter timeout configurado — operações 'rápidas' ficam lentas quando a rede está com problema."
+    },
+    {
+      "id": "ex3",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quais são os três estados de um Circuit Breaker e como se relacionam?",
+      "opcoes": [
+        "ON, OFF, MAINTENANCE — controle manual de operação",
+        "CLOSED (normal, passa chamadas), OPEN (rejeita tudo imediatamente — fail fast), HALF-OPEN (deixa algumas chamadas passarem pra testar recuperação)",
+        "ACTIVE, INACTIVE, DEPRECATED — ciclo de vida do componente",
+        "CONNECTED, DISCONNECTED, RECONNECTING — estados de rede"
+      ],
+      "correta": 1,
+      "explicacao": "Os três estados (analogia ao disjuntor elétrico residencial — Nygard cap 5.2): CLOSED (fechado, em circuitos elétricos 'fechado' significa 'passa corrente') é o estado normal — chamadas passam pra dependência e o breaker monitora taxa de falha. Quando a taxa ultrapassa threshold (ex: 50% nas últimas 20 chamadas, ou 5 falhas seguidas), vira OPEN. OPEN (aberto, 'não passa corrente') rejeita TODAS as chamadas IMEDIATAMENTE sem tentar — isso é fail fast. Protege tanto sua aplicação (não acumula threads pendentes) quanto a dependência (que ganha tempo pra recuperar). Após timeout configurado (ex: 30s), o breaker vai pra HALF-OPEN: deixa POUCAS chamadas passarem pra TESTAR se a dependência se recuperou. Se essas chamadas têm sucesso, volta pra CLOSED. Se falham, volta pra OPEN e o timeout reinicia. A analogia: trocar a queima do disjuntor (barata, fácil de resetar) pela queima da casa inteira (catastrófica)."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a história canônica do Circuit Breaker em Java moderno: Netflix Hystrix → ?",
+      "opcoes": [
+        "Hystrix continua sendo o padrão recomendado pelo Spring para novos projetos em 2026",
+        "Netflix anunciou Hystrix em maintenance mode em novembro/2018; Spring Cloud Hystrix deprecated em dezembro/2018; Resilience4j (criado 2017, desenhado pra Java 8+ funcional) virou sucessor canônico, modular, leve, com integração nativa Spring Boot e Micrometer",
+        "Hystrix foi substituído pelo Apache HTTPClient",
+        "Resilience4j foi descontinuado em 2023 e a indústria voltou pro Hystrix"
+      ],
+      "correta": 1,
+      "explicacao": "Cronologia confirmada: (1) Netflix abriu Hystrix em 2012 junto com Eureka, Zuul e outras peças do stack microservices Netflix. Hystrix virou padrão de fato pra Circuit Breaker em Java por anos. (2) Em NOVEMBRO de 2018, Netflix anunciou Hystrix em 'maintenance mode' — sem novo desenvolvimento. (3) Em DEZEMBRO de 2018, Spring Cloud Hystrix foi deprecated. (4) Em SpringOne 2019, anunciaram remoção do Hystrix Dashboard do Spring Cloud 3.1, oficializando a morte do projeto. (5) Resilience4j (criado 2017, desenhado pra Java 8+ e programação funcional) virou sucessor canônico. Diferenças relevantes: Modular (importa só o módulo que precisa — circuitbreaker, retry, bulkhead, ratelimiter, timelimiter, cache); leve (dependência única no Vavr, vs Hystrix com Archaius/Guava/Apache Commons); API funcional (Supplier/Function/Predicate, encaixa com lambdas); integração nativa Spring Boot e Micrometer pra observabilidade. Spring Cloud Circuit Breaker é abstração que roda Resilience4j por baixo."
+    },
+    {
+      "id": "ex5",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "A analogia do padrão Bulkhead vem da arquitetura naval: o casco de um navio é dividido em compartimentos estanques (anteparos/bulkheads) — se um for perfurado e alagar, os outros continuam intactos, o navio pode boiar. Em software, Bulkhead significa isolar recursos pra que falha numa parte não consuma os recursos das outras partes.",
+      "correta": true,
+      "explicacao": "Verdadeiro. Nygard cap 5.3 do 'Release It!' usa exatamente essa analogia naval. Em software, Bulkhead pode ser implementado em vários níveis: (1) Thread pool bulkhead — pools de threads SEPARADOS pra dependências diferentes; se chamada à API de cotações fica pendurada e enche o pool de cotação, o pool de pagamentos continua livre; (2) Connection pool separado por dependência — pools HTTP separados pra cada API externa; (3) Process/container bulkhead — processos separados pra workloads diferentes (microservices já é uma forma de bulkhead). Resilience4j tem dois tipos: SEMAPHORE (limita chamadas concorrentes, na mesma thread do chamador, baixo overhead) e THREADPOOL (pool de threads separado, retorna CompletableFuture, mais isolamento, mais overhead). A grande vantagem segundo Nygard: o sistema DEGRADA PARCIALMENTE em vez de FALHAR TOTALMENTE — cotação fora? Pagamentos continuam. Cada compartimento que cai é perda controlada, não a perda do navio inteiro."
+    },
+    {
+      "id": "ex6",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual o problema do 'retry imediato' e do 'backoff fixo', e qual a solução canônica?",
+      "opcoes": [
+        "Não há problema — retry simples sempre funciona em produção",
+        "Retry imediato piora a sobrecarga (você triplica/quintuplica o volume exatamente quando o serviço está com problema). Backoff fixo evita isso, mas causa thundering herd (todos os clients esperam exatamente o mesmo tempo e bombardeiam o serviço sincronizados). Solução: exponential backoff (espera dobra a cada tentativa: 1s, 2s, 4s, 8s...) com jitter (aleatoriedade no tempo de espera pra dessincronizar clients)",
+        "Backoff exponencial pode ser implementado mas jitter é overhead desnecessário",
+        "A solução é simplesmente não fazer retry — falhe e deixe o cliente decidir"
+      ],
+      "correta": 1,
+      "explicacao": "A referência canônica é Marc Brooker (VP and Distinguished Engineer no AWS), post 'Exponential Backoff And Jitter' no AWS Architecture Blog, 4 de março de 2015 (aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/). É documento de referência citado no próprio AWS Well-Architected Framework. A ideia tem duas partes: (1) EXPONENTIAL BACKOFF — tempo de espera DOBRA a cada tentativa (1s, 2s, 4s, 8s, 16s...), dando tempo crescente pro serviço se recuperar; (2) JITTER — adiciona aleatoriedade no tempo: em vez de esperar exatamente 2^n segundos, espera random(0, 2^n). Isso DESSINCRONIZA os clients que pararam de retentar ao mesmo tempo. Sem jitter, 1000 clients chamando o serviço caído vão esperar exatamente 1s e bombardear o serviço de novo TODOS AO MESMO TEMPO (thundering herd) — o serviço cai de novo, eles esperam 1s, e o ciclo continua. Brooker expandiu depois no Amazon Builders' Library com 'Timeouts, retries, and backoff with jitter'. AWS SDKs implementam por padrão. Resilience4j tem essa lógica declarativa (enableExponentialBackoff + enableRandomizedWait)."
+    },
+    {
+      "id": "ex7",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a ordem CORRETA de combinação dos resilience patterns numa chamada a dependência externa (de fora pra dentro)?",
+      "opcoes": [
+        "Timeout → Retry → Circuit Breaker → Bulkhead (do mais interno pro mais externo)",
+        "Bulkhead → Circuit Breaker → Retry → Timeout (do mais externo pro mais interno, com cada camada protegendo um aspecto diferente)",
+        "Não importa a ordem — qualquer combinação funciona igual",
+        "Retry → Bulkhead → Timeout → Circuit Breaker"
+      ],
+      "correta": 1,
+      "explicacao": "A ordem correta de FORA pra DENTRO é: Bulkhead → Circuit Breaker → Retry → Timeout → chamada real. RAZÃO: (1) Bulkhead é o MAIS EXTERNO — limita quantas chamadas concorrentes você faz a essa dependência, protege seu PRÓPRIO sistema de exaurir recursos. Antes de qualquer outra coisa, garanta que não vai estourar o pool. (2) Circuit Breaker vem depois — se a dependência está conhecidamente caída (breaker OPEN), falha rápido SEM nem tentar retry. Não adianta retentar 5 vezes se o serviço está fora há 1 hora. (3) Retry está DENTRO do breaker — só atua quando o breaker está CLOSED, pra cobrir falhas genuinamente transitórias (rede momentaneamente fora). (4) Timeout é o MAIS INTERNO — cada tentativa individual tem seu próprio timeout. Em Resilience4j com Spring, a ordem de execução das annotations é: Bulkhead → CircuitBreaker → RateLimiter → TimeLimiter → Retry. As outras opções confundem com ordem inversa ou ignoram que ordem importa."
+    },
+    {
+      "id": "ex8",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Retry deve ser aplicado sem restrições em qualquer operação que falhe, incluindo POST que criam recursos (ex: criar pedido), porque retentar nunca causa problema em sistemas modernos.",
+      "correta": false,
+      "explicacao": "Falso — categoricamente. Existem várias restrições importantes pra retry: (1) Retentar APENAS operações IDEMPOTENTES. GET buscando dados: idempotente, pode retentar à vontade. POST criando pedido NÃO-idempotente: se você retentar, pode criar 2 pedidos. Solução: use idempotency keys (cliente envia chave única no header, servidor detecta retry e devolve o mesmo resultado) ou só retente operações idempotentes por design. (2) NÃO retentar em 4xx. Se o servidor retornou 400 (bad request), 401 (não autenticado), 404 (não encontrado), retentar não vai mudar nada — o pedido está errado, mais N tentativas continuarão erradas. Retente APENAS em 5xx (erro do servidor que pode ser transitório) e em timeouts/network errors. (3) Combine com Circuit Breaker. Se o serviço está caído há horas, retentar não adianta — o breaker resolve melhor. Ordem natural: Retry DENTRO do Circuit Breaker. (4) Defina TETO MÁXIMO de tentativas. 5 costuma ser razoável; mais que isso pra operação síncrona prejudica UX e gera carga desnecessária. Retry mal feito é uma das formas clássicas de derrubar produção — não é técnica gratuita."
+    },
+    {
+      "id": "ex9",
+      "tipo": "multipla-escolha",
+      "pergunta": "O que é o pattern 'Fail Fast' segundo Nygard (Release It! cap 5.5), e quando aplicá-lo?",
+      "opcoes": [
+        "Falhar imediatamente em qualquer erro, sem nenhuma tentativa de recuperação",
+        "Se você JÁ SABE que a operação vai falhar, falhe IMEDIATAMENTE em vez de tentar — não desperdice recursos numa operação fadada. Casos típicos: validações baratas antes de operações caras (validar saldo antes de antifraude), rejeição de carga em sobrecarga conhecida (503 Service Unavailable), health check do Circuit Breaker antes de tentar a chamada",
+        "Padrão para programas que devem terminar rapidamente após inicialização",
+        "Sinônimo de retry com timeout muito curto"
+      ],
+      "correta": 1,
+      "explicacao": "Fail Fast é o OPOSTO da intuição: se você sabe que vai falhar, falhe imediatamente em vez de tentar. Casos típicos: (1) Validações baratas ANTES de operações caras. Numa transferência: valide PRIMEIRO 'valor > 0', conta existe, tem saldo — ANTES de chamar a API de antifraude que demora 500ms. Não faça antifraude pra depois descobrir que não tinha saldo. (2) Health check do Circuit Breaker no início da chamada — se o breaker está OPEN, falha antes de tentar (Resilience4j faz isso automaticamente). (3) Rejeição de carga em sobrecarga conhecida — se a fila de processamento já está em 95% de capacidade, rejeite novas requests com 503 Service Unavailable em vez de aceitá-las e demorar muito pra processar. O cliente prefere falha RÁPIDA (com retry backoff) do que timeout demorado. Fail Fast e Timeout são pares naturais: timeout limita o tempo MÁXIMO que você espera; Fail Fast evita esperas que você SABE que serão inúteis. As outras opções confundem com falha indiscriminada (A) ou com conceitos não relacionados (C, D)."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Pro projeto Carbon Credit (in-memory, monolito modular, sem dependências externas), qual a recomendação correta sobre Circuit Breaker, Bulkhead e Retry com Resilience4j?",
+      "opcoes": [
+        "Aplicar todos os patterns imediatamente pra praticar — incluindo Circuit Breaker em chamadas internas entre módulos",
+        "Não aplicar nada de resilience pattern porque é desperdício em projeto educacional",
+        "Aplicação direta de Circuit Breaker/Bulkhead/Retry é MÍNIMA agora (não há chamadas remotas), mas aplicar Timeouts conceituais em operações longas, Fail Fast nas validações de domínio (já parcialmente presente) e reconhecer Steady State (Map<> in-memory cresce indefinidamente — limitação aceita pro projeto Fatec). Aplicar os patterns COMPLETOS quando o projeto evoluir pra ter integração externa real",
+        "Aplicar apenas Retry, porque é o pattern mais simples"
+      ],
+      "correta": 2,
+      "explicacao": "A regra de Nygard é clara: aplique resilience patterns nas FRONTEIRAS DE PROCESSO, em comunicação remota. Não DENTRO do mesmo classpath — chamadas internas não falham por rede. Aplicar Circuit Breaker numa chamada de método interna entre módulos é overhead sem benefício. Pro Carbon Credit hoje (in-memory, monolito modular, sem dependências externas), três aplicações válidas: (1) TIMEOUTS conceituais em operações potencialmente longas — operações in-memory que iteram coleções grandes podem ser monitoradas com log de warning quando passam de threshold; (2) FAIL FAST nas validações de domínio — vocês já têm isso parcialmente nos agregados das lições 4 e 5 ('if (status != RASCUNHO) throw') — vale formalizar como pattern explícito; (3) STEADY STATE — o Map<CompensacaoId, CompensacaoEmissao> in-memory cresce indefinidamente. Pro projeto Fatec não é problema (tem prazo, escopo limitado), mas RECONHEÇAM que em produção isso precisaria de persistência + arquivamento de compensações antigas + limite de memória. Quando aplicar Circuit Breaker/Bulkhead/Retry de verdade: quando o projeto evoluir pra integração externa real (ex: API de cotação, sistema externo de auditoria, microservices). O viés do mercado é aplicar tudo 'pra ficar mais seguro' — over-engineering catastrófico. As opções A e D pecam por isso; B descarta benefícios reais."
+    }
+  ]
+}

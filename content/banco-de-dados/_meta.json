@@ -1,0 +1,19 @@
+{
+  "titulo": "Bancos de Dados",
+  "descricao": "Modelo relacional, SQL, normalização, índices, transações, modelagem, organização, triggers, procedures, herança e fluxo de aplicação.",
+  "licoes": [
+    { "slug": "01-modelo-relacional", "ordem": 1 },
+    { "slug": "02-normalizacao", "ordem": 2, "prerequisitos": ["01-modelo-relacional"] },
+    { "slug": "03-sql-basico", "ordem": 3, "prerequisitos": ["01-modelo-relacional", "02-normalizacao"] },
+    { "slug": "04-sql-avancado", "ordem": 4, "prerequisitos": ["03-sql-basico"] },
+    { "slug": "05-indices", "ordem": 5, "prerequisitos": ["04-sql-avancado"] },
+    { "slug": "06-transacoes-acid", "ordem": 6, "prerequisitos": ["03-sql-basico"] },
+    { "slug": "07-jpa-hibernate", "ordem": 7, "prerequisitos": ["03-sql-basico", "06-transacoes-acid"] },
+    { "slug": "08-modelagem-pratica", "ordem": 8, "prerequisitos": ["01-modelo-relacional", "02-normalizacao", "03-sql-basico", "05-indices"] },
+    { "slug": "09-views-schemas", "ordem": 9, "prerequisitos": ["03-sql-basico"] },
+    { "slug": "10-triggers-auditoria", "ordem": 10, "prerequisitos": ["03-sql-basico", "06-transacoes-acid"] },
+    { "slug": "11-stored-procedures-functions", "ordem": 11, "prerequisitos": ["03-sql-basico"] },
+    { "slug": "12-especializacao-heranca", "ordem": 12, "prerequisitos": ["01-modelo-relacional", "07-jpa-hibernate", "08-modelagem-pratica"] },
+    { "slug": "13-banco-em-aplicacao-real", "ordem": 13, "prerequisitos": ["06-transacoes-acid", "07-jpa-hibernate"] }
+  ]
+}

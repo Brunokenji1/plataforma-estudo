@@ -1,0 +1,471 @@
+---
+titulo: "Dijkstra: O Algoritmo Que Nasceu Numa Cafeteria"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Edsger W. Dijkstra (1959), 'A note on two problems in connexion with graphs', Numerische Mathematik 1, pp. 269-271 — paper original, apenas 3 páginas"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 24 — Single-Source Shortest Paths"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 4.4 — Shortest Paths (Princeton)"
+  - "David Gries (Cornell, 2018), 'Edsger Dijkstra and the shortest-path algorithm' — fonte histórica sobre a invenção"
+  - "MIT OCW 6.006 (Spring 2020), Lectures 13-14 — Dijkstra, Erik Demaine"
+  - "Stanford CS 161 (2023) — Shortest paths lecture notes"
+  - "Richard Bellman (1958), 'On a routing problem', Quarterly of Applied Mathematics 16 — Bellman-Ford"
+  - "Lester Ford Jr. (1956), 'Network Flow Theory', RAND Corporation paper P-923"
+  - "Antti Laaksonen, Competitive Programmer's Handbook, Cap. 13"
+---
+
+## Vinte minutos numa mesa de café
+
+Era 1956. Edsger Wybe Dijkstra, então um jovem de 26 anos trabalhando no Mathematisch Centrum em Amsterdã, estava num dia de compras com a noiva Maria pela cidade. Cansados, sentaram numa cafeteria pra tomar um café. Enquanto Maria descansava, Dijkstra ficou pensando num problema que tinha aparecido recentemente no trabalho.
+
+O Mathematisch Centrum estava prestes a inaugurar um novo computador, o **ARMAC**. Pra demonstração pública, precisavam de um problema impressionante e visual — algo que mostrasse o poder do computador pra plateia leiga. Alguém sugeriu: **dado um mapa simplificado de 64 cidades da Holanda, qual o caminho mais curto entre duas cidades quaisquer?**
+
+Era um problema novo. Ninguém tinha um algoritmo eficiente publicado. Dijkstra ficou matutando enquanto bebia o café. Sem caneta. Sem papel. Sem computador. Sem nenhuma linguagem de programação de alto nível — em 1956, programar era em assembly direto na arquitetura da máquina.
+
+E ali, na sua cabeça, em **aproximadamente 20 minutos**, ele inventou o algoritmo que hoje carrega seu nome. Três anos depois, em 1959, finalmente publicou o paper na revista Numerische Mathematik. **Três páginas**, modestamente intitulado *"A note on two problems in connexion with graphs"* (uma nota sobre dois problemas relacionados a grafos). Esse paper viria a ser citado dezenas de milhares de vezes.
+
+A história está documentada em entrevista com Philip L. Frana (2001) e foi resgatada por David Gries num documento histórico da Cornell. As palavras do próprio Dijkstra: *"I designed it in about twenty minutes... it was a twenty-minute invention."*
+
+Hoje, esse algoritmo está em todo GPS que calcula sua rota, em todo roteador da internet rodando OSPF, em toda IA de jogo achando caminho num mapa, e em toda biblioteca de roteamento minimamente séria. Nesta lição você vai entender por que ele funciona, como implementar, e onde ele aparece em produção.
+
+---
+
+## O problema: SSSP
+
+**SSSP** (Single-Source Shortest Path): dado um grafo direcionado ou não-direcionado com **pesos** nas arestas, e um vértice **origem**, encontre a distância mais curta da origem até **todos os outros vértices**.
+
+Os pesos podem representar muitas coisas: distância em quilômetros, tempo em minutos, custo em reais, capacidade reservada de banda, latência de rede. O algoritmo é o mesmo — basta o que está sendo somado fazer sentido como soma.
+
+**Restrição importante**: o algoritmo de Dijkstra **só funciona com pesos não-negativos**. Pesos negativos exigem algoritmos diferentes (Bellman-Ford, Johnson). Vamos ver por quê mais adiante.
+
+---
+
+## Por que BFS não basta
+
+Na lição passada vimos que BFS encontra o caminho mais curto em grafos sem peso (ou onde todas arestas têm peso igual). Por que não estender pra grafos com pesos?
+
+A resposta está numa analogia. **Imagine ondas se espalhando na água.** Se você joga uma pedra num lago de profundidade uniforme, as ondas chegam a todos os pontos da margem aproximadamente na mesma velocidade — BFS funciona porque cada "salto" custa o mesmo.
+
+Mas e se o lago tem **profundidades diferentes**? Em águas rasas a onda viaja mais rápido, em águas fundas mais devagar. As ondas distorcem. A primeira a chegar num ponto não é necessariamente a que percorreu o menor número de saltos — é a que percorreu o menor **tempo total**.
+
+Esse é exatamente o problema que Dijkstra resolveu. BFS visita por **número de arestas**, mas com pesos você quer visitar por **soma de pesos**. A solução: **trocar a fila simples do BFS por uma fila de prioridade** (min-heap), onde o vértice de menor distância acumulada é sempre processado primeiro.
+
+<Insight>
+Essa observação é o coração de Dijkstra: **BFS com fila de prioridade vira Dijkstra**. A estrutura interna determina o algoritmo. Já vimos esse padrão antes: BFS + pilha vira DFS. Trocar fila por fila de prioridade muda o algoritmo de "visitar em ordem de saltos" pra "visitar em ordem de distância acumulada".
+</Insight>
+
+---
+
+## A intuição greedy
+
+Dijkstra é um algoritmo **greedy**: a cada passo, faz a escolha localmente ótima e nunca volta atrás. Especificamente:
+
+> A cada passo, escolha o vértice ainda não processado com a **menor distância conhecida**. Marque ele como "finalizado". Atualize as distâncias dos vizinhos dele.
+
+Por que isso funciona? Porque com **pesos não-negativos**, o vértice com menor distância conhecida **já tem sua distância final calculada** — qualquer caminho alternativo passaria por algum vértice com distância maior, e somar arestas não-negativas só pode aumentar o total.
+
+Esse argumento é a **prova de corretude** do Dijkstra. É exatamente onde pesos negativos quebram tudo: se uma aresta pode ter peso negativo, talvez chegar via um vértice "mais distante" e depois usar a aresta negativa dê total menor.
+
+---
+
+## A operação central: relaxamento
+
+Antes de ver o algoritmo completo, precisamos do conceito de **relaxamento de aresta**.
+
+Cada vértice tem uma **distância tentativa** — a menor distância conhecida até agora, começando com infinito (exceto a origem, que começa com 0).
+
+Relaxar uma aresta `(u, v)` com peso `w` significa: "se eu for de u até v passando por essa aresta, ficaria mais perto que minha distância atual até v?". Em pseudocódigo:
+
+```
+relaxar(u, v, w):
+    se dist[v] > dist[u] + w:
+        dist[v] = dist[u] + w
+        anterior[v] = u   // pra reconstruir o caminho depois
+```
+
+Toda a essência do Dijkstra é **relaxar arestas na ordem certa**. Greedy: sempre processa primeiro o vértice de menor distância tentativa, e relaxa todas as suas arestas de saída.
+
+---
+
+## O algoritmo passo a passo
+
+Dado o grafo abaixo com origem A:
+
+```
+        A
+       / \
+      4   2
+     /     \
+    B───1───C
+    |       |
+    5       8
+    |       |
+    D───2───E
+```
+
+**Estado inicial:**
+```
+dist[A] = 0
+dist[B] = ∞    dist[C] = ∞
+dist[D] = ∞    dist[E] = ∞
+```
+
+**Passo 1:** Escolhe A (menor dist = 0). Relaxa vizinhos: B via aresta de peso 4 → dist[B] = 4. C via aresta de peso 2 → dist[C] = 2.
+```
+dist[A] = 0 ✓
+dist[B] = 4    dist[C] = 2
+dist[D] = ∞    dist[E] = ∞
+```
+
+**Passo 2:** Escolhe C (menor dist não finalizada = 2). Relaxa: B via C (custo 2+1=3, menor que 4) → dist[B] = 3. E via C (custo 2+8=10) → dist[E] = 10.
+```
+dist[A] = 0 ✓
+dist[B] = 3    dist[C] = 2 ✓
+dist[D] = ∞    dist[E] = 10
+```
+
+**Passo 3:** Escolhe B (dist = 3). Relaxa: D via B (custo 3+5=8) → dist[D] = 8.
+```
+dist[A] = 0 ✓
+dist[B] = 3 ✓  dist[C] = 2 ✓
+dist[D] = 8    dist[E] = 10
+```
+
+**Passo 4:** Escolhe D (dist = 8). Relaxa: E via D (custo 8+2=10, igual a já registrado, não atualiza).
+```
+dist[A] = 0 ✓
+dist[B] = 3 ✓  dist[C] = 2 ✓
+dist[D] = 8 ✓  dist[E] = 10
+```
+
+**Passo 5:** Escolhe E (dist = 10). Sem vizinhos não-finalizados. Termina.
+
+**Resultado final:** A=0, C=2, B=3, D=8, E=10. Caminho ótimo de A até E é A → C → B → D → E com custo 10.
+
+---
+
+## Implementação naive O(V²)
+
+A versão original do Dijkstra de 1959 era essa — sem heap. A cada iteração, varre todos os vértices não-finalizados pra achar o de menor distância.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+// Dijkstra naive O(V²) — sem heap
+// Bom para grafos densos (V² é comparável a E)
+public static int[] dijkstraNaive(List<List<int[]>> adj, int origem) {
+    int n = adj.size();
+    int[] dist = new int[n];
+    boolean[] finalizado = new boolean[n];
+    Arrays.fill(dist, Integer.MAX_VALUE);
+    dist[origem] = 0;
+
+    for (int iter = 0; iter < n; iter++) {
+        // Acha o vértice não-finalizado com menor dist
+        int u = -1;
+        int menorDist = Integer.MAX_VALUE;
+        for (int v = 0; v < n; v++) {
+            if (!finalizado[v] && dist[v] < menorDist) {
+                menorDist = dist[v];
+                u = v;
+            }
+        }
+        if (u == -1) break;  // todos não-alcançáveis terminaram
+
+        finalizado[u] = true;
+
+        // Relaxa todas as arestas saindo de u
+        for (int[] aresta : adj.get(u)) {
+            int v = aresta[0];
+            int peso = aresta[1];
+            if (!finalizado[v] && dist[u] + peso < dist[v]) {
+                dist[v] = dist[u] + peso;
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <climits>
+
+// Dijkstra naive O(V²) — sem heap
+std::vector<int> dijkstraNaive(const std::vector<std::vector<std::pair<int,int>>>& adj, int origem) {
+    int n = adj.size();
+    std::vector<int> dist(n, INT_MAX);
+    std::vector<bool> finalizado(n, false);
+    dist[origem] = 0;
+
+    for (int iter = 0; iter < n; iter++) {
+        int u = -1;
+        int menorDist = INT_MAX;
+        for (int v = 0; v < n; v++) {
+            if (!finalizado[v] && dist[v] < menorDist) {
+                menorDist = dist[v];
+                u = v;
+            }
+        }
+        if (u == -1) break;
+
+        finalizado[u] = true;
+
+        for (auto [v, peso] : adj[u]) {
+            if (!finalizado[v] && dist[u] + peso < dist[v]) {
+                dist[v] = dist[u] + peso;
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V²). A cada uma das V iterações, gasta O(V) pra encontrar o próximo vértice + O(grau) pra relaxar arestas. Soma O(V²) no total. Bom pra grafos **densos** (E próximo de V²), ruim pra grafos esparsos.
+
+---
+
+## Implementação com min-heap O((V+E) log V)
+
+Pra acelerar a "busca pelo próximo vértice de menor distância", trocamos a varredura linear por uma **min-heap**. É o que vimos na lição de Heap: estrutura ótima pra "qual o próximo de menor valor".
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+// Dijkstra com min-heap O((V+E) log V) — padrão pra grafos esparsos
+public static int[] dijkstra(List<List<int[]>> adj, int origem) {
+    int n = adj.size();
+    int[] dist = new int[n];
+    Arrays.fill(dist, Integer.MAX_VALUE);
+    dist[origem] = 0;
+
+    // PriorityQueue de pares (distância, vértice). Java usa min-heap por padrão.
+    PriorityQueue<int[]> heap = new PriorityQueue<>((a, b) -> Integer.compare(a[0], b[0]));
+    heap.offer(new int[]{0, origem});
+
+    while (!heap.isEmpty()) {
+        int[] atual = heap.poll();
+        int d = atual[0];
+        int u = atual[1];
+
+        // Entrada obsoleta: já achamos caminho melhor depois de inserir
+        if (d > dist[u]) continue;
+
+        for (int[] aresta : adj.get(u)) {
+            int v = aresta[0];
+            int peso = aresta[1];
+            int novoDist = dist[u] + peso;
+            if (novoDist < dist[v]) {
+                dist[v] = novoDist;
+                heap.offer(new int[]{novoDist, v});
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <queue>
+#include <climits>
+
+// Dijkstra com min-heap O((V+E) log V)
+std::vector<int> dijkstra(const std::vector<std::vector<std::pair<int,int>>>& adj, int origem) {
+    int n = adj.size();
+    std::vector<int> dist(n, INT_MAX);
+    dist[origem] = 0;
+
+    // priority_queue em C++ é max-heap por padrão.
+    // Usar std::greater pra obter MIN-heap. Pares (distância, vértice).
+    std::priority_queue<std::pair<int,int>,
+                        std::vector<std::pair<int,int>>,
+                        std::greater<>> heap;
+    heap.push({0, origem});
+
+    while (!heap.empty()) {
+        auto [d, u] = heap.top();
+        heap.pop();
+
+        if (d > dist[u]) continue;  // entrada obsoleta
+
+        for (auto [v, peso] : adj[u]) {
+            int novoDist = dist[u] + peso;
+            if (novoDist < dist[v]) {
+                dist[v] = novoDist;
+                heap.push({novoDist, v});
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+</CodeSwap>
+
+<Aviso>
+**O truque das entradas obsoletas**: nessa implementação não usamos a operação `decrease-key` da heap (que seria a forma "teórica" de Dijkstra). Em vez disso, **inserimos uma nova entrada** toda vez que uma distância melhora. Quando tiramos da heap, **checamos se a distância tirada ainda é a melhor conhecida** — se não for, é uma entrada obsoleta e ignoramos. É mais simples de implementar (heap padrão não suporta decrease-key eficiente) e tem a mesma complexidade assintótica.
+</Aviso>
+
+**Complexidade**: O((V + E) log V). Cada vértice é inserido na heap no máximo uma vez por aresta que chega nele, então no máximo E inserções. Cada inserção/extração custa O(log V). Total: O((V + E) log V). Pra **grafos esparsos** (E muito menor que V²), isso vence claramente a versão O(V²).
+
+<ComplexidadeBox melhor="O((V+E) log V)" media="O((V+E) log V)" pior="O((V+E) log V)" />
+
+---
+
+## Por que pesos negativos quebram tudo
+
+Considere o seguinte grafo, com peso negativo na aresta B → C:
+
+```
+       A
+      / \
+     1   4
+    /     \
+   B───-3──C
+```
+
+Distância correta de A até C: pelo caminho A→B→C, custa 1 + (-3) = -2. Caminho direto A→C custa 4. Distância correta é **-2**.
+
+O que Dijkstra faz:
+
+1. Tira A da heap. Relaxa B (dist=1), C (dist=4).
+2. Tira B da heap (menor dist=1). Marca como **finalizado**. Relaxa C: 1 + (-3) = -2, menor que 4. dist[C] = -2.
+3. Tira C da heap (dist=-2). Tudo OK até aqui? **Não.** O problema é mais sutil — vamos imaginar um exemplo onde dá errado.
+
+Considere agora:
+
+```
+       A
+      / \
+     1   2
+    /     \
+   B───-5──C
+```
+
+Distância correta de A até B: caminho A→C→B, custa 2 + (-5) = -3. Mas dist direta A→B é 1.
+
+1. Tira A. Relaxa B (dist=1), C (dist=2).
+2. Tira B (menor dist=1). **Finaliza B com dist=1.** Mas a resposta correta era -3!
+3. Tira C (dist=2). Relaxa B via C: 2 + (-5) = -3, menor que 1. Mas B já foi **finalizado** — Dijkstra ignora ou produz resultado inconsistente dependendo da implementação.
+
+A premissa **"o vértice de menor distância tentativa já tem a distância final"** quebra com pesos negativos. Pra esses casos, precisa de outros algoritmos:
+
+- **Bellman-Ford** (Richard Bellman, 1958 + Lester Ford Jr., 1956): O(V·E), aceita pesos negativos, detecta ciclos negativos.
+- **Floyd-Warshall**: O(V³), all-pairs shortest paths, aceita pesos negativos sem ciclos negativos.
+- **Johnson**: combinação Bellman-Ford + Dijkstra pra all-pairs com pesos negativos.
+
+Esses são tópicos pra próximas lições.
+
+---
+
+## Reconstruindo o caminho
+
+Até aqui calculamos só as distâncias. E o caminho em si? A solução é simples: durante o relaxamento, **guarda quem foi o predecessor** do vértice atualizado.
+
+```java
+int[] anterior = new int[n];
+Arrays.fill(anterior, -1);
+// ... no relaxamento:
+if (novoDist < dist[v]) {
+    dist[v] = novoDist;
+    anterior[v] = u;             // u é o pai de v no caminho mais curto
+    heap.offer(new int[]{novoDist, v});
+}
+```
+
+Depois, pra reconstruir o caminho até um destino `d`, basta caminhar de volta seguindo `anterior` até a origem:
+
+```java
+List<Integer> reconstruirCaminho(int[] anterior, int destino) {
+    List<Integer> caminho = new ArrayList<>();
+    for (int v = destino; v != -1; v = anterior[v]) {
+        caminho.add(v);
+    }
+    Collections.reverse(caminho);
+    return caminho;
+}
+```
+
+Esse mesmo padrão (registrar predecessores durante a busca) vale pra BFS, DFS, A* — qualquer travessia onde você quer não só a distância mas o trajeto.
+
+---
+
+## Aplicações em produção
+
+Dijkstra é um dos algoritmos mais usados do mundo. Onde ele aparece:
+
+### GPS e navegação
+
+Todo aplicativo de mapas (Google Maps, Waze, Apple Maps) calcula rotas usando variantes de Dijkstra. Os pesos das arestas são **tempos de viagem**, ajustados em tempo real por tráfego. A escala é gigantesca: o grafo de ruas dos EUA tem dezenas de milhões de nós. Dijkstra puro seria lento — produção usa **otimizações** como hierarchical routing, contraction hierarchies, e A* com heurísticas geográficas. Mas o esqueleto é Dijkstra.
+
+### Roteamento de redes (OSPF)
+
+**OSPF** (Open Shortest Path First) é um dos protocolos mais usados pra roteamento dentro de redes corporativas e provedores de internet. Cada roteador mantém um grafo da rede e roda Dijkstra periodicamente pra decidir por onde enviar pacotes. Os pesos representam **custo** (que pode incluir largura de banda, latência, política administrativa).
+
+### IA em jogos
+
+Personagens controlados por computador que precisam atravessar mapas, fugir de inimigos, encontrar tesouros — todos usam Dijkstra (ou A*, sua variante com heurística). Em jogos modernos, isso roda **dezenas de vezes por segundo** pra cada NPC.
+
+### Logística e operações
+
+Roteamento de entregas (Amazon, iFood, Uber), planejamento de voos, gestão de tráfego portuário — todos modelados como variantes de SSSP. Os pesos podem ser tempo, custo combustível, ou outras métricas operacionais.
+
+### Bioinformática
+
+Comparação de sequências de DNA usa programação dinâmica que pode ser modelada como caminho mais curto num grafo. Pesos representam custos de mutação, inserção, deleção.
+
+### Compiladores
+
+Otimizadores de compiladores usam grafos de fluxo de dados com pesos representando custos estimados. Encontrar a sequência de transformações mais barata pode ser modelado como SSSP.
+
+---
+
+## A*: Dijkstra com heurística
+
+Vale uma menção rápida ao **A*** (lê-se "A-estrela"), criado em 1968 por Hart, Nilsson, e Raphael. É uma extensão direta de Dijkstra com uma adição esperta.
+
+Em Dijkstra, a heap ordena vértices pela distância conhecida `g(v)` — quanto já foi gasto pra chegar em v. A* ordena por `f(v) = g(v) + h(v)`, onde `h(v)` é uma **heurística** — estimativa da distância restante de v até o destino.
+
+Se a heurística é **admissível** (nunca superestima a distância real), A* encontra o caminho ótimo **mais rápido** que Dijkstra puro. Em mapas geográficos, a heurística natural é a **distância em linha reta** (Euclidiana ou Haversine pra latitude/longitude). Em grades, a **distância Manhattan**.
+
+A* é o algoritmo padrão em pathfinding de jogos. Em vez de explorar todas as direções (Dijkstra), A* concentra a busca na direção do alvo. Pra mesma resposta, examina muito menos vértices.
+
+---
+
+## Recap
+
+**Dijkstra**, inventado em ~20 minutos por Edsger W. Dijkstra em 1956 numa cafeteria em Amsterdã (publicado em 1959 em apenas 3 páginas), resolve **Single-Source Shortest Path** em grafos com pesos **não-negativos**.
+
+A ideia central: **greedy** — a cada passo, escolher o vértice ainda não finalizado com a menor distância conhecida, e **relaxar** suas arestas de saída. Com pesos não-negativos, o vértice escolhido já tem distância final correta — qualquer alternativa só pode aumentar o custo.
+
+Implementação **naive**: O(V²), boa pra grafos densos. Implementação com **min-heap**: O((V+E) log V), padrão pra grafos esparsos. Use a versão com heap em quase todos os casos práticos.
+
+**BFS não funciona** com pesos diferentes porque visita por número de arestas, não por soma. Dijkstra é BFS com **fila de prioridade** — trocar a estrutura interna muda o algoritmo.
+
+**Pesos negativos quebram Dijkstra**. Use **Bellman-Ford** (O(V·E), detecta ciclos negativos) ou **Floyd-Warshall** (O(V³), all-pairs) nesses casos.
+
+Pra reconstruir o caminho, basta registrar **predecessores** durante o relaxamento e caminhar de volta a partir do destino.
+
+**A*** estende Dijkstra com uma heurística, focando a busca na direção do alvo. Padrão em pathfinding de jogos e GPS.
+
+Onde Dijkstra aparece em produção: **GPS, OSPF, IA de jogos, logística, bioinformática, compiladores**. Provavelmente roda bilhões de vezes por dia no planeta.
+
+Próxima lição: **Programação Dinâmica** — uma das técnicas mais poderosas e mais temidas em algoritmos, que aparece tanto em otimização clássica quanto em IA moderna.

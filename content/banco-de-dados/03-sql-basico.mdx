@@ -1,0 +1,691 @@
+---
+titulo: "SQL Básico: DDL, DML, JOINs e GROUP BY na Prática"
+trilha: "banco-de-dados"
+duracaoMin: 70
+dificuldade: "iniciante"
+referencias:
+  - "Donald D. Chamberlin, Raymond F. Boyce (1974), 'SEQUEL: A Structured English Query Language', Proc. ACM SIGFIDET Workshop on Data Description, Access and Control — paper fundador do SQL"
+  - "ANSI X3.135-1986 — primeiro padrão SQL formal (SQL-86)"
+  - "ISO 9075:1987 — padrão internacional SQL"
+  - "ISO/IEC 9075:2023 — versão atual do padrão SQL"
+  - "Edgar F. Codd (1972), 'Relational Completeness of Data Base Sublanguages' — definição formal da álgebra relacional que fundamenta JOIN, SELECT, PROJECT"
+  - "PostgreSQL Documentation — https://www.postgresql.org/docs/current/sql.html"
+  - "MySQL 8.0 Reference Manual — https://dev.mysql.com/doc/refman/8.0/en/"
+  - "Joe Celko, 'SQL for Smarties: Advanced SQL Programming', 5ª ed., Morgan Kaufmann 2014"
+  - "C. J. Date, 'SQL and Relational Theory', 3ª ed., O'Reilly 2015"
+  - "Stanford CS 145 — Introduction to Databases (SQL portion)"
+---
+
+## Por que SQL ainda manda em 2026, 50 anos depois
+
+Em **1974**, **Donald D. Chamberlin** e **Raymond F. Boyce** (lembra deles? Boyce morreu aos 26 antes do paper de BCNF sair) publicaram no SIGFIDET workshop o paper *"SEQUEL: A Structured English Query Language"*. A ideia era radical: substituir as **APIs procedurais** dos modelos hierárquico e em rede ("vá ao registro X, siga o ponteiro Y, pegue o filho Z") por uma linguagem **declarativa** onde você diz **o que quer**, não **como buscar**.
+
+```sql
+SELECT nome, salario
+FROM funcionario
+WHERE departamento = 'Engenharia'
+ORDER BY salario DESC;
+```
+
+Compara isso com o equivalente em CODASYL dos anos 70 — 30+ linhas de chamadas FIND, GET, OBTAIN com cursors manuais. **Diferença gritante**.
+
+A IBM teve que renomear SEQUEL pra **SQL** por questão de marca (uma empresa britânica de aviação, Hawker Siddeley, tinha "SEQUEL" registrado). Em **junho de 1979**, **Oracle V2** virou o primeiro RDBMS comercial implementando SQL — 2 anos antes da IBM lançar o próprio. Em **1986**, ANSI formalizou o padrão como **ANSI X3.135-1986** (SQL-86); em **1987**, ISO publicou idêntico como **ISO 9075:1987**.
+
+Desde então, SQL **dominou o mundo da computação**. Versão atual: **ISO/IEC 9075:2023**. A linguagem evolui (window functions em 2003, recursive CTEs em 1999, JSON em 2016), mas o **core que você vai aprender nesta lição é praticamente idêntico ao de 1986**. Aprenda agora, use por décadas.
+
+Esta lição cobre o ferramental do dia-a-dia em SQL:
+
+1. **DDL** — `CREATE`, `ALTER`, `DROP` (definição do schema)
+2. **DML** — `INSERT`, `UPDATE`, `DELETE` (manipulação de dados)
+3. **SELECT** completo — `WHERE`, `ORDER BY`, `LIMIT`, `DISTINCT`
+4. **JOINs** — INNER, LEFT, RIGHT, FULL (a parte que mais confunde iniciante)
+5. **Agregação** — `GROUP BY`, `HAVING`, funções agregadas
+6. **Subqueries** básicas
+
+Tudo com exemplos práticos usando as tabelas que **a gente normalizou na lição passada** (Aluno, Disciplina, Matricula, Departamento). No fim, você consegue ler 95% do SQL que vai ver em código Spring Boot, dashboards corporativos, ou interview question.
+
+---
+
+## Setup: as tabelas que a gente vai usar
+
+Pra evitar confusão, vamos fixar **um schema** que será usado em toda a lição. Esse é o resultado de normalizar a Lição 2:
+
+```sql
+CREATE TABLE Departamento (
+    id              SERIAL PRIMARY KEY,
+    nome            VARCHAR(50) NOT NULL UNIQUE,
+    localizacao     VARCHAR(100)
+);
+
+CREATE TABLE Aluno (
+    id              SERIAL PRIMARY KEY,
+    nome            VARCHAR(100) NOT NULL,
+    email           VARCHAR(100) UNIQUE,
+    curso           VARCHAR(50),
+    semestre        INTEGER CHECK (semestre BETWEEN 1 AND 10),
+    departamento_id INTEGER REFERENCES Departamento(id)
+);
+
+CREATE TABLE Disciplina (
+    id              SERIAL PRIMARY KEY,
+    nome            VARCHAR(100) NOT NULL,
+    carga_horaria   INTEGER NOT NULL,
+    departamento_id INTEGER REFERENCES Departamento(id)
+);
+
+CREATE TABLE Matricula (
+    aluno_id        INTEGER REFERENCES Aluno(id),
+    disciplina_id   INTEGER REFERENCES Disciplina(id),
+    nota            DECIMAL(4,2),
+    data_matricula  DATE DEFAULT CURRENT_DATE,
+    PRIMARY KEY (aluno_id, disciplina_id)
+);
+```
+
+Esse SQL acima já demonstra **vários conceitos de DDL** que vamos detalhar agora.
+
+---
+
+## DDL: definindo a estrutura
+
+**DDL** = **Data Definition Language**. Os 3 comandos centrais:
+
+- `CREATE` — cria objetos (tabela, índice, view, etc.)
+- `ALTER` — modifica objetos existentes
+- `DROP` — destrói objetos
+
+### CREATE TABLE — tipos de dados comuns
+
+| Categoria | Tipos (PostgreSQL) | Quando usar |
+|---|---|---|
+| Inteiros | `SMALLINT`, `INTEGER`, `BIGINT`, `SERIAL` | IDs, contadores, semestres |
+| Decimais | `DECIMAL(p,s)`, `NUMERIC(p,s)`, `REAL` | Dinheiro, notas, medidas |
+| Texto | `VARCHAR(n)`, `TEXT`, `CHAR(n)` | Nomes, descrições, código |
+| Data/hora | `DATE`, `TIMESTAMP`, `TIMESTAMPTZ` | Datas, eventos, timestamps |
+| Booleano | `BOOLEAN` | Flags |
+| JSON | `JSON`, `JSONB` (PostgreSQL) | Dados semi-estruturados |
+| UUID | `UUID` | IDs distribuídos |
+
+**Dica prática**: em Spring Boot, use `BIGSERIAL` (= `BIGINT auto-increment`) pra PKs surrogate, exceto se houver razão pra usar `UUID` (sistemas distribuídos, IDs públicos que não vazam contagem).
+
+### Constraints (restrições)
+
+Restrições garantem **integridade dos dados**. As principais:
+
+```sql
+CREATE TABLE Funcionario (
+    id              SERIAL PRIMARY KEY,                    -- PK
+    cpf             VARCHAR(11) UNIQUE NOT NULL,           -- único e obrigatório
+    nome            VARCHAR(100) NOT NULL,                  -- obrigatório
+    salario         DECIMAL(10,2) CHECK (salario > 0),     -- validação custom
+    idade           INTEGER CHECK (idade >= 18 AND idade <= 100),
+    departamento_id INTEGER REFERENCES Departamento(id)    -- FK
+        ON DELETE SET NULL                                  -- se deptar depto, vira NULL
+        ON UPDATE CASCADE,                                  -- se mudar id depto, atualiza aqui
+    criado_em       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,    -- valor padrão
+    UNIQUE (nome, idade)                                    -- constraint composta
+);
+```
+
+As constraints são checadas em **toda operação** (INSERT, UPDATE) e **falham com erro** se violadas. Isso é uma das **garantias fundamentais** que SQL oferece sobre NoSQL.
+
+### ALTER TABLE — modificando depois
+
+```sql
+-- Adicionar coluna nova
+ALTER TABLE Aluno ADD COLUMN telefone VARCHAR(20);
+
+-- Remover coluna
+ALTER TABLE Aluno DROP COLUMN telefone;
+
+-- Renomear coluna
+ALTER TABLE Aluno RENAME COLUMN nome TO nome_completo;
+
+-- Modificar tipo
+ALTER TABLE Aluno ALTER COLUMN email TYPE VARCHAR(150);
+
+-- Adicionar constraint
+ALTER TABLE Aluno ADD CONSTRAINT chk_semestre CHECK (semestre > 0);
+
+-- Adicionar FK depois de criar
+ALTER TABLE Aluno ADD CONSTRAINT fk_dept
+    FOREIGN KEY (departamento_id) REFERENCES Departamento(id);
+```
+
+**Cuidado em produção**: alguns ALTERs **bloqueiam a tabela** durante a operação. Em tabelas grandes, isso pode causar downtime. Use ferramentas como `pg_repack` (PostgreSQL) ou `pt-online-schema-change` (MySQL) pra migrations sem downtime.
+
+### DROP — destruindo objetos
+
+```sql
+DROP TABLE Aluno;                       -- só se nenhuma tabela depender via FK
+DROP TABLE Aluno CASCADE;               -- remove também as dependências (CUIDADO)
+DROP TABLE IF EXISTS Aluno;             -- não falha se não existir
+```
+
+**Regra de ouro**: `DROP` é **irreversível**. Em produção, sempre faça backup antes. Algumas empresas exigem aprovação dupla pra rodar `DROP` em prod.
+
+---
+
+## DML: manipulando dados
+
+**DML** = **Data Manipulation Language**. Quatro comandos:
+
+- `INSERT` — adiciona linhas
+- `UPDATE` — modifica linhas
+- `DELETE` — remove linhas
+- `SELECT` — consulta (cobre seção própria abaixo)
+
+### INSERT
+
+```sql
+-- Forma completa (especifica todas as colunas)
+INSERT INTO Departamento (id, nome, localizacao)
+VALUES (10, 'TI', 'Cruzeiro');
+
+-- Omite id se for SERIAL (auto-gera)
+INSERT INTO Departamento (nome, localizacao)
+VALUES ('Jurídico', 'Lorena');
+
+-- Múltiplas linhas de uma vez (muito mais rápido que vários INSERTs)
+INSERT INTO Aluno (nome, email, curso, semestre, departamento_id) VALUES
+    ('Bruno Kenji', 'bruno@email.com', 'ADS', 4, 10),
+    ('Murilo Silva', 'murilo@email.com', 'ADS', 4, 10),
+    ('Erika Costa', 'erika@email.com', 'Direito', 7, 20),
+    ('Pedro Chaves', 'pedro@email.com', 'ADS', 3, 10);
+
+-- INSERT a partir de SELECT (cópia de dados)
+INSERT INTO HistoricoAluno (aluno_id, nome, data_evento)
+SELECT id, nome, CURRENT_DATE FROM Aluno WHERE semestre = 10;
+```
+
+**Detalhe importante** — UPSERT (insert ou update se já existir):
+
+```sql
+-- PostgreSQL: ON CONFLICT
+INSERT INTO Aluno (id, nome, email)
+VALUES (1, 'Bruno Kenji', 'bruno.novo@email.com')
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+
+-- MySQL: ON DUPLICATE KEY UPDATE
+INSERT INTO Aluno (id, nome, email)
+VALUES (1, 'Bruno Kenji', 'bruno.novo@email.com')
+ON DUPLICATE KEY UPDATE email = VALUES(email);
+
+-- SQL padrão (mais novo): MERGE — suportado em PostgreSQL 15+, SQL Server, Oracle
+MERGE INTO Aluno t
+USING (VALUES (1, 'Bruno Kenji', 'bruno.novo@email.com')) AS s(id, nome, email)
+ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET email = s.email
+WHEN NOT MATCHED THEN INSERT (id, nome, email) VALUES (s.id, s.nome, s.email);
+```
+
+### UPDATE
+
+```sql
+-- Atualizar uma coluna em todas as linhas (RARO, geralmente perigoso)
+UPDATE Aluno SET semestre = semestre + 1;
+
+-- Atualizar com filtro (caso comum)
+UPDATE Aluno
+SET semestre = semestre + 1
+WHERE curso = 'ADS' AND semestre < 10;
+
+-- Atualizar múltiplas colunas
+UPDATE Aluno
+SET email = 'novo@email.com', curso = 'Ciência da Computação'
+WHERE id = 1;
+
+-- UPDATE com JOIN (sintaxe PostgreSQL/MySQL)
+UPDATE Matricula m
+SET nota = nota + 0.5
+FROM Aluno a
+WHERE m.aluno_id = a.id AND a.curso = 'ADS';
+```
+
+<Aviso>
+**ATENÇÃO**: `UPDATE` ou `DELETE` SEM `WHERE` afeta **todas as linhas da tabela**. Bug clássico de produção: rodou `UPDATE Aluno SET semestre = 1;` sem WHERE e zerou semestre de todos os alunos. Sempre rode `SELECT` com o mesmo WHERE primeiro pra confirmar o conjunto afetado. Muitos clientes SQL (DBeaver, DataGrip) têm "safe update mode" que bloqueia UPDATE/DELETE sem WHERE — **deixe ligado em produção**.
+</Aviso>
+
+### DELETE
+
+```sql
+-- Deletar com filtro (caso comum)
+DELETE FROM Aluno WHERE semestre > 10;
+
+-- Deletar tudo (mantém estrutura da tabela)
+DELETE FROM Aluno;
+
+-- TRUNCATE — mais rápido que DELETE all, mas não pode usar com FK ativa
+TRUNCATE TABLE Aluno;
+```
+
+`TRUNCATE` vs `DELETE all`:
+- `DELETE` é **transacional**, **dispara triggers**, **registra em WAL** (write-ahead log). Pode dar rollback.
+- `TRUNCATE` é **muito mais rápido** (não loga linha-a-linha), mas geralmente **não dá rollback** e pode não disparar triggers. Bom pra limpeza de tabelas temporárias/staging.
+
+---
+
+## SELECT: o coração do SQL
+
+Aqui que 90% do tempo de SQL é gasto. Estrutura completa:
+
+```sql
+SELECT      [DISTINCT] coluna1, coluna2, expressao, ...
+FROM        tabela1
+JOIN        tabela2 ON condição
+WHERE       condição_filtro
+GROUP BY    colunas_agrupamento
+HAVING      condição_pós_agrupamento
+ORDER BY    coluna [ASC|DESC]
+LIMIT       n
+OFFSET      m;
+```
+
+**Ordem de execução LÓGICA** (importante saber pra entender erros):
+
+1. `FROM` + `JOIN` — monta o conjunto inicial
+2. `WHERE` — filtra linhas
+3. `GROUP BY` — agrupa
+4. `HAVING` — filtra grupos
+5. `SELECT` — projeta colunas
+6. `DISTINCT` — remove duplicatas
+7. `ORDER BY` — ordena
+8. `LIMIT` / `OFFSET` — pagina
+
+Por isso você **não pode usar alias do SELECT no WHERE** (WHERE executa antes), mas **pode no ORDER BY** (executa depois).
+
+### SELECT simples + WHERE
+
+```sql
+-- Todas as colunas
+SELECT * FROM Aluno;
+
+-- Colunas específicas (sempre prefira sobre * em produção)
+SELECT nome, email FROM Aluno;
+
+-- Com filtro
+SELECT nome FROM Aluno WHERE curso = 'ADS';
+
+-- Múltiplas condições
+SELECT nome FROM Aluno WHERE curso = 'ADS' AND semestre >= 4;
+
+-- Operadores de comparação
+SELECT * FROM Aluno WHERE semestre BETWEEN 3 AND 5;
+SELECT * FROM Aluno WHERE curso IN ('ADS', 'Ciência da Computação');
+SELECT * FROM Aluno WHERE nome LIKE 'B%';                    -- começa com B
+SELECT * FROM Aluno WHERE nome ILIKE '%silva%';              -- contém "silva" (case-insensitive em PostgreSQL)
+SELECT * FROM Aluno WHERE email IS NULL;                     -- NUNCA use = NULL — sempre IS NULL
+SELECT * FROM Aluno WHERE email IS NOT NULL;
+```
+
+<Insight>
+**NULL é o vilão silencioso do SQL**. Comparações com NULL retornam **UNKNOWN** (tri-state logic), não TRUE nem FALSE. `WHERE coluna = NULL` nunca retorna nada — use `IS NULL`. Operações aritméticas com NULL viram NULL (`5 + NULL = NULL`). Strings concatenadas com NULL viram NULL em alguns SGBDs. Pra agregações: `SUM(coluna)` ignora NULL; `COUNT(*)` conta todas as linhas; `COUNT(coluna)` ignora NULLs. Esses detalhes geram bugs sutis em produção. Quando puder, **declare colunas como `NOT NULL`** — evita classe inteira de bugs.
+</Insight>
+
+### ORDER BY, LIMIT, DISTINCT
+
+```sql
+-- Ordenação ascendente (default) e descendente
+SELECT nome, semestre FROM Aluno ORDER BY semestre DESC;
+
+-- Múltiplas colunas
+SELECT * FROM Aluno ORDER BY curso ASC, semestre DESC;
+
+-- Paginação
+SELECT * FROM Aluno ORDER BY id LIMIT 10 OFFSET 20;   -- página 3 de 10 em 10
+
+-- DISTINCT — remove duplicatas
+SELECT DISTINCT curso FROM Aluno;                       -- lista cursos únicos
+SELECT DISTINCT curso, semestre FROM Aluno;             -- combinações únicas
+```
+
+---
+
+## JOINs: a operação mais importante (e mal compreendida)
+
+Lembra das lições anteriores — normalizamos pra eliminar redundância, dados foram separados em várias tabelas. **JOINs** são como você **recombina esses dados pra consultas**.
+
+O JOIN é baseado na **álgebra relacional de Codd (1972)** — operação que combina duas relações usando uma condição. Existem variantes:
+
+<svg width="100%" viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Quatro tipos principais de JOIN visualizados como diagramas de Venn</title>
+<desc>Diagramas mostrando INNER JOIN (interseção), LEFT JOIN (esquerda + interseção), RIGHT JOIN (interseção + direita), e FULL JOIN (união completa)</desc>
+
+<g fontFamily="sans-serif" fontSize="13" textAnchor="middle">
+
+<g transform="translate(80, 40)">
+<circle cx="35" cy="60" r="40" fill="#888888" fillOpacity="0.3" stroke="#7F77DD" strokeWidth="2"/>
+<circle cx="85" cy="60" r="40" fill="#888888" fillOpacity="0.3" stroke="#7F77DD" strokeWidth="2"/>
+<path d="M 60 30 A 40 40 0 0 1 60 90 A 40 40 0 0 1 60 30 Z" fill="#7F77DD" fillOpacity="0.8"/>
+<text x="60" y="140" fill="#cccccc" fontWeight="bold">INNER JOIN</text>
+<text x="60" y="158" fill="#888888" fontSize="11">só a interseção</text>
+<text x="20" y="180" fill="#888888" fontSize="10">A</text>
+<text x="100" y="180" fill="#888888" fontSize="10">B</text>
+</g>
+
+<g transform="translate(240, 40)">
+<path d="M 35 20 A 40 40 0 1 1 35 100 A 40 40 0 0 1 60 90 A 40 40 0 0 1 60 30 A 40 40 0 0 1 35 20 Z" fill="#7F77DD" fillOpacity="0.8" stroke="#7F77DD" strokeWidth="2"/>
+<circle cx="85" cy="60" r="40" fill="#888888" fillOpacity="0.3" stroke="#7F77DD" strokeWidth="2"/>
+<text x="60" y="140" fill="#cccccc" fontWeight="bold">LEFT JOIN</text>
+<text x="60" y="158" fill="#888888" fontSize="11">A toda + match em B</text>
+<text x="20" y="180" fill="#888888" fontSize="10">A</text>
+<text x="100" y="180" fill="#888888" fontSize="10">B</text>
+</g>
+
+<g transform="translate(400, 40)">
+<circle cx="35" cy="60" r="40" fill="#888888" fillOpacity="0.3" stroke="#7F77DD" strokeWidth="2"/>
+<path d="M 85 20 A 40 40 0 1 1 85 100 A 40 40 0 0 1 60 90 A 40 40 0 0 1 60 30 A 40 40 0 0 1 85 20 Z" fill="#7F77DD" fillOpacity="0.8" stroke="#7F77DD" strokeWidth="2"/>
+<text x="60" y="140" fill="#cccccc" fontWeight="bold">RIGHT JOIN</text>
+<text x="60" y="158" fill="#888888" fontSize="11">match em A + B toda</text>
+<text x="20" y="180" fill="#888888" fontSize="10">A</text>
+<text x="100" y="180" fill="#888888" fontSize="10">B</text>
+</g>
+
+<g transform="translate(560, 40)">
+<circle cx="35" cy="60" r="40" fill="#7F77DD" fillOpacity="0.8" stroke="#7F77DD" strokeWidth="2"/>
+<circle cx="85" cy="60" r="40" fill="#7F77DD" fillOpacity="0.8" stroke="#7F77DD" strokeWidth="2"/>
+<text x="60" y="140" fill="#cccccc" fontWeight="bold">FULL JOIN</text>
+<text x="60" y="158" fill="#888888" fontSize="11">tudo (A ∪ B)</text>
+<text x="20" y="180" fill="#888888" fontSize="10">A</text>
+<text x="100" y="180" fill="#888888" fontSize="10">B</text>
+</g>
+
+</g>
+
+<text x="350" y="260" fontFamily="sans-serif" fontSize="12" fill="#888888" textAnchor="middle">Linhas SEM match aparecem com NULL nas colunas da outra tabela (em LEFT, RIGHT e FULL)</text>
+</svg>
+
+### INNER JOIN — só com match em ambos os lados
+
+O JOIN clássico. Retorna apenas linhas onde **existe correspondência** nos dois lados.
+
+```sql
+-- Quem está matriculado em quê (com dados das duas tabelas)
+SELECT a.nome AS aluno, d.nome AS disciplina, m.nota
+FROM Matricula m
+INNER JOIN Aluno a ON m.aluno_id = a.id
+INNER JOIN Disciplina d ON m.disciplina_id = d.id
+ORDER BY a.nome, d.nome;
+```
+
+**Resultado** (exemplo):
+
+| aluno | disciplina | nota |
+|---|---|---|
+| Bruno Kenji | Algoritmos I | 8.5 |
+| Bruno Kenji | Banco de Dados | 7.0 |
+| Murilo Silva | Algoritmos I | 9.0 |
+
+**Importante**: alunos sem matrícula **não aparecem**. Disciplinas sem aluno matriculado **não aparecem**. Pra incluir esses casos, use LEFT/RIGHT/FULL.
+
+### LEFT JOIN — todas da esquerda
+
+> "Quero **todos os alunos**, com suas matrículas **se existirem**."
+
+```sql
+SELECT a.nome AS aluno, d.nome AS disciplina, m.nota
+FROM Aluno a
+LEFT JOIN Matricula m ON a.id = m.aluno_id
+LEFT JOIN Disciplina d ON m.disciplina_id = d.id
+ORDER BY a.nome;
+```
+
+**Resultado**:
+
+| aluno | disciplina | nota |
+|---|---|---|
+| Bruno Kenji | Algoritmos I | 8.5 |
+| Bruno Kenji | Banco de Dados | 7.0 |
+| Erika Costa | NULL | NULL |
+| Murilo Silva | Algoritmos I | 9.0 |
+| Pedro Chaves | NULL | NULL |
+
+Erika e Pedro **aparecem mesmo sem matrícula**, com `NULL` nas colunas vindas das outras tabelas. **Esse é o ponto** do LEFT JOIN.
+
+### RIGHT JOIN — todas da direita
+
+Mesmo conceito invertido. Raramente usado na prática — você pode sempre reescrever um RIGHT como LEFT trocando a ordem das tabelas, e o LEFT é mais natural de ler.
+
+### FULL OUTER JOIN — tudo dos dois lados
+
+```sql
+SELECT a.nome AS aluno, d.nome AS disciplina
+FROM Aluno a
+FULL OUTER JOIN Matricula m ON a.id = m.aluno_id
+FULL OUTER JOIN Disciplina d ON m.disciplina_id = d.id;
+```
+
+Inclui alunos sem matrícula **e** disciplinas sem aluno. Útil pra auditoria de dados.
+
+### CROSS JOIN — produto cartesiano
+
+Combina **cada linha de A com cada linha de B**. Quase nunca o que você quer — geralmente é bug.
+
+```sql
+SELECT a.nome, d.nome
+FROM Aluno a
+CROSS JOIN Disciplina d;
+-- 4 alunos × 5 disciplinas = 20 linhas
+```
+
+Caso legítimo: gerar combinações pra preencher dados (ex: matrícula default de todos os alunos em todas as obrigatórias).
+
+### Self-join — tabela com ela mesma
+
+Útil pra hierarquias.
+
+```sql
+-- Quem é o supervisor de quem (assumindo Funcionario tem supervisor_id FK pra si mesma)
+SELECT
+    f.nome AS funcionario,
+    s.nome AS supervisor
+FROM Funcionario f
+LEFT JOIN Funcionario s ON f.supervisor_id = s.id;
+```
+
+### Detalhe: `JOIN` sem qualificação = `INNER JOIN`
+
+```sql
+-- Estas duas linhas são IDÊNTICAS
+SELECT * FROM Aluno JOIN Matricula ON Aluno.id = Matricula.aluno_id;
+SELECT * FROM Aluno INNER JOIN Matricula ON Aluno.id = Matricula.aluno_id;
+```
+
+Eu **sempre escrevo `INNER JOIN` explicitamente** — fica claro pra quem lê.
+
+### Anti-pattern: vírgula no FROM (sintaxe antiga pré-SQL-92)
+
+```sql
+-- NÃO FAÇA isso — sintaxe pré-SQL-92, fácil de errar
+SELECT a.nome, d.nome
+FROM Aluno a, Matricula m, Disciplina d
+WHERE a.id = m.aluno_id AND m.disciplina_id = d.id;
+
+-- FAÇA isso — JOIN explícito, sintaxe SQL-92+
+SELECT a.nome, d.nome
+FROM Aluno a
+INNER JOIN Matricula m ON a.id = m.aluno_id
+INNER JOIN Disciplina d ON m.disciplina_id = d.id;
+```
+
+A sintaxe com vírgula **funciona** (todo SGBD aceita), mas é error-prone — esquecer um filtro no WHERE vira CROSS JOIN acidental. **SQL-92 (1992)** introduziu a sintaxe `JOIN ... ON` explícita exatamente pra evitar isso.
+
+---
+
+## Agregação: GROUP BY e funções agregadas
+
+Resumir dados em grupos é uma das operações mais comuns. Funções agregadas:
+
+| Função | Faz |
+|---|---|
+| `COUNT(*)` | Conta todas as linhas |
+| `COUNT(coluna)` | Conta linhas onde coluna não é NULL |
+| `COUNT(DISTINCT coluna)` | Conta valores únicos não-NULL |
+| `SUM(coluna)` | Soma |
+| `AVG(coluna)` | Média |
+| `MIN(coluna)` | Mínimo |
+| `MAX(coluna)` | Máximo |
+| `STRING_AGG(coluna, sep)` | Concatena strings (PostgreSQL) |
+
+### Sem GROUP BY: agregação sobre tudo
+
+```sql
+-- Total de alunos
+SELECT COUNT(*) FROM Aluno;
+
+-- Média de nota de todas as matrículas
+SELECT AVG(nota) FROM Matricula;
+
+-- Quantos cursos distintos existem
+SELECT COUNT(DISTINCT curso) FROM Aluno;
+```
+
+### Com GROUP BY: agregação por grupos
+
+```sql
+-- Quantos alunos por curso
+SELECT curso, COUNT(*) AS total_alunos
+FROM Aluno
+GROUP BY curso;
+```
+
+**Resultado**:
+
+| curso | total_alunos |
+|---|---|
+| ADS | 3 |
+| Direito | 1 |
+
+```sql
+-- Média de nota por aluno
+SELECT a.nome, AVG(m.nota) AS media
+FROM Aluno a
+LEFT JOIN Matricula m ON a.id = m.aluno_id
+GROUP BY a.id, a.nome
+ORDER BY media DESC NULLS LAST;
+```
+
+### Regra do GROUP BY
+
+> **Todas as colunas no SELECT que NÃO estão em uma função agregada DEVEM estar no GROUP BY.**
+
+```sql
+-- ERRADO — `nome` não está agregado nem no GROUP BY
+SELECT curso, nome, COUNT(*) FROM Aluno GROUP BY curso;
+
+-- ERRO em PostgreSQL: "nome must appear in the GROUP BY clause"
+```
+
+MySQL com `ONLY_FULL_GROUP_BY=OFF` permite isso (até 5.7 era o default!) — resultado é **indeterminado** (pega qualquer um dos nomes). Bug clássico. Em PostgreSQL e MySQL 8.0+, é erro.
+
+### HAVING: filtro sobre grupos
+
+```sql
+-- Cursos com mais de 2 alunos
+SELECT curso, COUNT(*) AS total
+FROM Aluno
+GROUP BY curso
+HAVING COUNT(*) > 2;
+```
+
+**Diferença `WHERE` vs `HAVING`**:
+- `WHERE` filtra **linhas individuais antes do agrupamento**
+- `HAVING` filtra **grupos após agrupamento**
+
+```sql
+-- Alunos com média > 7, agrupados por curso, mostrando cursos com pelo menos 2 desses alunos
+SELECT a.curso, COUNT(*) AS alunos_acima_de_7
+FROM Aluno a
+JOIN Matricula m ON a.id = m.aluno_id
+WHERE m.nota > 7                    -- filtra matrículas individuais (linhas)
+GROUP BY a.curso
+HAVING COUNT(*) >= 2;               -- filtra grupos (cursos)
+```
+
+---
+
+## Subqueries: queries dentro de queries
+
+Subquery = um `SELECT` dentro de outro. Três usos clássicos:
+
+### Subquery escalar (retorna um único valor)
+
+```sql
+-- Alunos com nota acima da média geral
+SELECT nome FROM Aluno
+WHERE id IN (
+    SELECT aluno_id FROM Matricula
+    WHERE nota > (SELECT AVG(nota) FROM Matricula)
+);
+```
+
+### Subquery em IN / NOT IN
+
+```sql
+-- Alunos que NÃO têm matrícula
+SELECT nome FROM Aluno
+WHERE id NOT IN (SELECT aluno_id FROM Matricula);
+```
+
+**Cuidado**: `NOT IN` com NULLs no resultado da subquery retorna 0 linhas (NULL semantics). Prefira `NOT EXISTS`:
+
+```sql
+SELECT nome FROM Aluno a
+WHERE NOT EXISTS (
+    SELECT 1 FROM Matricula m WHERE m.aluno_id = a.id
+);
+```
+
+### Subquery no FROM (tabela derivada)
+
+```sql
+-- Top 3 cursos por quantidade de alunos
+SELECT curso, total
+FROM (
+    SELECT curso, COUNT(*) AS total
+    FROM Aluno
+    GROUP BY curso
+) AS resumo
+ORDER BY total DESC
+LIMIT 3;
+```
+
+CTEs (Common Table Expressions, `WITH`) fazem a mesma coisa de forma mais legível — cobertura na próxima lição (SQL Avançado).
+
+---
+
+## Recap
+
+**SQL** nasceu em **1974** com Chamberlin & Boyce na IBM (paper *"SEQUEL: A Structured English Query Language"*, SIGFIDET). Renomeado pra **SQL** por questão de marca. Oracle V2 foi o primeiro RDBMS comercial em **1979**. **ANSI X3.135-1986** virou o primeiro padrão; **ISO 9075:1987** padrão internacional. Versão atual: **ISO/IEC 9075:2023**. O core declarativo de 1974 continua válido — você aprende uma vez, usa por décadas.
+
+**DDL** (Data Definition Language): `CREATE`, `ALTER`, `DROP`. Define schema. **Constraints** são fundamentais — `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `NOT NULL`, `CHECK`, `DEFAULT`. SGBDs verificam em toda operação.
+
+**DML** (Data Manipulation Language): `INSERT`, `UPDATE`, `DELETE`. **Sempre use `WHERE` em UPDATE/DELETE** — sem WHERE, afeta toda a tabela. Bug clássico de produção. UPSERT existe em variantes específicas (PostgreSQL `ON CONFLICT`, MySQL `ON DUPLICATE KEY UPDATE`, padrão `MERGE`).
+
+**SELECT** segue ordem lógica: `FROM` → `JOIN` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `DISTINCT` → `ORDER BY` → `LIMIT`. Por isso alias do SELECT funciona em `ORDER BY` mas não em `WHERE`.
+
+**JOINs**:
+- **INNER JOIN** — só interseção (match em ambos)
+- **LEFT JOIN** — tudo da esquerda + match da direita (NULL onde não casa)
+- **RIGHT JOIN** — espelho do LEFT (raramente usado)
+- **FULL OUTER JOIN** — união completa
+- **CROSS JOIN** — produto cartesiano (cada linha de A com cada de B)
+- **Self-join** — tabela com ela mesma (hierarquias)
+
+Sintaxe com vírgula no FROM (pré-SQL-92) é error-prone, **use `JOIN ... ON` sempre**.
+
+**Agregação**: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `COUNT(DISTINCT)`. `GROUP BY` agrupa; `HAVING` filtra grupos (vs `WHERE` que filtra linhas). **Regra do GROUP BY**: toda coluna não-agregada no SELECT precisa estar no GROUP BY.
+
+**NULL** é tri-state — `coluna = NULL` nunca retorna nada, use `IS NULL`. Agregações ignoram NULL (exceto `COUNT(*)`). Sempre que possível, declare colunas `NOT NULL`.
+
+**Subqueries**: escalares (retorna 1 valor), `IN`/`NOT IN` (lista), tabela derivada (no FROM). Preferir `NOT EXISTS` sobre `NOT IN` quando pode haver NULLs.
+
+Próximas lições da trilha:
+
+- **SQL Avançado** — CTEs (`WITH`), window functions, recursive queries, `MERGE`, `JSON` operators
+- **Índices** — B+tree, hash, BRIN, GIN, GiST, EXPLAIN ANALYZE, otimizador
+- **Transações e ACID** — isolation levels, MVCC, locking, deadlock detection
+- **Modelagem prática** — modelar do zero um sistema usando brModelo/dbdiagram.io
+- **JPA/Hibernate** — `@Entity`, `@OneToMany`, lazy/eager, N+1 problem
+
+Manda qual quer.

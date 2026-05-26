@@ -1,0 +1,552 @@
+---
+titulo: "Triggers e Auditoria: Reagindo Automaticamente a Mudanças no Banco"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "PostgreSQL Documentation 18, 'CREATE TRIGGER' — postgresql.org/docs/current/sql-createtrigger.html"
+  - "PostgreSQL Documentation 18, '37.1. Overview of Trigger Behavior' — postgresql.org/docs/current/trigger-definition.html"
+  - "PostgreSQL Documentation 18, '41.10. Trigger Functions' — postgresql.org/docs/current/plpgsql-trigger.html"
+  - "Microsoft Learn, 'CREATE TRIGGER (Transact-SQL)' — learn.microsoft.com/en-us/sql/t-sql/statements/create-trigger-transact-sql"
+  - "Microsoft Learn, 'Use the inserted and deleted tables with DML triggers' — learn.microsoft.com/en-us/sql/relational-databases/triggers/use-the-inserted-and-deleted-tables"
+  - "Microsoft Learn, 'Create Nested Triggers' — learn.microsoft.com/en-us/sql/relational-databases/triggers/create-nested-triggers"
+  - "Microsoft Learn, 'Server Configuration: server trigger recursion' — learn.microsoft.com/en-us/sql/database-engine/configure-windows/server-trigger-recursion-server-configuration-option"
+---
+
+## O que são triggers
+
+**Triggers** são pedaços de código que o banco **executa automaticamente** quando algo acontece — geralmente um `INSERT`, `UPDATE` ou `DELETE` em uma tabela. Você não chama, não invoca, não declara `EXEC` — o banco dispara sozinho quando o evento que você configurou ocorre.
+
+Pense num exemplo simples: você quer que **toda vez** que alguém atualizar a tabela `pedido`, uma linha seja gravada em `pedido_auditoria` com os valores antes e depois da mudança. Sem trigger, **toda parte do sistema** que altera pedido precisa lembrar de gravar essa auditoria — código duplicado em 30 lugares, e basta um esquecer pra perder rastreamento.
+
+Com trigger, a regra fica **no próprio banco**: não importa quem mexa na tabela `pedido` (Spring Boot, script SQL ad-hoc rodado pelo DBA, ferramenta de migração, importação de CSV), a auditoria **sempre acontece**. É essa **garantia** que diferencia trigger de código de aplicação.
+
+Esta lição cobre, baseado nas documentações oficiais do **PostgreSQL** e **Microsoft Learn**:
+
+1. **Anatomia de uma trigger** — quando dispara, o que pode fazer
+2. **`BEFORE` vs `AFTER` vs `INSTEAD OF`** — semânticas diferentes
+3. **`FOR EACH ROW` vs `FOR EACH STATEMENT`**
+4. **PostgreSQL**: `NEW` e `OLD`, função de trigger separada
+5. **SQL Server**: tabelas pseudo-mágicas `INSERTED` e `DELETED`
+6. **Padrão de auditoria completo** com `FULL OUTER JOIN`
+7. **Trigger para `updated_at` automático**
+8. **Triggers `INSTEAD OF`** em views (conexão com Lição 9)
+9. **Pitfalls reais**: recursão, ordem de execução, performance, debug
+10. **Quando NÃO usar trigger** — lógica de negócio frequentemente fica melhor na aplicação
+
+---
+
+## Anatomia de uma trigger
+
+Toda trigger tem 4 elementos que você define:
+
+1. **Quando dispara** (`BEFORE`/`AFTER`/`INSTEAD OF`)
+2. **Em qual evento** (`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`)
+3. **Em qual tabela ou view**
+4. **Granularidade** (`FOR EACH ROW`/`FOR EACH STATEMENT`)
+5. **O que executar** (uma função/bloco de código)
+
+A documentação oficial do PostgreSQL define isso de forma clara: *"The trigger can be specified to fire before the operation is attempted on a row (...); or after the operation has completed (...); or instead of the operation (in the case of inserts, updates or deletes on a view)."*
+
+### BEFORE — dispara antes da operação
+
+A trigger roda **antes** da linha ser efetivamente alterada na tabela. Citação literal da documentação PostgreSQL: *"If the trigger fires before or instead of the event, the trigger can skip the operation for the current row, or change the row being inserted (for INSERT and UPDATE operations only)."*
+
+Casos de uso:
+- **Validação**: rejeitar a operação (lançando exceção) se algo estiver errado
+- **Normalização**: modificar o valor que vai ser gravado (ex: forçar `lowercase` em email)
+- **Preencher campos automaticamente**: `created_at`, `updated_at`
+
+### AFTER — dispara depois da operação
+
+A linha **já foi** inserida/atualizada/deletada. A trigger reage **ao fato consumado**. Citação da documentação: *"If the trigger fires after the event, all changes, including the effects of other triggers, are 'visible' to the trigger."*
+
+Casos de uso:
+- **Auditoria**: gravar log do que mudou (a operação já aconteceu)
+- **Notificação**: disparar evento, enviar mensagem pra fila
+- **Manutenção de denormalização**: atualizar contadores agregados em outras tabelas
+
+### INSTEAD OF — substitui a operação (apenas em views)
+
+A trigger **substitui** a operação. Em views complexas (com JOIN, agregação, etc.), o banco não sabe como traduzir um `INSERT/UPDATE/DELETE` em mudanças nas tabelas base — você define manualmente.
+
+Casos de uso:
+- Tornar views complexas **updatable** (visto na Lição 9)
+- Direcionar escritas pra tabelas físicas específicas dependendo de regra
+
+<Insight>
+**Heurística simples**: use `BEFORE` quando precisa **interferir** na operação (modificar valores, abortar); use `AFTER` quando só precisa **reagir** ao que já aconteceu (logging, propagar para outras tabelas); use `INSTEAD OF` apenas em views, quando precisa traduzir DML pra tabelas base.
+</Insight>
+
+### FOR EACH ROW vs FOR EACH STATEMENT
+
+Esta distinção é **fonte clássica de bugs**.
+
+- **`FOR EACH ROW`**: trigger executa **uma vez por linha** afetada. Se você fizer `UPDATE pedido SET status = 'X'` que afeta 1000 linhas, a trigger roda **1000 vezes**, uma por linha.
+- **`FOR EACH STATEMENT`**: trigger executa **uma vez por comando SQL**, não importa quantas linhas foram afetadas. 1000 linhas → 1 execução.
+
+Citação literal da documentação PostgreSQL: *"A trigger that is marked FOR EACH ROW is called once for every row that the operation modifies. For example, a DELETE that affects 10 rows will cause any ON DELETE triggers on the target relation to be called 10 separate times."*
+
+Casos de uso de cada um:
+- `FOR EACH ROW`: auditoria detalhada (registra mudança de cada linha), validação de invariantes por linha
+- `FOR EACH STATEMENT`: log de operação macro ("usuário X rodou UPDATE em massa às 14:32"), invalidar cache, disparar evento agregado
+
+No PostgreSQL, default é `FOR EACH STATEMENT` se você não especificar. No SQL Server, comportamento é diferente — veremos abaixo.
+
+---
+
+## PostgreSQL: NEW, OLD e função separada
+
+PostgreSQL **separa** trigger de função. Você define uma **função** (em PL/pgSQL, ou outra linguagem procedural) que retorna `TRIGGER`, e **depois** cria a trigger ligando essa função a uma tabela.
+
+Dentro da função de trigger, você acessa:
+
+- **`NEW`**: registro com os **novos valores** (válido em `INSERT` e `UPDATE`)
+- **`OLD`**: registro com os **valores anteriores** (válido em `UPDATE` e `DELETE`)
+- **`TG_OP`**: string com `'INSERT'`, `'UPDATE'`, `'DELETE'` ou `'TRUNCATE'`
+- **`TG_TABLE_NAME`**: nome da tabela
+- **`TG_WHEN`**: `'BEFORE'`, `'AFTER'` ou `'INSTEAD OF'`
+- **`TG_LEVEL`**: `'ROW'` ou `'STATEMENT'`
+
+Exemplo prático — **atualizar `updated_at` automaticamente**:
+
+```sql
+-- 1. Define a função
+CREATE OR REPLACE FUNCTION atualizar_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.atualizado_em = NOW();
+    RETURN NEW;  -- retorna o registro modificado pra ser efetivamente gravado
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Aplica a função como trigger em uma tabela
+CREATE TRIGGER trg_pedido_atualizar
+BEFORE UPDATE ON pedido
+FOR EACH ROW
+EXECUTE FUNCTION atualizar_timestamp();
+
+-- 3. Pode reusar a mesma função em outras tabelas
+CREATE TRIGGER trg_cliente_atualizar
+BEFORE UPDATE ON cliente
+FOR EACH ROW
+EXECUTE FUNCTION atualizar_timestamp();
+```
+
+A função é genérica — funciona em qualquer tabela que tenha coluna `atualizado_em`. **Reuso real**.
+
+<Aviso>
+**Detalhe da função BEFORE**: a documentação PostgreSQL diz: *"Row-level triggers fired BEFORE can return null to signal the trigger manager to skip the rest of the operation for this row (i.e., subsequent triggers are not fired, and the INSERT/UPDATE/DELETE does not occur for this row)."* Ou seja, retornar `NULL` em trigger `BEFORE FOR EACH ROW` **cancela a operação** para aquela linha. Pra triggers `AFTER` ou `STATEMENT`, o valor de retorno é ignorado — pode retornar `NULL`.
+</Aviso>
+
+### Trigger com WHEN condicional
+
+PostgreSQL permite condição na própria definição da trigger, evitando que a função seja chamada se a condição não bate:
+
+```sql
+CREATE TRIGGER trg_pedido_log_status
+AFTER UPDATE ON pedido
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)  -- só se status mudou
+EXECUTE FUNCTION logar_mudanca_status();
+```
+
+`IS DISTINCT FROM` trata `NULL` corretamente — diferente de `<>` que retorna `NULL` quando algum dos lados é `NULL`. Detalhe sutil que evita bug.
+
+---
+
+## SQL Server: tabelas pseudo-mágicas INSERTED e DELETED
+
+SQL Server tem abordagem **bem diferente**. Não tem `NEW`/`OLD` — em vez disso, cria duas **tabelas pseudo-temporárias** que ficam disponíveis dentro do corpo da trigger:
+
+- **`inserted`**: linhas após a operação (válida em `INSERT` e `UPDATE`)
+- **`deleted`**: linhas antes da operação (válida em `DELETE` e `UPDATE`)
+
+Citação literal da Microsoft Learn: *"DML trigger statements use two special tables: the deleted and inserted tables. SQL Server automatically creates and manages these tables. You can use these temporary, memory-resident tables to test the effects of certain data modifications and to set conditions for DML trigger actions."*
+
+Mapeamento por operação:
+
+| Operação | `inserted` | `deleted` |
+|---|---|---|
+| `INSERT` | tem linhas novas | vazia |
+| `UPDATE` | tem valores novos | tem valores antigos |
+| `DELETE` | vazia | tem linhas removidas |
+
+**Diferença CRÍTICA**: triggers de SQL Server disparam **uma vez por statement**, não por linha (mesmo sem especificar `FOR EACH STATEMENT`). Citação literal de fonte confiável: *"SQL Server triggers fire once per statement, not once per row, so a single update can place many rows into inserted and deleted."*
+
+Isso significa: se um `UPDATE` afeta 1000 linhas, a trigger roda **1 vez**, mas `inserted` e `deleted` têm **1000 linhas cada**. Você precisa escrever **lógica baseada em conjunto** (set-based logic), não pensar "uma linha por vez".
+
+### Exemplo SQL Server — auditoria de status
+
+```sql
+-- Tabela de auditoria
+CREATE TABLE PedidoAuditoria (
+    AuditID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    PedidoID BIGINT NOT NULL,
+    StatusAntes NVARCHAR(20) NULL,
+    StatusDepois NVARCHAR(20) NULL,
+    AlteradoPor SYSNAME NOT NULL,
+    AlteradoEm DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+
+-- Trigger
+CREATE OR ALTER TRIGGER tr_Pedido_AuditarStatus
+ON Pedido
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO PedidoAuditoria (PedidoID, StatusAntes, StatusDepois, AlteradoPor)
+    SELECT
+        i.PedidoID,
+        d.Status,            -- valor ANTIGO vem da tabela deleted
+        i.Status,            -- valor NOVO vem da tabela inserted
+        SUSER_SNAME()        -- usuário que fez a alteração
+    FROM inserted i
+    INNER JOIN deleted d ON d.PedidoID = i.PedidoID
+    WHERE ISNULL(i.Status, '') <> ISNULL(d.Status, '');  -- só registra se status mudou
+END;
+GO
+```
+
+Note o `INNER JOIN ON pk = pk` entre `inserted` e `deleted` — padrão pra correlacionar valor antigo com novo na mesma linha em SQL Server. **Diferente** do PostgreSQL onde `NEW` e `OLD` se referem à mesma linha automaticamente.
+
+`SET NOCOUNT ON` é boa prática — impede que cada operação dentro da trigger devolva mensagem "X rows affected" pra cliente, o que pode confundir aplicações que esperam só uma mensagem.
+
+---
+
+## Padrão de auditoria completo
+
+Padrão real implementado em empresa pra auditoria que cubra **INSERT, UPDATE e DELETE** com **uma única trigger**. Você possivelmente fez algo parecido na faculdade.
+
+### Versão SQL Server
+
+```sql
+-- Tabela de auditoria genérica pra funcionarios
+CREATE TABLE FuncionarioAuditoria (
+    AuditID    BIGINT IDENTITY(1,1) PRIMARY KEY,
+    Operacao   NVARCHAR(10) NOT NULL,   -- 'INSERT' | 'UPDATE' | 'DELETE'
+    DataHora   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UsuarioBD  SYSNAME NOT NULL DEFAULT SUSER_SNAME(),
+
+    -- Snapshot do estado ANTERIOR
+    Matricula_Antes      INT NULL,
+    Nome_Antes           NVARCHAR(80) NULL,
+    Salario_Antes        DECIMAL(10,2) NULL,
+
+    -- Snapshot do estado POSTERIOR
+    Matricula_Depois     INT NULL,
+    Nome_Depois          NVARCHAR(80) NULL,
+    Salario_Depois       DECIMAL(10,2) NULL
+);
+GO
+
+-- Trigger única que cobre INSERT, UPDATE e DELETE
+CREATE TRIGGER tr_Funcionario_Auditoria
+ON Funcionario
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @operacao NVARCHAR(10);
+
+    -- Detecta qual operação foi via presença/ausência de linhas em inserted/deleted
+    IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted)
+        SET @operacao = 'UPDATE';
+    ELSE IF EXISTS (SELECT 1 FROM inserted)
+        SET @operacao = 'INSERT';
+    ELSE
+        SET @operacao = 'DELETE';
+
+    INSERT INTO FuncionarioAuditoria (
+        Operacao,
+        Matricula_Antes, Nome_Antes, Salario_Antes,
+        Matricula_Depois, Nome_Depois, Salario_Depois
+    )
+    SELECT
+        @operacao,
+        d.Matricula, d.Nome, d.Salario,    -- "antes" da tabela deleted
+        i.Matricula, i.Nome, i.Salario     -- "depois" da tabela inserted
+    FROM inserted i
+    FULL OUTER JOIN deleted d
+        ON i.Matricula = d.Matricula;
+END;
+GO
+```
+
+**Por que `FULL OUTER JOIN`?**
+
+- `INSERT`: `inserted` tem linha, `deleted` vazia — FULL OUTER traz a linha de `inserted` com `deleted` columns NULL → registro com `_Antes` NULL e `_Depois` preenchido
+- `UPDATE`: ambos têm linha — FULL OUTER junta pela PK → registro com `_Antes` e `_Depois` preenchidos
+- `DELETE`: `deleted` tem linha, `inserted` vazia — FULL OUTER traz a linha de `deleted` com `inserted` columns NULL → registro com `_Antes` preenchido e `_Depois` NULL
+
+**Uma trigger, três operações, código limpo**. Padrão clássico que aparece em vagas e em sistemas reais.
+
+### Versão PostgreSQL
+
+```sql
+-- Tabela de auditoria
+CREATE TABLE funcionario_auditoria (
+    audit_id BIGSERIAL PRIMARY KEY,
+    operacao VARCHAR(10) NOT NULL,
+    data_hora TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    usuario_bd TEXT NOT NULL DEFAULT CURRENT_USER,
+
+    matricula_antes INT NULL,
+    nome_antes VARCHAR(80) NULL,
+    salario_antes NUMERIC(10,2) NULL,
+
+    matricula_depois INT NULL,
+    nome_depois VARCHAR(80) NULL,
+    salario_depois NUMERIC(10,2) NULL
+);
+
+-- Função de trigger
+CREATE OR REPLACE FUNCTION fn_funcionario_auditoria()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO funcionario_auditoria (
+            operacao, matricula_depois, nome_depois, salario_depois
+        ) VALUES (
+            TG_OP, NEW.matricula, NEW.nome, NEW.salario
+        );
+        RETURN NEW;
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO funcionario_auditoria (
+            operacao,
+            matricula_antes, nome_antes, salario_antes,
+            matricula_depois, nome_depois, salario_depois
+        ) VALUES (
+            TG_OP,
+            OLD.matricula, OLD.nome, OLD.salario,
+            NEW.matricula, NEW.nome, NEW.salario
+        );
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO funcionario_auditoria (
+            operacao, matricula_antes, nome_antes, salario_antes
+        ) VALUES (
+            TG_OP, OLD.matricula, OLD.nome, OLD.salario
+        );
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger
+CREATE TRIGGER trg_funcionario_auditoria
+AFTER INSERT OR UPDATE OR DELETE ON funcionario
+FOR EACH ROW
+EXECUTE FUNCTION fn_funcionario_auditoria();
+```
+
+A lógica em PostgreSQL é mais direta — usa `TG_OP` pra detectar operação e acessa `NEW`/`OLD` diretamente.
+
+<Aviso>
+**Detalhe importante sobre retorno em PostgreSQL `AFTER` triggers**: a documentação diz que pra triggers `AFTER`, o valor de retorno é **ignorado**. Você poderia retornar `NULL` em todos os casos. Mas é **boa prática** retornar `NEW` em INSERT/UPDATE e `OLD` em DELETE — torna mais fácil reaproveitar a função como `BEFORE` trigger no futuro sem mudança.
+</Aviso>
+
+---
+
+## Triggers INSTEAD OF em views
+
+Conectando com a **Lição 9** (Views): vimos que views complexas (com JOIN, GROUP BY, etc.) **não são auto-updatable**. `INSTEAD OF` triggers resolvem isso.
+
+A documentação PostgreSQL é explícita: *"On views, triggers can be defined to execute instead of INSERT, UPDATE, or DELETE operations. Such INSTEAD OF triggers are fired once for each row that needs to be modified in the view. It is the responsibility of the trigger's function to perform the necessary modifications to the view's underlying base table(s) and, where appropriate, return the modified row as it will appear in the view."*
+
+Exemplo PostgreSQL — view juntando `cliente` e `endereco`, queremos permitir `INSERT` na view:
+
+```sql
+CREATE VIEW v_cliente_completo AS
+SELECT c.id, c.nome, c.email, e.rua, e.cidade, e.estado
+FROM cliente c
+JOIN endereco e ON e.cliente_id = c.id;
+
+-- Sem INSTEAD OF, INSERT na view falha (view não-updatable por causa do JOIN)
+
+CREATE OR REPLACE FUNCTION fn_inserir_cliente_completo()
+RETURNS TRIGGER AS $$
+DECLARE
+    novo_id INT;
+BEGIN
+    -- Insere primeiro no cliente
+    INSERT INTO cliente (nome, email)
+    VALUES (NEW.nome, NEW.email)
+    RETURNING id INTO novo_id;
+
+    -- Depois insere o endereço relacionado
+    INSERT INTO endereco (cliente_id, rua, cidade, estado)
+    VALUES (novo_id, NEW.rua, NEW.cidade, NEW.estado);
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_inserir_cliente_completo
+INSTEAD OF INSERT ON v_cliente_completo
+FOR EACH ROW
+EXECUTE FUNCTION fn_inserir_cliente_completo();
+
+-- Agora isso funciona:
+INSERT INTO v_cliente_completo (nome, email, rua, cidade, estado)
+VALUES ('Bruno', 'bruno@email.com', 'Rua X', 'Cruzeiro', 'SP');
+```
+
+A trigger **traduz** o INSERT na view em dois INSERTs nas tabelas base. Cliente da view nem sabe que tem JOIN escondido.
+
+---
+
+## Pitfalls reais
+
+Triggers são poderosas mas têm armadilhas que **derrubam sistemas** em produção. Os principais:
+
+### 1. Recursão direta e indireta
+
+**Recursão direta** acontece quando uma trigger faz uma operação que dispara ela mesma. Exemplo trivial:
+
+```sql
+-- ANTI-PATTERN — trigger que se autoinvoca
+CREATE TRIGGER trg_loop ON pedido
+AFTER UPDATE
+AS
+BEGIN
+    UPDATE pedido SET observacao = 'modificado' WHERE id IN (SELECT id FROM inserted);
+    -- Esse UPDATE dispara o próprio trigger novamente → loop
+END;
+```
+
+**Como o SQL Server lida**: por **default**, recursão direta de triggers `AFTER` é **bloqueada** pelo SQL Server. A documentação Microsoft Learn diz: *"An AFTER trigger does not call itself recursively unless the RECURSIVE_TRIGGERS database option is set."* Default é `OFF`.
+
+**Recursão indireta**: trigger T1 da tabela A modifica tabela B, que tem trigger T2, que modifica tabela A de novo, disparando T1. Esse tipo é controlado por outra opção: `nested triggers` no servidor (default `ON`, pode desabilitar com `sp_configure 'nested triggers', 0`).
+
+**Limite máximo de nesting documentado pela Microsoft**: **32 níveis**. Citação direta: *"Nested triggers SQL Server supports the nesting of triggers up to a maximum of 32 levels."* Se ultrapassar, erro `'Maximum stored procedure, function, trigger, or view nesting level exceeded (limit 32)'` e a transação inteira aborta.
+
+Em PostgreSQL, comportamento similar: triggers recursivas são permitidas, mas você pode hit limites de stack. Recomendação geral em **todos os SGBDs**: **evite triggers recursivas**. Quando precisar, controle com flags na linha (coluna `processado BOOLEAN`) ou variáveis de sessão.
+
+### 2. Performance silenciosa
+
+Triggers são **invisíveis** no código da aplicação — o desenvolvedor não vê que está sendo executada. Consequência: query que parece simples pode ter **5 triggers em cascata** disparando, fazendo I/O massivo.
+
+Exemplo real: `UPDATE pedido SET status = 'PAGO' WHERE id = 1` parece ser uma operação trivial. Mas se tem:
+- Trigger 1 (`AFTER UPDATE`): grava auditoria → 1 INSERT
+- Trigger 2 (`AFTER UPDATE`): atualiza estoque (`UPDATE estoque ...`) → dispara mais 2 triggers
+- Trigger 3 (`AFTER UPDATE`): notifica via tabela de mensagens → 1 INSERT
+- Trigger 4 (`AFTER UPDATE`): recalcula estatísticas do cliente → 5 queries
+
+Resultado: o "simples UPDATE" virou **10+ operações de I/O**. Em batch de 10K linhas, performance afunda.
+
+Mitigação: **monitore** com `EXPLAIN ANALYZE` (PostgreSQL) ou `SET STATISTICS IO/TIME ON` (SQL Server). Triggers de auditoria pesadas em loops de batch costumam ser as vilãs.
+
+### 3. Debug é difícil
+
+Quando algo dá errado, o stack trace mostra a linha da aplicação, não a trigger. Erros em triggers (especialmente com `RAISERROR` no SQL Server, `RAISE EXCEPTION` no PostgreSQL) chegam como exceção misteriosa pra quem chamou.
+
+Mitigação:
+- **Mensagens de erro claras**: `RAISE EXCEPTION 'Saldo insuficiente em conta % para débito de %', conta_id, valor` — inclua dados que ajudem identificar
+- **Log dentro da trigger**: grava em tabela de log antes de propagar erro
+- **Comentários extensos** no código da trigger
+
+### 4. Transações longas e locks
+
+Trigger roda **dentro da mesma transação** que disparou. Se a trigger demora 5 segundos pra rodar, sua transação demora 5 segundos a mais. Locks ficam segurados, contenção aumenta.
+
+Mitigação:
+- Triggers devem ser **rápidas** — milissegundos, não segundos
+- Pra operações pesadas (envio de email, integração externa), **NUNCA** faça dentro de trigger. Enfileire em tabela `outbox` que worker assíncrono consome.
+
+### 5. SQL Server: triggers disparam por statement, não por linha
+
+Já mencionado, mas vale repetir porque é fonte de bug clássico. Esse código é **errado**:
+
+```sql
+-- ANTI-PATTERN no SQL Server — assume uma linha
+CREATE TRIGGER tr_pedido_audit ON pedido AFTER INSERT
+AS
+BEGIN
+    DECLARE @pedido_id INT;
+    SELECT @pedido_id = id FROM inserted;  -- pega só uma linha aleatória!
+    -- Se INSERT inseriu 100 linhas, 99 perdidas
+END;
+```
+
+Pra um `INSERT ... SELECT` que insere 100 linhas, a trigger só processa 1. **Sempre escreva lógica baseada em conjunto** (set-based), como nos exemplos acima.
+
+### 6. Lógica espalhada e oculta
+
+Triggers escondem **lógica de negócio** no banco. Pra entender o que acontece quando `UPDATE pedido` é executado, o desenvolvedor precisa ler o código da aplicação **E** todas as triggers da tabela. Em sistemas grandes, isso vira pesadelo de manutenção.
+
+Por isso muitos arquitetos (incluindo Uncle Bob, Martin Fowler) defendem: **lógica de negócio na aplicação, banco só guarda dados**. Triggers seriam apenas pra:
+- Auditoria
+- `updated_at` automático
+- Constraints complexas que não dá pra expressar com `CHECK`
+- Sincronização entre tabelas redundantes
+
+Lógica de negócio "real" (calcular desconto, validar fluxo, decidir status) deve ficar na aplicação, em **uma camada visível e testável**.
+
+---
+
+## Quando NÃO usar triggers
+
+Resumindo casos em que **outras soluções são melhores**:
+
+- **Lógica de negócio complexa**: prefira código de aplicação (Service Layer no Spring, Use Cases em Clean Architecture). Triggers viram código invisível.
+- **Validações expressáveis com `CHECK` constraints**: use `CHECK` direto. Mais simples, mais rápido, mais legível. `CHECK (saldo >= 0)` é melhor que trigger fazendo a mesma coisa.
+- **Validações expressáveis com `FOREIGN KEY` e `ON DELETE` / `ON UPDATE`**: use FKs com cascateamento. Trigger pra "deletar filhos quando deleta pai" é reinventar a roda.
+- **Operações assíncronas** (email, integração externa, fila de processamento): NUNCA dentro de trigger. Use pattern Outbox — grave em tabela, worker assíncrono consome.
+- **Cálculo de valor derivado simples**: use `GENERATED COLUMN` (PostgreSQL 12+) ou `computed column` (SQL Server). Mais limpo.
+- **Histórico temporal versionado**: `TEMPORAL TABLES` (SQL Server 2016+) ou `SYSTEM VERSIONING` resolvem auditoria automaticamente sem trigger custom.
+
+---
+
+## Recap
+
+**Triggers** são código que o banco executa **automaticamente** quando ocorre um evento (`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`) em uma tabela ou view. Diferente de stored procedures, **você não invoca** — o banco dispara sozinho. Garantia importante: regra fica no banco, não no código de aplicação — ninguém pode esquecer ou bypassar.
+
+**Anatomia**: definida por (1) quando dispara — `BEFORE`/`AFTER`/`INSTEAD OF`; (2) qual evento — `INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`; (3) qual tabela/view; (4) granularidade — `FOR EACH ROW` ou `FOR EACH STATEMENT`; (5) o que executa.
+
+**`BEFORE`**: roda antes da operação efetivar; pode **abortar** ou **modificar** a linha. Casos: validação, normalização, preencher `created_at`/`updated_at`. PostgreSQL: retornar `NULL` em `BEFORE FOR EACH ROW` cancela a operação.
+
+**`AFTER`**: roda depois; reage ao fato consumado. Casos: auditoria, propagar para outras tabelas, notificações. PostgreSQL: valor de retorno é ignorado, mas boa prática retornar `NEW`/`OLD`.
+
+**`INSTEAD OF`**: roda **no lugar** da operação. Apenas em views. Permite tornar views complexas (com JOIN, agregação) updatable — você define manualmente como traduzir DML pra tabelas base.
+
+**`FOR EACH ROW`**: executa uma vez **por linha** afetada. `FOR EACH STATEMENT`: executa **uma vez por comando**, independente de quantas linhas. Default PostgreSQL: `FOR EACH STATEMENT`. SQL Server: **sempre uma vez por statement**, com `inserted`/`deleted` contendo todas as linhas afetadas.
+
+**PostgreSQL**: separa função (PL/pgSQL retornando `TRIGGER`) da trigger propriamente dita. Função tem acesso a `NEW` (valores novos), `OLD` (valores antigos), `TG_OP` (operação), `TG_TABLE_NAME`, `TG_WHEN`, `TG_LEVEL`. Suporta `WHEN()` condicional. `IS DISTINCT FROM` trata `NULL` corretamente.
+
+**SQL Server**: pseudo-tabelas `inserted` (linhas após operação) e `deleted` (linhas antes). Documentação Microsoft: *"SQL Server automatically creates and manages these tables"*. Mapeamento: INSERT → só `inserted`; DELETE → só `deleted`; UPDATE → ambos (correlacionar por PK via JOIN).
+
+**Padrão de auditoria** com **`FULL OUTER JOIN`** entre `inserted` e `deleted` no SQL Server (ou via `TG_OP` no PostgreSQL): uma única trigger cobre INSERT, UPDATE e DELETE com snapshot de antes e depois. Inclua sempre: operação, data/hora, usuário do banco, snapshot completo.
+
+**Pitfalls documentados pela Microsoft Learn**:
+
+- **Recursão**: SQL Server bloqueia recursão direta de `AFTER` triggers por default (`RECURSIVE_TRIGGERS` OFF). Recursão indireta controlada por `nested triggers`. Limite máximo: **32 níveis**.
+- **Performance silenciosa**: triggers invisíveis no código da app; cascata de triggers pode multiplicar I/O drasticamente
+- **Debug difícil**: erros chegam descontextualizados; use mensagens claras com dados de contexto
+- **Transações longas**: trigger roda na mesma transação; deve ser milissegundos, não segundos
+- **Bug clássico SQL Server**: assumir uma linha por dispatch — sempre escreva set-based logic
+- **Lógica espalhada**: triggers escondem regras; manutenção fica difícil em sistemas grandes
+
+**Quando NÃO usar trigger** (use alternativas):
+
+- Lógica de negócio complexa → camada de aplicação (Service Layer, Use Cases)
+- Validações simples → `CHECK` constraints
+- Cascateamento de FK → `ON DELETE`/`ON UPDATE`
+- Operações assíncronas (email, integrações) → pattern Outbox
+- Valor derivado simples → `GENERATED COLUMN` (PostgreSQL 12+), computed column (SQL Server)
+- Histórico temporal → Temporal Tables (SQL Server 2016+)
+
+**Casos legítimos**: auditoria, `updated_at` automático, constraints complexas inexpressáveis em `CHECK`, sincronização entre tabelas redundantes, manutenção de views materializadas customizadas, denormalização controlada.
+
+Próximas lições da trilha:
+
+- **Stored Procedures e Functions** — `CREATE PROCEDURE`, parâmetros `OUTPUT`/`IN OUT`, UDFs escalares e table-valued, quando usar vs código de aplicação
+- **Especialização e Herança ER** — `(t,c)`/`(t,e)`/`(p,c)`/`(p,e)`, 3 estratégias de mapeamento físico
+- **SQL Server vs PostgreSQL** — diferenças práticas de sintaxe entre os dois SGBDs mais usados
+- **NoSQL Básico** — quando NÃO usar relacional
+
+Manda qual quer.

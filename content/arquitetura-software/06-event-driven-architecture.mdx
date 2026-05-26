@@ -1,0 +1,785 @@
+---
+titulo: "Event-Driven Architecture"
+descricao: "Domain Events, Integration Events, Event Sourcing e CQRS. Como agregados independentes se comunicam de forma assíncrona, e como separar leitura de escrita em sistemas que escalam."
+---
+
+As cinco lições anteriores cobriram domínio, princípios arquiteturais, DDD estratégico e tático, e Hexagonal. Em todas elas apareceram eventos sem que fossem o foco: `CompensacaoEfetivada`, `CreditoReservado`, `CompensacaoIniciada`. Hora de tratar eventos como o que eles são — uma peça arquitetural de primeira classe.
+
+Esta lição cobre quatro conceitos relacionados mas distintos: **Domain Events** (eventos dentro de um Bounded Context), **Integration Events** (eventos entre contextos), **Event Sourcing** (estado como log de eventos) e **CQRS** (separar modelo de leitura do de escrita). Os quatro nascem do mesmo princípio — mudanças importantes do domínio são fatos comunicáveis — mas resolvem problemas diferentes.
+
+<Insight>
+Domain Events não aparecem no livro original de Eric Evans de 2003. Foram introduzidos pelo próprio Evans depois — primeiro em apresentações ("What I've Learned About DDD Since the Book", QCon London, março de 2009) e depois formalizados no documento "DDD Reference" (domainlanguage.com/wp-content/uploads/2020/08/DDD-Reference-version-2015-03.pdf), e por Vaughn Vernon no capítulo 8 do "Implementing Domain-Driven Design" em 2013. A definição de Evans citada por Vernon (DDD Reference, p. 20): *"Something happened that domain experts care about."* — algo aconteceu que os especialistas de domínio se importam.
+</Insight>
+
+## Por que eventos
+
+Pra ver a motivação, olha o que acontece sem eventos. No Carbon Credit, quando uma compensação é efetivada, várias coisas precisam acontecer:
+
+- O estoque do crédito reservado precisa diminuir
+- O emissor precisa receber confirmação por e-mail
+- O relatório de auditoria precisa registrar
+- O dashboard de métricas precisa atualizar
+- A nota fiscal de serviço precisa ser gerada
+
+A versão ingênua: o use case `EfetivarCompensacao` chama todos esses sistemas direto, em sequência, dentro da mesma transação.
+
+```java
+public void efetivar(CompensacaoId id) {
+    var compensacao = repo.buscarPorId(id).orElseThrow();
+    compensacao.efetivar();
+    repo.salvar(compensacao);
+
+    inventario.diminuirEstoque(compensacao.itens());
+    notificador.enviarEmail(compensacao.emissor(), "Compensação confirmada");
+    auditoria.registrar(compensacao);
+    metricas.incrementarContador(...);
+    notaFiscal.gerar(compensacao);
+}
+```
+
+Problemas que aparecem em produção:
+
+1. **Acoplamento forte**. O Core Domain (Compensação) conhece Inventário, Notificações, Auditoria, Métricas, Nota Fiscal. Quando um deles muda interface, Compensação muda também.
+2. **Atomicidade falsa**. Se a nota fiscal falha, você quer rollback de tudo? Provavelmente não — a compensação aconteceu, faturou amanhã. Mas o código atual faz tudo na mesma transação.
+3. **Escalabilidade ruim**. Mandar e-mail leva 800ms. Gerar nota fiscal leva 2s. Cada nova feature adiciona latência ao caminho crítico.
+4. **Bloqueio cruzado**. Se o serviço de notificações está fora do ar, a compensação não conclui.
+
+A versão event-driven inverte o controle: a Compensação anuncia o que aconteceu (`CompensacaoEfetivada`) e cada interessado reage no seu próprio ritmo.
+
+```java
+public void efetivar(CompensacaoId id) {
+    var compensacao = repo.buscarPorId(id).orElseThrow();
+    compensacao.efetivar();  // gera evento internamente
+    repo.salvar(compensacao);
+    publicador.publicar(compensacao.eventosNaoPublicados());
+}
+```
+
+A Compensação não conhece Inventário, Notificações, Auditoria. Ela conhece **o evento** `CompensacaoEfetivada`. Quem se importa subscreve; quem não se importa ignora.
+
+## Domain Events: a peça que faltava no DDD
+
+Um Domain Event é um objeto imutável que representa um fato ocorrido no domínio. Três características essenciais:
+
+- **Imutável**. Eventos são fatos do passado. `CompensacaoEfetivada(id, timestamp)` não pode ser "atualizado" — ou aconteceu, ou não.
+- **Nomeado no passado**. O nome do evento usa verbo no particípio passado: `Iniciada`, `Efetivada`, `Reservado`, `Cancelada`. Nunca imperativo (`Efetivar`), nunca presente (`Efetivando`).
+- **Significativo pro negócio**. Não é qualquer mudança de estado interno. É algo que um especialista de domínio se importaria de saber.
+
+A última regra é o filtro que separa Domain Events úteis de ruído. `CompensacaoCacheRefreshed` não é Domain Event. `CompensacaoEfetivada` é.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+package com.carbon.compensacao.dominio.eventos;
+
+// Interface marcadora
+public interface EventoDominio {
+    Instant ocorridoEm();
+}
+
+// Eventos concretos: imutáveis, nomeados no passado
+public record CompensacaoIniciada(
+    CompensacaoId compensacaoId,
+    CNPJ emissor,
+    BigDecimal toneladas,
+    Instant ocorridoEm
+) implements EventoDominio {}
+
+public record CreditoReservado(
+    CompensacaoId compensacaoId,
+    CreditoId creditoId,
+    BigDecimal toneladas,
+    Instant ocorridoEm
+) implements EventoDominio {}
+
+public record CompensacaoEfetivada(
+    CompensacaoId compensacaoId,
+    CNPJ emissor,
+    BigDecimal totalToneladas,
+    List<ItemEfetivado> itens,
+    Instant ocorridoEm
+) implements EventoDominio {
+
+    public record ItemEfetivado(CreditoId creditoId, BigDecimal toneladas) {}
+}
+
+// O agregado gera eventos como parte das operações
+public class CompensacaoEmissao {
+    private final List<EventoDominio> eventos = new ArrayList<>();
+
+    public void efetivar() {
+        if (status != StatusCompensacao.RASCUNHO) {
+            throw new CompensacaoNaoEditavel(this.id, this.status);
+        }
+        if (somaReservada().compareTo(totalToneladas) != 0) {
+            throw new CompensacaoIncompleta(this.id, totalToneladas, somaReservada());
+        }
+        this.status = StatusCompensacao.EFETIVADA;
+        this.eventos.add(new CompensacaoEfetivada(
+            this.id, this.emissor, this.totalToneladas,
+            this.itens.stream()
+                .map(i -> new CompensacaoEfetivada.ItemEfetivado(i.creditoId(), i.toneladas()))
+                .toList(),
+            Instant.now()
+        ));
+    }
+
+    public List<EventoDominio> eventosNaoPublicados() {
+        return List.copyOf(eventos);
+    }
+
+    public void limparEventosPublicados() {
+        this.eventos.clear();
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace carbon::compensacao::dominio::eventos {
+
+struct EventoDominio {
+    virtual ~EventoDominio() = default;
+    virtual std::chrono::system_clock::time_point ocorridoEm() const = 0;
+    virtual std::string tipo() const = 0;
+};
+
+struct CompensacaoIniciada : EventoDominio {
+    CompensacaoId compensacaoId;
+    CNPJ emissor;
+    int64_t toneladasMilhar;
+    std::chrono::system_clock::time_point momento;
+
+    std::chrono::system_clock::time_point ocorridoEm() const override { return momento; }
+    std::string tipo() const override { return "CompensacaoIniciada"; }
+};
+
+struct CreditoReservado : EventoDominio {
+    CompensacaoId compensacaoId;
+    CreditoId creditoId;
+    int64_t toneladasMilhar;
+    std::chrono::system_clock::time_point momento;
+
+    std::chrono::system_clock::time_point ocorridoEm() const override { return momento; }
+    std::string tipo() const override { return "CreditoReservado"; }
+};
+
+struct CompensacaoEfetivada : EventoDominio {
+    struct ItemEfetivado {
+        CreditoId creditoId;
+        int64_t toneladasMilhar;
+    };
+
+    CompensacaoId compensacaoId;
+    CNPJ emissor;
+    int64_t totalToneladasMilhar;
+    std::vector<ItemEfetivado> itens;
+    std::chrono::system_clock::time_point momento;
+
+    std::chrono::system_clock::time_point ocorridoEm() const override { return momento; }
+    std::string tipo() const override { return "CompensacaoEfetivada"; }
+};
+
+} // namespace carbon::compensacao::dominio::eventos
+
+namespace carbon::compensacao::dominio {
+
+class CompensacaoEmissao {
+    std::vector<std::unique_ptr<eventos::EventoDominio>> eventos_;
+
+public:
+    void efetivar() {
+        if (status_ != StatusCompensacao::Rascunho) {
+            throw CompensacaoNaoEditavel(id_, status_);
+        }
+        if (somaReservada() != totalToneladasMilhar_) {
+            throw CompensacaoIncompleta(id_, totalToneladasMilhar_, somaReservada());
+        }
+        status_ = StatusCompensacao::Efetivada;
+
+        auto evento = std::make_unique<eventos::CompensacaoEfetivada>();
+        evento->compensacaoId = id_;
+        evento->emissor = emissor_;
+        evento->totalToneladasMilhar = totalToneladasMilhar_;
+        evento->momento = std::chrono::system_clock::now();
+        for (const auto& item : itens_) {
+            evento->itens.push_back({item.creditoId(), item.toneladasMilhar()});
+        }
+        eventos_.push_back(std::move(evento));
+    }
+
+    const std::vector<std::unique_ptr<eventos::EventoDominio>>& eventosNaoPublicados() const {
+        return eventos_;
+    }
+};
+
+} // namespace carbon::compensacao::dominio
+```
+
+</Code>
+
+</CodeSwap>
+
+Repara em três escolhas de design:
+
+1. **`record` em Java**: imutabilidade gratuita. Em C++ você usa `struct` com membros `const` ou regras de cópia.
+2. **Eventos guardados no agregado**: a `CompensacaoEmissao` acumula seus próprios eventos. Quem chama `efetivar()` decide quando publicá-los.
+3. **`eventosNaoPublicados()`**: cópia imutável da lista. Quem está fora não consegue burlar o ciclo de vida do agregado adicionando eventos por conta própria.
+
+## A anatomia de um Domain Event
+
+Olha o fluxo concreto que separa intenção, fato e reação:
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-evt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
+    </marker>
+  </defs>
+
+  <rect x="20" y="30" width="160" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+  <text x="100" y="58" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="600">COMMAND</text>
+  <text x="100" y="78" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.75">EfetivarCompensacao</text>
+  <text x="100" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fillOpacity="0.55">(intenção)</text>
+
+  <rect x="260" y="30" width="200" height="80" rx="8" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="2" />
+  <text x="360" y="58" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="600">AGGREGATE</text>
+  <text x="360" y="78" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.75">CompensacaoEmissao</text>
+  <text x="360" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fillOpacity="0.55">(decisão + invariantes)</text>
+
+  <rect x="540" y="30" width="160" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+  <text x="620" y="58" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="600">EVENT</text>
+  <text x="620" y="78" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.75">CompensacaoEfetivada</text>
+  <text x="620" y="95" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fillOpacity="0.55">(fato)</text>
+
+  <line x1="180" y1="70" x2="256" y2="70" stroke="currentColor" strokeWidth="2" markerEnd="url(#seta-evt)" />
+  <line x1="460" y1="70" x2="536" y2="70" stroke="currentColor" strokeWidth="2" markerEnd="url(#seta-evt)" />
+
+  <text x="360" y="160" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.6">PUBLICAÇÃO</text>
+
+  <line x1="620" y1="120" x2="620" y2="190" stroke="currentColor" strokeOpacity="0.7" strokeWidth="2" markerEnd="url(#seta-evt)" />
+
+  <rect x="40" y="220" width="160" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeOpacity="0.65" />
+  <text x="120" y="245" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Inventário</text>
+  <text x="120" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">diminui estoque</text>
+
+  <rect x="220" y="220" width="160" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeOpacity="0.65" />
+  <text x="300" y="245" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Notificações</text>
+  <text x="300" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">envia e-mail</text>
+
+  <rect x="400" y="220" width="160" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeOpacity="0.65" />
+  <text x="480" y="245" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Auditoria</text>
+  <text x="480" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">registra log</text>
+
+  <rect x="580" y="220" width="120" height="60" rx="6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeOpacity="0.65" />
+  <text x="640" y="245" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12">Métricas</text>
+  <text x="640" y="263" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">contador++</text>
+
+  <line x1="600" y1="180" x2="120" y2="218" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" markerEnd="url(#seta-evt)" />
+  <line x1="600" y1="180" x2="300" y2="218" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" markerEnd="url(#seta-evt)" />
+  <line x1="600" y1="180" x2="480" y2="218" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" markerEnd="url(#seta-evt)" />
+  <line x1="620" y1="180" x2="640" y2="218" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1.5" markerEnd="url(#seta-evt)" />
+
+  <text x="360" y="330" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.7">SUBSCRIBERS reagem ao evento</text>
+  <text x="360" y="348" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.55">(cada um na sua transação, no seu ritmo)</text>
+</svg>
+
+A distinção entre **Command** e **Event** é fundamental e frequentemente confundida:
+
+- **Command** representa intenção, no imperativo presente. `EfetivarCompensacao`, `ReservarCredito`, `CancelarPedido`. Pode ser rejeitado (a Compensação não está em rascunho, capacidade excedida, emissor inativo). Vai do mundo externo pro agregado.
+- **Event** representa fato, no particípio passado. `CompensacaoEfetivada`, `CreditoReservado`, `PedidoCancelado`. Já aconteceu, é imutável. Vai do agregado pro mundo externo.
+
+Essa distinção foi sintetizada por Greg Young em apresentações desde 2006 e formalizada na sua "CQRS Documents" PDF (cqrs.files.wordpress.com), e está documentada por Microsoft Learn como parte do vocabulário canônico de Event Sourcing.
+
+## Integration Events: cruzando Bounded Contexts
+
+Aqui aparece uma distinção que confunde quem está começando: **nem todo Domain Event deve sair do Bounded Context**.
+
+Domain Events vivem dentro de um contexto. Eles falam a linguagem ubíqua daquele contexto. Quando você precisa comunicar algo a outro Bounded Context, você publica um **Integration Event** — um evento separado, com schema estável, geralmente em formato neutro (JSON, Protobuf, Avro).
+
+A regra prática:
+
+- **Domain Event**: dentro do mesmo Bounded Context. Subscribers no mesmo deploy unit. Pode usar tipos do domínio (`CompensacaoId`, `CNPJ`) diretamente.
+- **Integration Event**: entre Bounded Contexts (ou pra fora do sistema). Subscribers em deploys separados, talvez em times diferentes. Usa tipos primitivos (string pra ID, string pra CNPJ).
+
+No Carbon Credit, quando o Compensação publica `CompensacaoEfetivada` pra dentro do próprio contexto (módulos de log, auditoria local), é Domain Event. Quando publica `compensation.compensation_finalized.v1` num tópico Kafka pra que Notificações e Relatórios consumam, é Integration Event.
+
+```java
+// Domain Event: tipos do domínio, comunicação interna
+package com.carbon.compensacao.dominio.eventos;
+public record CompensacaoEfetivada(
+    CompensacaoId compensacaoId,
+    CNPJ emissor,
+    BigDecimal totalToneladas,
+    List<ItemEfetivado> itens,
+    Instant ocorridoEm
+) implements EventoDominio {}
+
+// Integration Event: schema estável, tipos primitivos, versionado
+package com.carbon.compensacao.integracao.eventos;
+public record CompensacaoFinalizadaV1(
+    String eventId,         // UUID único do evento
+    String compensacaoId,   // string, não CompensacaoId
+    String emissorCnpj,     // string, não CNPJ
+    String totalToneladas,  // string pra preservar precisão decimal
+    List<ItemFinalizadoV1> itens,
+    String ocorridoEm,      // ISO-8601
+    String versaoSchema     // "1.0"
+) {
+
+    public record ItemFinalizadoV1(String creditoId, String toneladas) {}
+}
+
+// Tradutor: Domain Event → Integration Event
+public class TradutorEventosIntegracao {
+    public CompensacaoFinalizadaV1 traduzir(CompensacaoEfetivada dom) {
+        return new CompensacaoFinalizadaV1(
+            UUID.randomUUID().toString(),
+            dom.compensacaoId().valor(),
+            dom.emissor().valor(),
+            dom.totalToneladas().toPlainString(),
+            dom.itens().stream()
+                .map(i -> new CompensacaoFinalizadaV1.ItemFinalizadoV1(
+                    i.creditoId().valor(),
+                    i.toneladas().toPlainString()
+                ))
+                .toList(),
+            dom.ocorridoEm().toString(),
+            "1.0"
+        );
+    }
+}
+```
+
+Por que essa separação importa? Porque o Domain Event evolui com o modelo de domínio (você troca `BigDecimal` por `Toneladas` Value Object e tudo bem), mas o Integration Event é contrato com outros sistemas. Se você mudar `CompensacaoFinalizadaV1`, quebra todos os subscribers. A solução: versionar (`V2`, `V3`) e manter compatibilidade.
+
+## Publicar eventos: dentro e fora da transação
+
+Aqui aparece um problema sutil que tem nome próprio: **dual-write problem**.
+
+Suponha que `efetivar()` faz dois trabalhos:
+1. Salvar o agregado no banco (`UPDATE compensacoes ...`)
+2. Publicar `CompensacaoEfetivada` no broker (Kafka, RabbitMQ)
+
+O que acontece se o banco salva mas o broker está fora do ar? O estado mudou mas ninguém soube. Auditoria some, e-mail não vai. Pior: você pode reiniciar a aplicação e o evento se perde pra sempre.
+
+A solução canônica é o **Transactional Outbox Pattern**, popularizado por Chris Richardson e usado em quase todo sistema event-driven sério:
+
+1. Na mesma transação que salva o agregado, você grava os eventos numa tabela `outbox` no mesmo banco
+2. Um processo separado lê a `outbox`, publica no broker e marca como enviado
+3. Se falhar, retenta
+
+Como banco + outbox estão no mesmo schema, a transação ACID garante atomicidade. Se a transação commit, evento foi salvo. Se rollback, evento não existe.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Tabela outbox no mesmo banco do agregado
+package com.carbon.compensacao.adapter.driven.persistencia.outbox;
+
+@Entity
+@Table(name = "outbox_events")
+public class OutboxEventEntity {
+    @Id
+    private String eventId;
+    private String tipo;
+    private String agregadoId;
+    private String payload;        // JSON serializado
+    private Instant criadoEm;
+    private Instant publicadoEm;   // null = ainda não publicado
+}
+
+// Adapter de publicação: grava em outbox dentro da mesma transação
+@Repository
+public class PublicadorEventosOutbox implements PublicadorEventos {
+
+    private final OutboxRepository outbox;
+    private final ObjectMapper mapper;
+
+    public PublicadorEventosOutbox(OutboxRepository outbox, ObjectMapper mapper) {
+        this.outbox = outbox;
+        this.mapper = mapper;
+    }
+
+    @Override
+    public void publicar(EventoDominio evento) {
+        try {
+            var entity = new OutboxEventEntity();
+            entity.setEventId(UUID.randomUUID().toString());
+            entity.setTipo(evento.getClass().getSimpleName());
+            entity.setPayload(mapper.writeValueAsString(evento));
+            entity.setCriadoEm(Instant.now());
+            outbox.save(entity);
+        } catch (JsonProcessingException e) {
+            throw new FalhaSerializacaoEvento(evento, e);
+        }
+    }
+}
+
+// Worker separado: lê outbox e publica no broker
+@Component
+public class OutboxRelay {
+
+    private final OutboxRepository outbox;
+    private final KafkaTemplate<String, String> kafka;
+
+    @Scheduled(fixedDelay = 1000)
+    public void publicarPendentes() {
+        var pendentes = outbox.findByPublicadoEmIsNullOrderByCriadoEm(50);
+        for (var ev : pendentes) {
+            try {
+                kafka.send(topicoDe(ev.getTipo()), ev.getAgregadoId(), ev.getPayload()).get();
+                ev.setPublicadoEm(Instant.now());
+                outbox.save(ev);
+            } catch (Exception e) {
+                // mantém pendente; retenta na próxima rodada
+                log.warn("Falha ao publicar evento {}: {}", ev.getEventId(), e.getMessage());
+            }
+        }
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace carbon::adapter::driven::outbox {
+
+struct OutboxEvent {
+    std::string eventId;
+    std::string tipo;
+    std::string agregadoId;
+    std::string payload;
+    std::chrono::system_clock::time_point criadoEm;
+    std::optional<std::chrono::system_clock::time_point> publicadoEm;
+};
+
+class PublicadorEventosOutbox : public dominio::port::PublicadorEventos {
+    sql::Connection& conn_;
+
+public:
+    explicit PublicadorEventosOutbox(sql::Connection& c) : conn_(c) {}
+
+    void publicar(const dominio::eventos::EventoDominio& evento) override {
+        auto stmt = conn_.prepare(
+            "INSERT INTO outbox_events (event_id, tipo, agregado_id, payload, criado_em) "
+            "VALUES (?, ?, ?, ?, ?)"
+        );
+        stmt.bind(1, gerarUUID());
+        stmt.bind(2, evento.tipo());
+        stmt.bind(3, extrairAgregadoId(evento));
+        stmt.bind(4, serializarJson(evento));
+        stmt.bind(5, std::chrono::system_clock::now());
+        stmt.execute();
+    }
+};
+
+class OutboxRelay {
+    sql::Connection& conn_;
+    BrokerClient& broker_;
+
+public:
+    OutboxRelay(sql::Connection& c, BrokerClient& b) : conn_(c), broker_(b) {}
+
+    void publicarPendentes() {
+        auto stmt = conn_.prepare(
+            "SELECT event_id, tipo, agregado_id, payload FROM outbox_events "
+            "WHERE publicado_em IS NULL ORDER BY criado_em LIMIT 50"
+        );
+        auto rs = stmt.execute();
+        while (rs.next()) {
+            try {
+                broker_.send(
+                    topicoDe(rs.getString("tipo")),
+                    rs.getString("agregado_id"),
+                    rs.getString("payload")
+                );
+                marcarPublicado(rs.getString("event_id"));
+            } catch (const BrokerException& e) {
+                // mantém pendente; retenta na próxima rodada
+            }
+        }
+    }
+};
+
+} // namespace carbon::adapter::driven::outbox
+```
+
+</Code>
+
+</CodeSwap>
+
+A garantia: se o banco commitou, o evento existe na outbox. Se o broker está fora, o relay retenta até conseguir. Você nunca perde evento, e nunca publica evento de algo que não aconteceu.
+
+## Event Sourcing: o estado como log de eventos
+
+Event Sourcing é uma escolha radical: em vez de armazenar o **estado atual** dos agregados, você armazena o **log completo de eventos** que levaram a esse estado. O estado é derivado, não persistido.
+
+Martin Fowler publicou a primeira descrição canônica em 12 de dezembro de 2005, no `eaaDev/EventSourcing.html`, dentro da série Enterprise Application Architecture. A formulação dele: garantir que toda mudança de estado da aplicação seja armazenada como sequência de eventos.
+
+Pra entender, compara armazenamento clássico vs event-sourced de uma `CompensacaoEmissao`:
+
+**Clássico** (estado atual):
+```sql
+SELECT * FROM compensacoes WHERE id = 'abc-123';
+-- id=abc-123, emissor='12345678000100', total=100.5, status='EFETIVADA', ...
+```
+
+**Event-sourced** (log de eventos):
+```sql
+SELECT * FROM eventos WHERE agregado_id = 'abc-123' ORDER BY versao;
+-- (1) CompensacaoIniciada    {emissor=..., toneladas=100.5}
+-- (2) CreditoReservado        {creditoId=cre-1, toneladas=60.0}
+-- (3) CreditoReservado        {creditoId=cre-2, toneladas=40.5}
+-- (4) CompensacaoEfetivada    {timestamp=...}
+```
+
+O estado atual é reconstruído aplicando os eventos em sequência:
+
+```java
+public class CompensacaoEmissao {
+
+    public static CompensacaoEmissao reconstruir(List<EventoDominio> eventos) {
+        var compensacao = new CompensacaoEmissao();
+        for (var evento : eventos) {
+            compensacao.aplicar(evento);
+        }
+        return compensacao;
+    }
+
+    private void aplicar(EventoDominio evento) {
+        switch (evento) {
+            case CompensacaoIniciada e -> {
+                this.id = e.compensacaoId();
+                this.emissor = e.emissor();
+                this.totalToneladas = e.toneladas();
+                this.status = StatusCompensacao.RASCUNHO;
+            }
+            case CreditoReservado e ->
+                this.itens.add(new ItemCompensacao(e.creditoId(), e.toneladas(), e.ocorridoEm()));
+            case CompensacaoEfetivada e ->
+                this.status = StatusCompensacao.EFETIVADA;
+            default -> throw new EventoDesconhecido(evento);
+        }
+    }
+}
+```
+
+Vantagens de Event Sourcing:
+
+- **Auditoria perfeita gratuita**. Você não armazena "quem mudou o quê quando" como afterthought — é o storage primário.
+- **Time travel**. Você consegue reconstruir o estado em qualquer momento histórico (`SELECT ... WHERE ocorrido_em <= '2026-03-15'`).
+- **Novas projeções a qualquer momento**. Apareceu uma necessidade de relatório que ninguém pediu antes? Você reprocessa os eventos e gera a projeção.
+- **Debug de bugs raros**. Em vez de "como esse cliente chegou nesse estado?", você lê literalmente a história dele.
+
+Custos de Event Sourcing:
+
+- **Complexidade enorme**. Migração de schema de eventos antigos é problema sério. Você tem eventos de 5 anos atrás com formato diferente.
+- **Consultas ad-hoc viram pesadelo**. "Quantos clientes tem mais de 3 compensações?" exige reprocessar logs ou manter projeções.
+- **Curva de aprendizagem**. Times sem experiência sofrem por 6-12 meses até dominar o estilo.
+
+Greg Young, considerado o praticante canônico (fundou a Event Store DB), é cauteloso em recomendar Event Sourcing pra qualquer sistema. A regra que ele e Fowler defendem: use Event Sourcing quando o **histórico de mudanças** é tão importante quanto o estado atual. Sistemas financeiros (extrato bancário literalmente é event-sourced), sistemas de logística (rastreamento de cargas), sistemas de saúde (histórico médico) se beneficiam. CRUDs comuns, não.
+
+## CQRS: separar leitura de escrita
+
+CQRS — Command Query Responsibility Segregation — é um padrão arquitetural separado de Event Sourcing, embora frequentemente apareçam juntos. Foi formalizado por Greg Young (primeira menção pública em 2006, formalização em 2010) baseado no princípio CQS (Command-Query Separation) de Bertrand Meyer, criador da linguagem Eiffel.
+
+Martin Fowler descreveu CQRS em detalhes no bliki em 14 de julho de 2011 (martinfowler.com/bliki/CQRS.html). A ideia central, parafraseando: você pode usar um modelo diferente pra atualizar informação do que o modelo que usa pra ler informação. Em alguns casos isso é valioso, mas pra maioria dos sistemas CQRS adiciona complexidade arriscada.
+
+A motivação prática: agregados são otimizados pra invariantes (escrita), não pra consultas. Quando você precisa "listar todas as compensações efetivadas nos últimos 30 dias com valor acima de R$10.000, ordenadas por emissor", carregar agregados completos é caro e ineficiente. Você precisa de uma view denormalizada.
+
+```
+                           ┌─────────────────────┐
+        ┌─── Command ──────│  Write Model (DDD)  │
+        │                  │  Aggregates, ports  │
+   Cliente                 │  invariantes, regras│
+        │                  └──────────┬──────────┘
+        │                             │
+        │                          eventos
+        │                             │
+        │                             ▼
+        │                  ┌─────────────────────┐
+        └─── Query ────────│   Read Model        │
+                           │   denormalizado,    │
+                           │   otimizado p/ tela │
+                           └─────────────────────┘
+```
+
+O write model é o que você viu nas lições 4 e 5: agregados, repositórios, use cases. O read model pode ser:
+
+- Uma view materializada no mesmo banco (`CREATE MATERIALIZED VIEW v_compensacoes_dashboard ...`)
+- Uma tabela separada atualizada por eventos (`compensacoes_dashboard`)
+- Um banco diferente otimizado pra leitura (ElasticSearch pra busca textual, Redis pra cache, etc.)
+
+A sincronização acontece via eventos: quando `CompensacaoEfetivada` é publicada, um subscriber atualiza a tabela de leitura. Há atraso (consistência eventual), mas ganho de desempenho é grande.
+
+```java
+// Read model: tabela denormalizada otimizada pra dashboard
+@Entity
+@Table(name = "v_compensacoes_dashboard")
+public class CompensacaoDashboardEntry {
+    @Id private String compensacaoId;
+    private String emissorCnpj;
+    private String emissorRazaoSocial;  // já join-ado, não precisa buscar emissor
+    private BigDecimal totalToneladas;
+    private BigDecimal valorTotalBrl;
+    private String status;
+    private Instant efetivadaEm;
+    private int quantidadeCreditos;
+}
+
+// Subscriber atualiza o read model quando o evento chega
+@Component
+public class AtualizadorDashboardCompensacoes {
+
+    @EventListener
+    public void on(CompensacaoEfetivada evento) {
+        var entry = repo.findById(evento.compensacaoId().valor())
+            .orElse(new CompensacaoDashboardEntry());
+
+        entry.setCompensacaoId(evento.compensacaoId().valor());
+        entry.setEmissorCnpj(evento.emissor().valor());
+        entry.setEmissorRazaoSocial(emissoresRepo.buscarRazaoSocial(evento.emissor()));
+        entry.setTotalToneladas(evento.totalToneladas());
+        entry.setValorTotalBrl(calcularValor(evento));
+        entry.setStatus("EFETIVADA");
+        entry.setEfetivadaEm(evento.ocorridoEm());
+        entry.setQuantidadeCreditos(evento.itens().size());
+
+        repo.save(entry);
+    }
+}
+
+// Query lê do read model, não dos agregados
+@RestController
+@RequestMapping("/dashboard")
+public class DashboardController {
+
+    @GetMapping("/compensacoes")
+    public List<CompensacaoDashboardEntry> listar(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Instant desde) {
+        return dashboardRepo.buscarPorFiltros(status, desde);
+    }
+}
+```
+
+A query nunca toca `CompensacaoEmissao` (agregado). Ela lê só do read model. O agregado fica protegido — invariantes, validações, regras — e as consultas ficam rápidas.
+
+CQRS é especialmente útil em sistemas com **leitura muito mais frequente que escrita**, ou onde **as queries têm formato muito diferente da escrita**. Em sistemas simples, é overhead. Fowler explicitamente avisa que pra maioria dos sistemas CQRS adiciona complexidade arriscada — comece sem, adicione quando o problema aparecer.
+
+## Quando aplicar (e quando não)
+
+Resumindo o trade-off de cada técnica:
+
+- **Domain Events**: aplicar quase sempre quando você usa DDD tático. Custo baixo, benefício alto. Permite que o agregado anuncie mudanças sem conhecer subscribers.
+- **Integration Events**: aplicar quando você tem mais de um Bounded Context, especialmente se em deploys separados. Schema versionado é obrigatório.
+- **Outbox Pattern**: aplicar sempre que publicação de eventos precisa ser confiável (quase todo sistema produtivo). Custo: uma tabela extra e um job de relay. Benefício: zero perda de eventos.
+- **Event Sourcing**: aplicar raramente. Use quando o histórico é parte do domínio (financeiro, logística, saúde, auditoria regulatória). Pra CRUDs e SaaS comum, é overkill.
+- **CQRS**: aplicar quando leitura tem padrão muito diferente da escrita, ou quando dashboard/relatórios viram gargalo. Comece sem; adicione quando o problema doer.
+
+A regra geral, ecoada por Vernon (2013), Fowler (vários posts) e Greg Young (apresentações): **comece com o mínimo viável e adicione complexidade só quando o problema concreto justificar**. Times que aplicam Event Sourcing + CQRS + Microservices num projeto novo costumam levar 12-18 meses pra produção e perder o produto pra concorrência.
+
+## Aplicação no Carbon Credit
+
+Pro projeto da Fatec, dado que o grupo decidiu não persistir em banco e manter tudo in-memory (decisão registrada nas lições anteriores), a aplicação prática fica:
+
+**O que aplicar agora (in-memory, sem banco):**
+
+- Domain Events nos agregados: `CompensacaoIniciada`, `CreditoReservado`, `CompensacaoEfetivada`, `CompensacaoCancelada`. Já apareceram nas lições 4 e 5; agora têm conceito formal.
+- Publicador in-memory simples: uma lista de listeners cadastrados que recebem eventos publicados pelo use case.
+- Distinção semântica entre commands e events no código: comandos no infinitivo (`IniciarCompensacaoCommand`), eventos no particípio (`CompensacaoIniciada`).
+
+```java
+// Publisher in-memory pro projeto Fatec (sem broker)
+public class PublicadorEventosEmMemoria implements PublicadorEventos {
+
+    private final List<Consumer<EventoDominio>> listeners = new ArrayList<>();
+
+    public void registrar(Consumer<EventoDominio> listener) {
+        this.listeners.add(listener);
+    }
+
+    @Override
+    public void publicar(EventoDominio evento) {
+        for (var listener : listeners) {
+            try {
+                listener.accept(evento);
+            } catch (Exception e) {
+                // log e continua; um listener com bug não derruba os outros
+                System.err.println("Listener falhou: " + e.getMessage());
+            }
+        }
+    }
+}
+
+// Wiring na config
+@Configuration
+public class EventosConfig {
+
+    @Bean
+    public PublicadorEventos publicador(
+            AtualizadorEstatisticas estatisticas,
+            RegistradorAuditoria auditoria,
+            NotificadorEmissor notificador) {
+
+        var pub = new PublicadorEventosEmMemoria();
+        pub.registrar(estatisticas::on);
+        pub.registrar(auditoria::on);
+        pub.registrar(notificador::on);
+        return pub;
+    }
+}
+```
+
+**O que NÃO aplicar agora:**
+
+- Event Sourcing: overkill pra in-memory e overhead de aprendizagem.
+- CQRS: o grupo tem 4 pessoas e o produto é educacional. Não compensa.
+- Outbox Pattern: faz sentido só com banco + broker. Sem banco, não tem dual-write pra resolver.
+- Integration Events versionados: faz sentido só quando contextos rodam em deploys separados. No projeto monolito atual, todos os contextos vivem no mesmo classpath.
+
+**O que aplicar quando o grupo decidir adicionar persistência (provável em uma disciplina futura):**
+
+- Outbox Pattern junto com a adoção do banco.
+- Possivelmente Integration Events se o projeto evoluir pra microservices.
+- Event Sourcing fica como possibilidade de estudo avançado, mas não como necessidade.
+
+<Aviso>
+Cuidado com a tentação de aplicar tudo de uma vez "porque ficou interessante". DDD + Hexagonal + Domain Events + Outbox + CQRS + Event Sourcing num projeto de Fatec produz código que ninguém entende em 6 meses. A pedagogia importante é saber o que existe, entender quando aplicar, e aplicar gradualmente. Para esta lição, o objetivo é só que vocês saibam reconhecer cada padrão quando aparecer no Vernon (2013), no Fowler (bliki) ou em código real.
+</Aviso>
+
+## Próximos passos
+
+Esta foi a última lição da trilha de Arquitetura no formato planejado. Os próximos passos naturais, se vocês quiserem aprofundar, são três frentes:
+
+1. **Microservices**: aplicar Bounded Contexts como serviços fisicamente separados, com Integration Events via Kafka ou similar. Sam Newman tem "Building Microservices" (O'Reilly, 2ª edição 2021) como referência.
+2. **Event Storming**: técnica de modelagem proposta por Alberto Brandolini, complemento prático pro DDD estratégico. Brandolini publicou "Introducing EventStorming" (Leanpub, primeira versão de 6 de junho de 2018, continuamente atualizado).
+3. **Implementação avançada de Event Sourcing**: Greg Young tem o "Versioning in an Event Sourced System" (Leanpub, 2017) e cursos no eventstore.com.
+
+Pra todo o resto — aplicar essas ideias no projeto Carbon Credit Compensation Platform e nos outros sistemas que vocês forem construir — o que está nas lições 1 a 6 é suficiente como base.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Evans, Eric. *Domain-Driven Design Reference: Definitions and Pattern Summaries*. Domain Language. Summaries do livro original de 2003 colocados em Creative Commons em 2006; versão completa mais citada de março de 2015 disponível em domainlanguage.com/wp-content/uploads/2020/08/DDD-Reference-version-2015-03.pdf. Onde Evans introduziu formalmente Domain Events — não estavam no livro original de 2003. Ver também a apresentação "What I've Learned About DDD Since the Book", QCon London, março de 2009.
+- Vernon, Vaughn. *Implementing Domain-Driven Design*. Addison-Wesley Professional, 2013. Capítulo 8: "Domain Events". ISBN 978-0-321-83457-7.
+- Fowler, Martin. "Event Sourcing". martinfowler.com/eaaDev/EventSourcing.html, 12 de dezembro de 2005.
+- Fowler, Martin. "DomainEvent". martinfowler.com/eaaDev/DomainEvent.html.
+- Fowler, Martin. "CQRS". martinfowler.com/bliki/CQRS.html, 14 de julho de 2011.
+- Young, Greg. *CQRS Documents*. PDF disponível em cqrs.files.wordpress.com, datado de novembro de 2010. Formaliza CQRS e Event Sourcing pelo praticante que cunhou o termo CQRS (primeira menção pública em 2006, em discussões da comunidade ALT.NET).
+- Meyer, Bertrand. *Object-Oriented Software Construction*. Prentice Hall, 1988/1997. Origem do princípio Command-Query Separation (CQS) que precede CQRS.
+- Dahan, Udi. "Domain Events – Salvation". udidahan.com/2009/06/14/domain-events-salvation, 14 de junho de 2009.
+- Bogard, Jimmy. "Strengthening Your Domain: Domain Events". lostechies.com/jimmybogard/2010/04/08/strengthening-your-domain-domain-events, 8 de abril de 2010.
+- Microsoft Learn. "Event Sourcing Pattern". learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing (referencia o post de Fowler 2005 como definição fundadora).
+- Richardson, Chris. "Pattern: Transactional outbox". microservices.io/patterns/data/transactional-outbox.html (popularizador do Outbox Pattern).

@@ -1,0 +1,597 @@
+---
+titulo: "Como o Banco é Usado em uma Aplicação Real: O Fluxo Completo"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "Oracle JDBC Documentation, 'PreparedStatement' — docs.oracle.com/javase/tutorial/jdbc/basics/prepared.html"
+  - "HikariCP GitHub Repository — github.com/brettwooldridge/HikariCP — connection pool default no Spring Boot 2+"
+  - "Vlad Mihalcea, 'A beginner's guide to SQL injection and how you should prevent it' — vladmihalcea.com/a-beginners-guide-to-sql-injection-and-how-you-should-prevent-it/"
+  - "Spring Boot Documentation — docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#data — configuração de DataSource e JPA"
+  - "Jakarta Persistence Specification (JSR 338) — define EntityManager, PersistenceContext, ciclo de vida de entidades"
+  - "OWASP SQL Injection Prevention Cheat Sheet — cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+  - "SEI CERT Oracle Coding Standard for Java, IDS00-J: Prevent SQL injection — wiki.sei.cmu.edu"
+---
+
+## Por que essa lição existe
+
+Você passou 12 lições aprendendo pedaços importantes do banco — modelagem, SQL, índices, transações, JPA, views, triggers, procedures, herança. **Cada peça** isolada. Mas em **produção real**, essas peças trabalham juntas num **fluxo complexo** que vai desde o **clique do usuário** até a resposta voltar.
+
+Quando você faz `GET /api/pedidos/42` numa aplicação Spring Boot, o que acontece **na ordem certa**? Quantas camadas o pedido atravessa? Em qual ponto a conexão com o banco é adquirida? Em qual ponto a transação começa? Como o ORM gera o SQL? O que é connection pool e por que existe?
+
+Esta lição **conecta tudo** que você já aprendeu numa visão **operacional integrada**. No fim, você consegue desenhar o fluxo `Request HTTP → Resposta` passando por todas as camadas e responder perguntas reais como:
+
+- **"Por que ficamos sem conexão no banco em produção e o sistema travou?"** (connection pool exhaustion)
+- **"Por que essa query lenta só aparece com 50 usuários simultâneos?"** (contenção de lock)
+- **"Por que o JPA está gerando 200 queries pra uma listagem?"** (N+1, lazy loading)
+- **"Como esse SQL injection passou se usamos JPA?"** (concatenação em vez de bind)
+
+Tudo baseado em documentação oficial verificada.
+
+---
+
+## A pergunta central: o que acontece de verdade?
+
+Você tem este endpoint Spring Boot — simples, comum, em qualquer aplicação:
+
+```java
+@RestController
+@RequestMapping("/api/pedidos")
+public class PedidoController {
+
+    private final PedidoService service;
+
+    @GetMapping("/{id}")
+    public PedidoDTO buscarPorId(@PathVariable Long id) {
+        return service.buscarPorId(id);
+    }
+}
+
+@Service
+public class PedidoService {
+
+    private final PedidoRepository repository;
+
+    @Transactional(readOnly = true)
+    public PedidoDTO buscarPorId(Long id) {
+        Pedido pedido = repository.findById(id)
+            .orElseThrow(() -> new PedidoNaoEncontradoException(id));
+        return PedidoDTO.from(pedido);
+    }
+}
+
+@Repository
+public interface PedidoRepository extends JpaRepository<Pedido, Long> {
+}
+```
+
+Quando o navegador faz `GET /api/pedidos/42`, **o que efetivamente roda**?
+
+Vou seguir o pedido **passo a passo**, desde a chegada na sua aplicação até a resposta sair. Cada passo conecta com uma lição que você já fez.
+
+---
+
+## Passo 1: Servidor HTTP recebe o request
+
+Antes do Spring entrar em ação, há um **servidor HTTP embarcado** rodando dentro do Spring Boot (Tomcat por default, ou Jetty/Undertow). Esse servidor escuta na porta TCP (geralmente 8080).
+
+Quando o request chega:
+
+1. Servidor aceita conexão TCP do cliente
+2. Servidor parsa o request HTTP (method, path, headers, body)
+3. Servidor passa o request pro **DispatcherServlet** do Spring MVC
+
+**Threads**: Tomcat por default usa um pool de threads (`server.tomcat.threads.max=200` em Spring Boot é o default). Cada request roda numa thread separada. Em **alta carga**, podem rodar **200 requests simultâneos** — cada um tentando acessar o banco.
+
+Esse "200 simultâneos" é importante. Volta a aparecer no Passo 4.
+
+---
+
+## Passo 2: Spring MVC encontra o handler
+
+O DispatcherServlet examina a URL (`/api/pedidos/42`) e cruza com as anotações do seu código:
+
+- `@RequestMapping("/api/pedidos")` no controller
+- `@GetMapping("/{id}")` no método
+
+Match encontrado: chama `PedidoController.buscarPorId(42L)`.
+
+**Antes** disso, o Spring resolve **dependências** (Dependency Injection):
+
+- O `PedidoController` declara `PedidoService` no construtor — Spring injeta a instância gerenciada
+- O `PedidoService` declara `PedidoRepository` — Spring injeta o **proxy** gerado por JPA
+- Spring **proxia** o método anotado com `@Transactional`
+
+**Detalhe importante sobre `@Transactional`**: o que Spring injeta no controller **não é** o `PedidoService` diretamente. É um **proxy** que **intercepta** chamadas a métodos `@Transactional`. Antes de chamar `buscarPorId()`, o proxy **abre transação**; depois, **commita ou faz rollback**. Tudo invisível pro código.
+
+---
+
+## Passo 3: Service entra na transação
+
+O proxy do Spring intercepta `buscarPorId(42L)`. Antes de executar o método, faz:
+
+1. **Pede conexão ao DataSource** — aqui entra o **connection pool**
+2. **Inicia transação** — `Connection.setAutoCommit(false)` no JDBC
+3. **Marca isolation level** se configurado (`@Transactional(isolation = Isolation.READ_COMMITTED)`)
+4. **Vincula transação à thread** — via `TransactionSynchronizationManager`
+
+Só **depois disso** o código do método executa. Quando o método retorna (com sucesso ou exceção):
+
+- **Retorno normal**: `Connection.commit()` + libera conexão pro pool
+- **Exceção RuntimeException ou Error**: `Connection.rollback()` + libera conexão (default do Spring)
+- **Exceção checked**: por default, **NÃO** faz rollback. Pra forçar, use `@Transactional(rollbackFor = Exception.class)` ou similar
+
+<Aviso>
+**Pegadinha clássica**: muitos esperam que `IOException` ou `SQLException` (checked exceptions) causem rollback automático. **Não causam** por default. Se você quer rollback em qualquer exceção, declare explicitamente `@Transactional(rollbackFor = Exception.class)`. Esse é um dos top-10 bugs de produção em sistemas Spring — perda de integridade transacional silenciosa.
+</Aviso>
+
+Volta na **Lição 6 (Transações e ACID)** pra revisar isolation levels e o que ACID realmente significa.
+
+---
+
+## Passo 4: Connection Pool — HikariCP
+
+Esse é o passo **mais importante** da lição. Vou abrir um zoom aqui.
+
+### O problema
+
+Conexão com banco é **cara**. Cada nova conexão exige:
+
+- **Handshake TCP** (3 pacotes mínimo)
+- **Negociação SSL/TLS** se for criptografada (mais pacotes)
+- **Autenticação** (envia usuário/senha, banco valida)
+- **Setup da sessão** (timezone, charset, locale, statement_timeout)
+
+Tudo isso somado costuma levar **30 a 200ms**. Se cada request HTTP abrisse conexão nova, sua aplicação serviria **5-30 requests/segundo** **só** por causa do overhead de conexão. Inaceitável.
+
+### A solução: pool
+
+Aplicação mantém um **conjunto de conexões abertas reutilizáveis** — o **connection pool**. Quando seu código pede `connection`, o pool **entrega uma já existente**. Quando seu código fecha (`connection.close()`), o pool **NÃO fecha de verdade** — devolve a conexão pro pool, pronta pra outro request usar.
+
+Resultado: aquisição de conexão vira **microssegundos** em vez de centenas de milissegundos. Aplicação serve **milhares de requests/segundo**.
+
+### HikariCP — o pool padrão do Spring Boot
+
+Desde **Spring Boot 2** (lançado em 2018), o connection pool default é o **HikariCP** — biblioteca de Brett Wooldridge. Documentação oficial (`github.com/brettwooldridge/HikariCP`): *"HikariCP comes with sane defaults that perform well in most deployments without additional tweaking."*
+
+**Defaults documentados** (verificados no código-fonte e na documentação):
+
+| Parâmetro | Default | Significado |
+|---|---|---|
+| `maximumPoolSize` | **10** | Máximo de conexões simultâneas no pool |
+| `minimumIdle` | -1 (= maximumPoolSize) | Mínimo de conexões idle mantidas |
+| `connectionTimeout` | 30.000 ms (30s) | Timeout pra adquirir conexão do pool |
+| `idleTimeout` | 600.000 ms (10 min) | Tempo até conexão idle ser fechada |
+| `maxLifetime` | 1.800.000 ms (30 min) | Vida máxima de uma conexão antes de reciclar |
+
+### Por que isso importa pro entendimento
+
+Voltando ao Passo 1: Tomcat tem **200 threads HTTP por default**. Mas o pool tem **10 conexões por default**. O que acontece se **50 requests simultâneos** chegam e todos precisam do banco?
+
+- 10 requests pegam conexão imediatamente
+- 40 requests **ficam esperando** na fila do pool
+- Cada um pode esperar até **30 segundos** (`connectionTimeout`)
+- Se a fila não esvazia em 30s, request recebe `SQLException: Connection is not available`
+
+Esse é o **fenômeno de pool exhaustion** — sintoma clássico em produção: "aplicação ficou lenta de repente, depois timeouts em massa". A causa frequente: queries lentas mantendo conexões ocupadas + carga aumentando + pool muito pequeno.
+
+### Sizing do pool — não é "quanto maior, melhor"
+
+A documentação do HikariCP é explícita sobre isso. Fórmula recomendada baseada em pesquisa do **PostgreSQL Wiki**:
+
+```
+connections = (cores * 2) + spindle_count
+```
+
+Onde:
+- `cores` = número de CPU cores do servidor de banco
+- `spindle_count` = número de discos físicos (HDs) — pra SSD, considere 1
+
+**Exemplo**: banco em servidor com 4 cores + SSD → `(4 * 2) + 1 = 9 conexões`. **Próximo do default 10**.
+
+**Por que não 100 ou 500 conexões?** A documentação HikariCP cita: *"making it larger than necessary destroys performance"*. Razões:
+
+- Cada conexão consome **memória** do banco (alguns MB)
+- **Context switching** entre conexões piora throughput
+- Disputa por **locks internos** do banco aumenta
+- Banco fica **saturado** muito antes da aplicação esgotar conexões
+
+Pool **maior** = mais throughput até certo ponto, depois **derrubada brusca**. Ajustar tem que ser empírico, com monitoração.
+
+### Volta ao fluxo
+
+Spring `@Transactional` pediu conexão. HikariCP entregou em microssegundos (ou esperou se pool estava cheio). Agora a conexão está **atribuída à thread** que está processando o request.
+
+---
+
+## Passo 5: JPA traduz repository pra SQL
+
+`repository.findById(42L)` — método herdado de `JpaRepository`. O que acontece por baixo?
+
+### O proxy do Spring Data JPA
+
+`PedidoRepository` é uma **interface**, sem implementação. Spring Data JPA gera implementação em runtime:
+
+1. Cria proxy que implementa `JpaRepository<Pedido, Long>`
+2. Métodos padrão (`findById`, `save`, `delete`, `findAll`) usam **EntityManager** do JPA por baixo
+3. Métodos customizados (`findByNomeAndIdade`) são parseados — Spring inspeciona o nome e gera query JPQL automaticamente
+
+Pra `findById(42L)`:
+
+```java
+// Pseudocódigo do que o proxy faz:
+public Optional<Pedido> findById(Long id) {
+    EntityManager em = entityManagerFactory.createEntityManager();
+    Pedido p = em.find(Pedido.class, id);
+    return Optional.ofNullable(p);
+}
+```
+
+### EntityManager — o ponto central
+
+`EntityManager` é o **componente central** do JPA (Lição 7). Ele gerencia o **Persistence Context** — cache de primeira nível por transação.
+
+`em.find(Pedido.class, 42L)` faz:
+
+1. **Procura no Persistence Context** — se a entidade já foi carregada nesta transação, **retorna imediatamente**. Não vai ao banco.
+2. **Se não está no cache**, gera SQL e executa:
+
+```sql
+SELECT p.id, p.cliente_id, p.valor, p.data_pedido, p.status, ...
+FROM pedido p
+WHERE p.id = ?
+```
+
+Note o `?` — placeholder de bind parameter. **Importante pra SQL injection**, próximo passo.
+
+3. **Mapeia resultado pra entidade Java** (`new Pedido(...)` com setters do JPA)
+4. **Coloca no Persistence Context** — próximas referências dessa entidade nesta transação retornam o mesmo objeto
+
+---
+
+## Passo 6: Prepared Statement e SQL injection
+
+A geração do SQL com `?` em vez de valor literal é **a defesa central** contra SQL injection. Vou abrir aqui também.
+
+### O que é Prepared Statement
+
+JDBC tem duas formas de executar SQL:
+
+```java
+// Statement (PERIGOSO se concatenar input do usuário)
+Statement stmt = conn.createStatement();
+String sql = "SELECT * FROM usuario WHERE login = '" + userInput + "'";
+ResultSet rs = stmt.executeQuery(sql);  // SQL injection trivial
+
+// PreparedStatement (SEGURO com bind parameters)
+PreparedStatement pstmt = conn.prepareStatement(
+    "SELECT * FROM usuario WHERE login = ?"
+);
+pstmt.setString(1, userInput);  // valor vai como parâmetro, não como SQL
+ResultSet rs = pstmt.executeQuery();
+```
+
+### Como o PreparedStatement protege
+
+Documentação Oracle JDBC: quando você usa `PreparedStatement` com bind parameters, o driver envia ao banco **duas coisas separadas**:
+
+1. **Estrutura SQL** com placeholders (`SELECT * FROM usuario WHERE login = ?`)
+2. **Valores** dos parâmetros (separadamente)
+
+O banco **compila a query primeiro**, sem conhecer os valores. Depois, os valores entram **apenas como dados** — nunca são interpretados como SQL. Mesmo que `userInput` seja `' OR '1'='1`, o banco trata isso como **string literal** procurando login exatamente `' OR '1'='1` (que não existe).
+
+### A pegadinha que Vlad Mihalcea alerta
+
+PreparedStatement **só protege se você usar bind parameters**. Citação literal de Vlad Mihalcea: *"Prepared statements do not protect you against SQL Injection if you are not using bind parameters."*
+
+Código vulnerável **MESMO com PreparedStatement**:
+
+```java
+// AINDA VULNERÁVEL — concatena em vez de bind
+String sql = "SELECT * FROM usuario WHERE login = '" + userInput + "'";
+PreparedStatement pstmt = conn.prepareStatement(sql);  // sem ?
+ResultSet rs = pstmt.executeQuery();
+```
+
+Isso usa a classe `PreparedStatement` mas **NÃO usa bind parameters** — a concatenação aconteceu antes. Vulnerável.
+
+### JPA também protege automaticamente?
+
+**Sim, na maior parte**. JPQL e métodos do Spring Data JPA usam bind parameters automaticamente. Mas há armadilhas:
+
+```java
+// SEGURO — JPQL com parâmetro nomeado
+em.createQuery("SELECT u FROM Usuario u WHERE u.login = :login")
+  .setParameter("login", userInput)
+  .getResultList();
+
+// SEGURO — Spring Data JPA derived query
+List<Usuario> usuarios = repository.findByLogin(userInput);
+
+// VULNERÁVEL — Native query com concatenação
+em.createNativeQuery("SELECT * FROM usuario WHERE login = '" + userInput + "'")
+  .getResultList();
+```
+
+A regra geral: **se você está construindo string SQL/JPQL com `+`, há risco**. Use bind sempre.
+
+---
+
+## Passo 7: Driver JDBC envia query ao banco
+
+A query com placeholder vai pelo driver JDBC ao banco. Driver é uma **biblioteca específica por SGBD**:
+
+- PostgreSQL: `postgresql-42.x.x.jar`
+- MySQL: `mysql-connector-j-8.x.x.jar`
+- SQL Server: `mssql-jdbc-12.x.x.jar`
+- Oracle: `ojdbc11-23.x.x.jar`
+
+O driver:
+
+1. Serializa a query e parâmetros no protocolo do banco
+2. Envia pela conexão TCP/socket
+3. Aguarda resposta
+4. Deserializa o resultado em `ResultSet` JDBC
+5. Devolve pro JPA, que mapeia em `Pedido`
+
+### Otimização que muitos esquecem
+
+Drivers JDBC suportam **statement caching** — manter compilação de prepared statements em cache pra reusar. PostgreSQL chama de "server-side prepared statements". Em sistemas com queries repetitivas (típico de aplicação web), isso **reduz drasticamente** carga do banco.
+
+Habilitar no Spring Boot com PostgreSQL:
+
+```properties
+spring.datasource.hikari.data-source-properties.prepareThreshold=3
+spring.datasource.hikari.data-source-properties.preparedStatementCacheQueries=256
+spring.datasource.hikari.data-source-properties.preparedStatementCacheSizeMiB=5
+```
+
+Default não é otimizado — em produção, **vale ajustar**.
+
+---
+
+## Passo 8: O banco executa
+
+Chegou no banco — território das Lições 1-12. Aqui acontece:
+
+1. **Parser**: o SQL é parseado em árvore sintática
+2. **Otimizador**: gera **plano de execução** baseado em estatísticas das tabelas e índices disponíveis (Lição 5 — Índices)
+3. **Executor**: roda o plano, ler páginas do disco/cache
+4. **MVCC** (PostgreSQL) ou **locks** (SQL Server) garantem isolation correto (Lição 6 — Transações)
+5. **Resultado** é serializado e enviado de volta pelo socket
+
+Pra `findById(42L)`:
+- Plano provavelmente é **Index Scan** na PK (o índice B-tree gerado pela `PRIMARY KEY`)
+- Leitura é uma página do disco/cache — microssegundos
+- Resultado: 1 linha com todas as colunas do pedido
+
+---
+
+## Passo 9: Volta no JPA — Persistence Context preenchido
+
+Driver entrega `ResultSet` ao JPA. JPA:
+
+1. Cria `new Pedido()` (precisa de construtor sem argumentos!)
+2. Usa **reflection** pra setar campos: `pedido.setId(rs.getLong("id"))`, etc.
+3. **Coloca no Persistence Context** com chave `(Pedido.class, 42L)`
+4. Retorna pra `repository.findById(42L)`
+
+Próxima vez **na mesma transação** que pedir `findById(42L)` retorna o **mesmo objeto** sem ir ao banco. Esse é o **cache de 1° nível** do JPA.
+
+### Lazy Loading — o lado escuro
+
+Se `Pedido` tem associação `@OneToMany` com `Item`:
+
+```java
+@Entity
+public class Pedido {
+    @Id Long id;
+
+    @OneToMany(mappedBy = "pedido", fetch = FetchType.LAZY)
+    private List<Item> itens;
+}
+```
+
+O `findById` **NÃO carrega os itens**. `pedido.getItens()` dentro da transação **dispara segunda query**. Se você itera `pedidos` e chama `pedido.getItens()` pra cada um, **uma query por pedido**. Esse é o famoso **problema N+1** (Lição 7):
+
+- 1 query pra listar 100 pedidos
+- 100 queries pra carregar itens de cada um
+- Total: 101 queries onde **1 ou 2** com JOIN/IN bastaria
+
+Solução: `JOIN FETCH` no JPQL, `@EntityGraph` em métodos do repository, ou Spring Data `@Query` com fetch join.
+
+---
+
+## Passo 10: Service retorna, transação commita
+
+`PedidoService.buscarPorId()` retorna o `PedidoDTO`. O proxy do `@Transactional` detecta retorno bem-sucedido:
+
+1. **Flush do Persistence Context** — se houvesse alterações, JPA geraria UPDATEs aqui
+2. **`Connection.commit()`** — confirma transação no banco
+3. **Devolve conexão ao HikariCP** — fica disponível pra próximo request
+4. **Limpa ThreadLocal** do `TransactionSynchronizationManager`
+5. **Detacha entidades** do Persistence Context
+
+A entidade `Pedido` carregada ainda **existe na memória**, mas agora **detached** — mexer nela não afeta mais o banco.
+
+---
+
+## Passo 11: DTO volta pelo Spring MVC
+
+`PedidoDTO` retornado pelo service vai pro controller, que devolve pro Spring MVC. Spring MVC:
+
+1. **Serializa** o DTO em JSON (via Jackson, default)
+2. Adiciona headers HTTP (`Content-Type: application/json`)
+3. Envia resposta pelo socket
+
+Cliente recebe `200 OK` com JSON. Fim do fluxo.
+
+**Duração total**: em condições normais, **5 a 50 milissegundos**. Maior parte é tempo de rede + query no banco.
+
+---
+
+## Visão consolidada — diagrama mental
+
+Vou organizar o fluxo como uma sequência que cabe na cabeça:
+
+```
+1. Cliente HTTP        →  Servidor HTTP embarcado (Tomcat)
+2. Tomcat              →  DispatcherServlet (Spring MVC)
+3. DispatcherServlet   →  PedidoController (handler)
+4. @Transactional Proxy:
+   4a. HikariCP        →  cede conexão do pool
+   4b. setAutoCommit(false)
+   4c. transaction bind →  thread
+5. PedidoService       →  PedidoRepository.findById(42)
+6. JPA EntityManager   →  monta SQL com bind parameter
+7. JDBC Driver         →  envia ao banco via socket
+8. Banco:
+   8a. Parser → Otimizador → Executor
+   8b. Index Scan na PK
+   8c. Retorna 1 linha
+9. JDBC Driver         →  recebe ResultSet
+10. JPA                 →  mapeia em Pedido, coloca no Persistence Context
+11. Service            →  retorna PedidoDTO
+12. @Transactional Proxy:
+    12a. flush (nada a salvar)
+    12b. commit
+    12c. devolve conexão ao pool
+13. Spring MVC         →  serializa em JSON
+14. Cliente            →  recebe response
+```
+
+Cada camada tem **responsabilidade clara**. Bugs em produção quase sempre vêm de **uma camada específica** — saber qual é metade da solução.
+
+---
+
+## Padrões e anti-padrões observados na prática
+
+### 1. Open Session in View (OSIV)
+
+**O que é**: Spring Boot por default mantém a sessão JPA aberta **até o final do render da view** (no MVC) ou **até o final da serialização** (no REST). Permite acessar lazy associations no controller/template.
+
+**Default no Spring Boot**: `spring.jpa.open-in-view=true`. Documentação Spring recomenda **desabilitar em produção**.
+
+**Problema**: conexão fica retida durante serialização JSON. Sob carga alta, **inflate** o tempo médio de uso de conexão e exaure o pool.
+
+**Correção**: `spring.jpa.open-in-view=false`. Use `@EntityGraph` ou `JOIN FETCH` pra carregar tudo no service. Mais limpo arquiteturalmente.
+
+### 2. Long-running transactions
+
+**Sintoma**: transação demora 10 segundos. Locks mantidos. Outras transações esperando. Pool exhaustion.
+
+**Causa comum**: chamada externa (HTTP, email) dentro de transação. Ou processamento pesado em código Java entre 2 queries.
+
+**Correção**: transações **curtas**. Operações externas **fora** da transação. Use padrão Outbox (Lição 10).
+
+### 3. Persistence Context inchado
+
+**Sintoma**: importação em massa. Loop `for` com `repository.save()`. Heap cresce, GC fica longo.
+
+**Causa**: JPA mantém **TODAS** as entidades salvas no Persistence Context até o commit. 100k entidades = 100k objetos na memória.
+
+**Correção**: `entityManager.flush()` + `entityManager.clear()` periodicamente, OU use `JdbcTemplate.batchUpdate()` pra bulk inserts, OU use Spring Batch (ETL pro processamento massivo — próxima lição).
+
+### 4. Concatenação de SQL com input
+
+**Sintoma**: SQL injection. Sistemas Spring Boot **não estão imunes** se devs usam string concat em native queries ou em construção dinâmica de JPQL.
+
+**Correção**: bind parameters **sempre**. `setParameter()` em JPQL, `?` em native queries, evitar `Criteria API` improvisada com strings.
+
+### 5. N+1 queries
+
+**Sintoma**: listagem lenta sob carga. Logs mostram centenas de SELECTs por request.
+
+**Causa**: lazy loading dentro de loop. Quase sempre o motivo.
+
+**Correção**: revisar Lição 7. `JOIN FETCH` ou `@EntityGraph`. **Ative `show_sql=true` em dev** pra ver as queries.
+
+---
+
+## Configuração mínima recomendada — Spring Boot + PostgreSQL
+
+Configuração de produção que cobre 80% dos casos:
+
+```properties
+# DataSource
+spring.datasource.url=jdbc:postgresql://prod-db:5432/app
+spring.datasource.username=app_user
+spring.datasource.password=${DB_PASSWORD}
+
+# HikariCP — pool sizing baseado em CPU cores do banco
+spring.datasource.hikari.maximum-pool-size=20
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.connection-timeout=10000
+spring.datasource.hikari.idle-timeout=300000
+spring.datasource.hikari.max-lifetime=1200000
+spring.datasource.hikari.leak-detection-threshold=60000
+
+# JPA
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.open-in-view=false
+spring.jpa.properties.hibernate.jdbc.batch_size=50
+spring.jpa.properties.hibernate.order_inserts=true
+spring.jpa.properties.hibernate.order_updates=true
+
+# PostgreSQL driver — statement cache
+spring.datasource.hikari.data-source-properties.prepareThreshold=3
+spring.datasource.hikari.data-source-properties.preparedStatementCacheQueries=256
+```
+
+Pontos chave:
+
+- `ddl-auto=validate` — JPA confere se schema bate, NÃO altera. Migrations via Flyway/Liquibase, **nunca** `update` ou `create` em produção
+- `open-in-view=false` — fecha sessão JPA cedo, alivia pool
+- `leak-detection-threshold=60000` — alerta no log se conexão fica 60s sem ser devolvida (bug em algum lugar)
+- `batch_size + order_inserts/updates` — habilita batching real do Hibernate
+
+---
+
+## Recap
+
+**O fluxo completo** de um request HTTP `GET /api/pedidos/42` numa aplicação Spring Boot com JPA passa por mais de 10 camadas — saber o que cada uma faz é o que diferencia debugar produção de chutar.
+
+**1. Servidor HTTP embarcado** (Tomcat default): recebe TCP, parseia HTTP, usa pool de threads (200 default em Spring Boot).
+
+**2. Spring MVC**: DispatcherServlet roteia URL pra handler. Dependency Injection resolveu controller → service → repository.
+
+**3. `@Transactional` proxy**: intercepta antes do método. Pede conexão ao DataSource, marca `autoCommit=false`, vincula transação à thread. No retorno: commit (ou rollback se RuntimeException/Error — exceções checked NÃO causam rollback por default).
+
+**4. HikariCP** (default Spring Boot 2+): connection pool, defaults documentados — `maximumPoolSize=10`, `connectionTimeout=30000ms`, `idleTimeout=600000ms`, `maxLifetime=1800000ms`. Conexão é cara (30-200ms pra criar nova); pool reusa. Fórmula recomendada: `(cores * 2) + spindle_count`. Pool maior **não é** melhor — saturação destrói throughput.
+
+**5. Spring Data JPA**: gera implementação do repository em runtime. `findById` usa `EntityManager.find()`. Persistence Context é cache de 1° nível por transação — entidade já carregada não vai ao banco novamente.
+
+**6. PreparedStatement**: JPA gera SQL com placeholder `?`. Driver JDBC envia estrutura + valores **separadamente**. Banco compila uma vez, executa N. Defesa central contra SQL injection — mas **só funciona se você usar bind parameters**, não concatenação de string (Vlad Mihalcea alerta: prepared statement com concat ainda é vulnerável).
+
+**7. Driver JDBC**: biblioteca específica por SGBD (PostgreSQL `postgresql-42.x.x.jar`, etc). Serializa query, envia por socket, deserializa resposta. Statement caching server-side reduz carga em queries repetitivas.
+
+**8. Banco**: parser → otimizador (usa estatísticas + índices da Lição 5) → executor → MVCC ou locks (Lição 6). Pra `findById`, Index Scan na PK retorna 1 linha em microssegundos.
+
+**9. JPA mapping**: ResultSet → entity via reflection. Vai pro Persistence Context. Lazy loading dispara queries adicionais ao acessar `@OneToMany` — origem do problema **N+1** quando em loop (Lição 7).
+
+**10. Commit + devolve conexão**: flush do Persistence Context (UPDATEs se necessário), `commit()` no banco, conexão volta pro HikariCP. Entidades ficam **detached** na memória.
+
+**11. Spring MVC serializa**: DTO → JSON via Jackson, response HTTP.
+
+**Duração típica em produção saudável**: 5-50 ms total.
+
+**Anti-padrões clássicos observados** em sistemas Spring Boot reais:
+
+- **Open Session in View** ativo em produção: `spring.jpa.open-in-view=true` (default) mantém conexão durante serialização — pool exhaustion sob carga. **Desabilitar**.
+- **Long-running transactions**: chamada HTTP ou email dentro de `@Transactional` — locks segurados, contenção. Usar pattern Outbox (Lição 10).
+- **Persistence Context inchado**: bulk insert com `for { repository.save() }` — heap cresce. Usar `flush() + clear()` periódico ou `JdbcTemplate.batchUpdate()`.
+- **SQL injection via concatenação**: mesmo com JPA, native query com `+` é vulnerável. Bind parameters sempre.
+- **N+1 queries**: lazy loading em loops. `JOIN FETCH`/`@EntityGraph` resolvem. `show_sql=true` em dev pra detectar.
+
+**Configuração mínima recomendada pra produção** Spring Boot + PostgreSQL: `ddl-auto=validate` (Flyway pra migrations), `open-in-view=false`, leak detection ativo, batch size habilitado, statement caching no driver. Cobre 80% dos casos.
+
+**O insight central**: cada camada tem responsabilidade clara. Bugs em produção quase sempre vêm de uma camada específica — saber **qual** é metade da solução. **Pool exhaustion** = HikariCP + queries lentas. **SQL injection** = bind parameters faltando. **N+1** = lazy loading em loop. **Lock timeout** = transação longa.
+
+Próximas lições da trilha:
+
+- **ETL e Data Pipelines** — extract/transform/load, batch vs streaming, Spring Batch, dbt
+- **SQL Server vs PostgreSQL** — diferenças práticas de sintaxe entre os 2 SGBDs mais usados
+- **NoSQL Básico** — CAP theorem, tipos, quando NÃO usar relacional
+- **Performance e DBA Prático** — particionamento, replicação, backup/recovery, monitoring
+
+Manda qual quer.

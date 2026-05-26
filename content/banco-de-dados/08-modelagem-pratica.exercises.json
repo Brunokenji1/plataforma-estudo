@@ -1,0 +1,127 @@
+[
+  {
+    "id": "mod-01",
+    "enunciado": "Quais são os 5 passos do fluxo industrial padrão de modelagem de banco de dados?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Escrever código, criar tabela, popular dados, fazer queries, criar índices",
+      "1) Requisitos em linguagem natural; 2) Modelo Conceitual (ER); 3) Modelo Lógico (tabelas + FKs, normalizado até 3NF/BCNF); 4) Modelo Físico (DDL SQL específica do SGBD); 5) Índices estratégicos baseados em queries previsíveis. Cada passo é mais concreto que o anterior — começa abstrato (domínio), termina executável (SQL)",
+      "Apenas criar tabelas direto no SGBD e ajustar conforme necessário",
+      "Usar engenharia reversa do banco existente"
+    ],
+    "resposta": 1,
+    "explicacao": "Fluxo industrial completo de modelagem: (1) REQUISITOS EM LINGUAGEM NATURAL — entender o domínio conversando com PM/stakeholders, listar substantivos importantes (candidatos a entidades) e verbos (candidatos a relacionamentos); (2) MODELO CONCEITUAL — ER em brModelo/dbdiagram.io, entidades + atributos + relacionamentos + cardinalidades, IGNORA detalhes técnicos de SGBD; (3) MODELO LÓGICO — converte ER em tabelas: cada entidade vira tabela com PK surrogate, 1:N vira FK no lado N, N:M com atributos próprios vira entity separada, verifica 3NF/BCNF; (4) MODELO FÍSICO — DDL SQL específica do SGBD escolhido: tipos concretos, ENUMs vs check constraints, ON DELETE strategies, naming evitando palavras reservadas; (5) ÍNDICES ESTRATÉGICOS — baseado em queries previsíveis (WHERE comuns, FKs em PostgreSQL que não auto-indexa, partial indexes pra fração consultada). PROGRESSÃO: começa ABSTRATO (domínio), termina EXECUTÁVEL (SQL). PULAR PASSOS é tentação comum de júnior, mas leva a dívida técnica. Cada passo VALIDA o anterior — se o lógico não está em 3NF, volta ao conceitual; se o físico tem palavra reservada, ajusta lógico."
+  },
+  {
+    "id": "mod-02",
+    "enunciado": "Quem é Carlos A. Heuser e qual sua importância para modelagem no Brasil?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Inventor do modelo relacional",
+      "Autor do livro 'Projeto de Banco de Dados' (Bookman) — referência da modelagem ER no Brasil. Sua notação para diagramas ER (uma evolução da notação original de Peter Chen) foi adotada pelo brModelo de Cândido Lima da Silva Dias e virou padrão do ensino acadêmico brasileiro. Cardinalidade (min,max) vai do LADO OPOSTO da entidade — convenção que confunde muito iniciante",
+      "Inventor do JPA",
+      "Autor do Hibernate"
+    ],
+    "resposta": 1,
+    "explicacao": "Carlos Alberto Heuser é professor brasileiro, autor do livro 'Projeto de Banco de Dados' (Bookman) — referência canônica de modelagem ER no Brasil há décadas. Sua notação para diagramas ER é uma EVOLUÇÃO da notação original do Peter Chen (1976) — adapta detalhes pra ficar mais expressiva, especialmente no tratamento de cardinalidades. CÂNDIDO LIMA DA SILVA DIAS criou o software brModelo como ferramenta acadêmica (monografia 'brModelo: Ferramenta de Modelagem Conceitual de Banco de Dados') ADOTANDO a notação de Heuser EM VEZ da original de Chen. Citação do próprio autor do brModelo: 'Decidi pela notação do Prof. Heuser e não a notação original do Dr. Peter P. Chen, por entender com significantes as contribuições dadas pelo primeiro ao trabalho do segundo'. RESULTADO: brModelo + notação Heuser = padrão de ensino acadêmico de BD no Brasil. Toda Fatec, USP, UFRGS, UFMG ensinam essa notação. CONVENÇÃO CHAVE que pega muito iniciante: cardinalidade (min, max) próxima a uma entidade descreve quantos DA OUTRA PONTA existem POR INSTÂNCIA dela — leitura cruzada. EXEMPLO: '(1,1) perto de Projeto' = 'cada projeto tem 1 e exatamente 1 time'. '(1,n) perto de Time' = 'cada time tem de 1 a n projetos'."
+  },
+  {
+    "id": "mod-03",
+    "enunciado": "Quando você deve modelar uma tabela de junção N:M como ENTITY EXPLÍCITA em vez de usar @ManyToMany puro?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sempre, @ManyToMany puro é deprecado",
+      "Quando a tabela de junção TEM ATRIBUTOS PRÓPRIOS além das 2 FKs. Exemplo: relacionamento Usuario ↔ Time com data_entrada e data_saida — esses atributos descrevem o RELACIONAMENTO, não Usuario nem Time. Modele como entity Membro com 2 @ManyToOnes + atributos extras. @ManyToMany puro só serve quando junção tem APENAS as 2 FKs",
+      "Quando tabela tem mais de 1000 linhas",
+      "Apenas em projetos legados"
+    ],
+    "resposta": 1,
+    "explicacao": "@ManyToMany puro (JPA) funciona quando a tabela de junção tem APENAS as 2 FKs (PK composta). Hibernate sincroniza automaticamente quando você adiciona/remove da coleção. ANTI-PATTERN: usar @ManyToMany quando a junção tem ATRIBUTOS PRÓPRIOS — sinal claro de que a relação é uma ENTIDADE DE NEGÓCIO. EXEMPLO da lição: relacionamento Usuario N:M Time, mas com data_entrada (quando entrou) e data_saida (quando saiu, NULL se ativo). Esses atributos NÃO são do Usuario (que pode estar em vários times) NEM do Time (que tem vários membros) — são do RELACIONAMENTO em si. SOLUÇÃO: criar entity Membro com @ManyToOne Usuario + @ManyToOne Time + data_entrada + data_saida. No banco: tabela 'membro' com PK composta (usuario_id, time_id) + colunas extras. VANTAGENS: (1) queries diretas sobre membros — 'findAtivos()' WHERE data_saida IS NULL; (2) cada membro tem identidade própria; (3) pode evoluir adicionando atributos sem refatoração; (4) lifecycle independente — criar membro não exige carregar Usuario nem Time. EM JPA: 'MembroRepository extends JpaRepository<Membro, MembroId>' onde MembroId é uma classe @Embeddable com (usuarioId, timeId). HEURÍSTICA RÁPIDA: se você consegue imaginar atributos pra o relacionamento, ele PROVAVELMENTE quer ser entity, não @ManyToMany."
+  },
+  {
+    "id": "mod-04",
+    "enunciado": "No nosso modelo, por que usamos UNIQUE em bug.execucao_id em vez de PRIMARY KEY?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "PK e UNIQUE são equivalentes",
+      "Bug tem PK própria (id BIGSERIAL) — é uma entidade independente que pode existir mesmo se a execução de origem for deletada (ON DELETE SET NULL). UNIQUE em execucao_id garante que cada execução tenha NO MÁXIMO 1 bug ligado (relacionamento 1:0..1), mas permite execucao_id NULL — implementando exatamente a regra 'execução PODE gerar 0 ou 1 bug'",
+      "Bugs não devem ter PK",
+      "Por limitação do PostgreSQL"
+    ],
+    "resposta": 1,
+    "explicacao": "Decisão de design importante: bug tem PK PRÓPRIA (id BIGSERIAL PRIMARY KEY) e execucao_id como FK separada com restrição UNIQUE. RAZÃO: bug é uma ENTIDADE INDEPENDENTE no domínio — pode ser criado, atribuído, fechado, ter histórico próprio. Não é meramente 'extensão' de execucao. ALTERNATIVA NAIVE: usar execucao_id como PK do bug (1:1 puro). PROBLEMA: (a) impede ON DELETE SET NULL — se delete execucao, bug some ou viola PK; (b) acopla identidade do bug à execucao — bug não pode existir sem execucao de origem; (c) dificulta evolução — e se quisermos bugs descobertos sem execução (auditoria, code review)? SOLUÇÃO USADA: id próprio + execucao_id UNIQUE NULLABLE com FK ON DELETE SET NULL. Significado: (1) Bug é entidade própria com lifecycle independente; (2) UNIQUE garante 1:0..1 (uma execução tem no máximo 1 bug); (3) NULL permitido — bug sobrevive se execucao for deletada (registro de auditoria mantido); (4) ON DELETE SET NULL — quando deletar execucao, bug fica órfão mas continua existindo. ESSE PATTERN é padrão em sistemas reais — entidades que TÊM relacionamento mas TÊM identidade própria. Aplicar princípio similar a Pedido/Cliente, Nota/Aluno, Comentario/Post."
+  },
+  {
+    "id": "mod-05",
+    "enunciado": "Por que 'time' é um nome RUIM para tabela em SQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "É curto demais",
+      "É PALAVRA RESERVADA em SQL padrão (tipo de dado de hora). Em algumas configurações de PostgreSQL/MySQL pode causar problemas em queries ('SELECT * FROM time' confunde o parser). Boa prática: NUNCA use nomes que conflitam com keywords SQL. Outros candidatos perigosos: user, order, group, select, from, table. Solução: renomear ('time_qa') ou usar aspas duplas ('FROM \"time\"') — mas evitar é melhor",
+      "Não é UTF-8",
+      "Não pode ter 4 letras"
+    ],
+    "resposta": 1,
+    "explicacao": "TIME é PALAVRA RESERVADA em SQL padrão — tipo de dado pra horários ('14:30:00'). Usar como nome de tabela ou coluna gera problemas: (1) em algumas configurações de PostgreSQL/MySQL/Oracle, 'SELECT * FROM time' confunde o parser; (2) ferramentas (DBeaver, pgAdmin, IDE plugins) podem highlighting estranho; (3) ORMs (Hibernate, JPA) podem precisar de @Table(name = \"\\\"time\\\"\") com escape — feio e propenso a erro; (4) ALGUNS SGBDs bloqueiam diretamente (SQL Server tem 'sysname'); (5) ferramentas de migration podem gerar SQL inconsistente. SOLUÇÃO: renomear pra 'time_qa', 'equipe', 'squad', 'team_membro' — qualquer coisa não-reservada. OUTROS NOMES PERIGOSOS comumente usados: USER (usuário) — substituir por 'usuario', 'app_user'; ORDER (pedido) — usar 'pedido', 'order_item'; GROUP (grupo) — usar 'grupo', 'user_group'; SELECT, FROM, WHERE, TABLE, COLUMN — óbvios; DATE, TIME, TIMESTAMP — também tipos. REGRA: antes de nomear, conferir a lista de palavras reservadas do SGBD que você usa. Lista oficial PostgreSQL: https://www.postgresql.org/docs/current/sql-keywords-appendix.html. ALTERNATIVA QUANDO FORÇADO A USAR (legado): usar aspas duplas 'SELECT * FROM \"order\"' — mas isso espalha por todas as queries do código, é doloroso. Melhor renomear no início."
+  },
+  {
+    "id": "mod-06",
+    "enunciado": "Em PostgreSQL, qual é a estratégia de ON DELETE adequada para o FK projeto.time_id?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "CASCADE — deletar time deleta todos os projetos junto",
+      "RESTRICT (ou NO ACTION) — BLOQUEIA o DELETE do time se ainda há projetos ativos. Razão: projetos representam trabalho real (casos de teste, execuções, bugs) que NÃO deveriam sumir só porque alguém deletou o time. Forçar usuário a transferir/arquivar projetos antes de deletar time é mais seguro",
+      "SET NULL — projetos ficam sem time",
+      "SET DEFAULT — projetos vão pro time padrão"
+    ],
+    "resposta": 1,
+    "explicacao": "ON DELETE RESTRICT é a escolha certa pra projeto.time_id. RAZÃO: projetos representam trabalho de longa duração — casos de teste, execuções, bugs históricos, evidências. Deletar tudo isso porque alguém deletou o time seria CATASTRÓFICO. RESTRICT bloqueia o DELETE do time, forçando o usuário a tratar os projetos antes (transferir pra outro time, arquivar, deletar explicitamente). ESTRATÉGIAS ON DELETE em ordem de proteção: (1) RESTRICT (mais seguro) — bloqueia delete se há filhos. Default implícito do PostgreSQL (NO ACTION é similar mas adiável); (2) NO ACTION — verifica no fim da transação (vs RESTRICT que verifica imediato); (3) SET NULL — filho fica órfão com FK NULL. Usar quando relação é OPCIONAL (Bug pode existir sem Execução de origem); (4) SET DEFAULT — filho vai pro valor default da coluna. Raramente usado; (5) CASCADE (menos seguro) — deleta filhos automaticamente. Usar APENAS quando filho NÃO FAZ SENTIDO sem o pai (Membro sem Usuario/Time; CasoTeste sem Projeto). REGRA HEURÍSTICA por contexto: relação ESTRUTURAL (composição forte) → CASCADE; relação ASSOCIATIVA (entidades independentes) → RESTRICT; relação OPCIONAL → SET NULL. PostgreSQL EXIGE explicitar ON DELETE em FK — default é NO ACTION (similar a RESTRICT). DICA PROFISSIONAL: sempre escreva ON DELETE explícito em TODA FK — força você a pensar no comportamento. Se você não tem certeza, RESTRICT é o default seguro."
+  },
+  {
+    "id": "mod-07",
+    "enunciado": "Por que criar índice em chave estrangeira (FK) é CRÍTICO no PostgreSQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque é padrão SQL",
+      "PostgreSQL NÃO CRIA ÍNDICE AUTOMÁTICO em FK (diferente do MySQL/InnoDB que cria). FK sem índice = (1) JOINs lentos via FK; (2) DELETE da linha pai faz table scan na tabela filha pra verificar referências; (3) queries com WHERE filho.fk = ? viram sequential scan. Sempre crie explicitamente: CREATE INDEX idx_caso_teste_projeto ON caso_teste (projeto_id)",
+      "Porque acelera INSERTs",
+      "Apenas em tabelas com mais de 1M linhas"
+    ],
+    "resposta": 1,
+    "explicacao": "PostgreSQL NÃO indexa FKs automaticamente — decisão deliberada (índice consome espaço e overhead em escrita, queiram cria explicitamente quando precisam). MUITO DIFERENTE do MySQL/InnoDB, onde toda FK ganha índice automático. CONSEQUÊNCIAS sem índice na FK no PostgreSQL: (1) JOINS LENTOS — 'JOIN caso_teste ON caso.projeto_id = projeto.id' faz sequential scan em caso_teste por projeto_id; (2) DELETES NO PAI LENTOS — pra validar 'pode deletar projeto?', PostgreSQL precisa scanner caso_teste inteiro procurando linhas com projeto_id = X; (3) WHERE FILTRADO LENTO — endpoint 'lista casos de um projeto' (uso mais comum) faz Seq Scan. SOLUÇÃO: sempre criar índice em FK que aparece em JOIN ou WHERE: 'CREATE INDEX idx_caso_teste_projeto ON caso_teste (projeto_id)'. EXCEÇÃO: FK em tabela MUITO PEQUENA (lookup table com 50 países) — não vale a pena indexar. Pra tudo mais, INDEXE. EM JPA com Hibernate: você pode declarar @Table(indexes = {@Index(columnList = \"projeto_id\")}) na entity — Hibernate gera CREATE INDEX no DDL. Mas em produção real, use Flyway/Liquibase pra migrations versionadas, NÃO Hibernate auto-DDL. SCRIPT ÚTIL pra encontrar FKs sem índice em PostgreSQL: pgAdmin tem ferramenta; ou query em pg_constraint LEFT JOIN pg_index ONDE índice faltando."
+  },
+  {
+    "id": "mod-08",
+    "enunciado": "O que é PARTIAL INDEX e quando vale a pena no nosso schema?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Índice que cobre só algumas colunas",
+      "Índice com cláusula WHERE — indexa APENAS LINHAS que satisfazem condição. Caso do nosso schema: 'CREATE INDEX idx_bug_responsavel ON bug (responsavel_id, status) WHERE status IN (ABERTO, EM_PROGRESSO)' — só indexa bugs ATIVOS (a minoria), ignorando bugs FECHADOS (a maioria histórica). Resultado: índice muito menor, queries de dashboard ('meus bugs abertos') muito mais rápidas",
+      "Índice que falha às vezes",
+      "Índice quebrado"
+    ],
+    "resposta": 1,
+    "explicacao": "Partial Index = índice com cláusula WHERE — só indexa linhas que satisfazem a condição. CASOS DE USO no nosso schema: (1) BUGS ABERTOS — 'CREATE INDEX idx_bug_responsavel_status ON bug (responsavel_id, status) WHERE status IN (ABERTO, EM_PROGRESSO)'. Em 6 meses, o sistema acumula 100K bugs, 95% fechados. Dashboard 'meus bugs ativos' filtra os 5% — partial index só indexa essa minoria, tamanho < 5% do índice completo. Queries voam; (2) MEMBROS ATIVOS — 'CREATE INDEX idx_membro_ativo ON membro (time_id) WHERE data_saida IS NULL'. Membros ex-funcionários não interessam pra listagens — partial index só ativos. CUIDADO CRÍTICO: query precisa INCLUIR a mesma condição WHERE do índice pra otimizador usar. 'SELECT * FROM bug WHERE responsavel_id = ? AND status = ABERTO' USA o partial; 'SELECT * FROM bug WHERE responsavel_id = ?' (sem mencionar status) NÃO USA. VANTAGENS: (a) menor (5% das linhas indexadas); (b) mais rápido pra usar (profundidade menor da árvore); (c) mais barato de manter (UPDATE em bug fechado não toca no índice); (d) economiza disco. ALTERNATIVA quando partial index não é possível: usar FILTERED INDEX (SQL Server) ou INDEX EXPRESSION. Em ORM/JPA não há suporte declarativo — precisa migration manual com Flyway/Liquibase. Workflow real: identifica query lenta com EXPLAIN ANALYZE → vê o filtro mais seletivo → cria partial index com esse filtro."
+  },
+  {
+    "id": "mod-09",
+    "enunciado": "Em uma migration de schema em produção, por que NUNCA rodar 'CREATE TABLE' manualmente direto no banco?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque é mais lento",
+      "Porque (1) NÃO É VERSIONADO — depois ninguém sabe o que rodou; (2) NÃO É REPRODUZÍVEL — dev local fica diferente de produção; (3) NÃO TEM ROLLBACK — se quebrar, voltar é manual; (4) NÃO RASTREIA QUEM RODOU O QUÊ E QUANDO; (5) AMBIENTES DIVERGEM com o tempo. Solução: ferramentas de MIGRATION versionada — Flyway (Java) ou Liquibase. Scripts em arquivos versionados no Git, executados em ordem, com tabela de controle no banco rastreando o que já foi aplicado",
+      "Porque PostgreSQL não permite",
+      "Apenas em weekends"
+    ],
+    "resposta": 1,
+    "explicacao": "RODAR SQL DIRETO EM PRODUÇÃO é uma das piores práticas de devops/data. PROBLEMAS: (1) NÃO VERSIONADO — depois ninguém sabe o que foi rodado, em que ordem, por quem. Auditoria impossível; (2) NÃO REPRODUZÍVEL — dev local rodou um SQL ad-hoc, staging não rodou, prod rodou outro. Ambientes divergem; (3) SEM ROLLBACK ESTRUTURADO — se quebrar, voltar é improviso manual com risco; (4) SEM CONTROLE DE QUEM RODOU O QUÊ E QUANDO — incidentes ficam difíceis de investigar; (5) BANCOS DIVERGEM com o tempo — cada ambiente vira um snowflake único. SOLUÇÃO INDUSTRIAL: ferramentas de MIGRATION VERSIONADA: (a) FLYWAY (mais popular em Java/Spring) — scripts SQL em arquivos nomeados V1__criar_tabelas.sql, V2__adicionar_indices.sql, V3__add_coluna.sql. Flyway mantém tabela 'flyway_schema_history' no próprio banco rastreando quais migrations já rodaram; em deploy, executa apenas as novas em ordem; (b) LIQUIBASE — similar mas suporta YAML/JSON/XML além de SQL, mais flexível pra mudanças complexas, com built-in ROLLBACK declarativo. INTEGRAÇÃO com Spring Boot: adiciona dependência Flyway, coloca scripts em src/main/resources/db/migration/, Spring Boot roda automaticamente no startup. WORKFLOW: dev escreve migration localmente → commita em branch → CI roda migration em staging → deploy em prod aplica migration nova. Tabela history garante idempotência. NUNCA use Hibernate auto-DDL (spring.jpa.hibernate.ddl-auto=update) em produção — destrutivo, imprevisível."
+  },
+  {
+    "id": "mod-10",
+    "enunciado": "Verdadeiro ou falso: você deve testar modelo de banco usando 10 linhas mock locais — é suficiente pra validar performance.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. 10 linhas locais NUNCA validam performance — TODA query é instantânea em 10 linhas, mesmo sem índice. Em produção com 1M linhas, queries que passavam em 0.001s viram 30 segundos, timeouts, OOM. PROBLEMAS específicos que SÓ aparecem com VOLUME REALISTA: (1) N+1 queries — 10 articles + 10 comentários = 11 queries totais aceitáveis. 1000 articles = 1001 queries, derruba sistema; (2) FALTA DE ÍNDICE — Seq Scan em 10 linhas é trivial; em 10M linhas vira segundos; (3) HOT SPOT — coluna mal indexada vira gargalo; (4) BLOAT em PostgreSQL — UPDATEs criam linhas dead, autovacuum precisa acompanhar; (5) LOCK CONTENTION — várias transações concorrentes em hotspot causam deadlocks; (6) PLAN STABILITY — otimizador escolhe planos diferentes conforme estatísticas; (7) NETWORK I/O — payload de 10K linhas estoura serializer. PRÁTICAS RECOMENDADAS: (a) POPULAR COM DADOS REALISTAS — ferramentas: Datafaker (Java), Faker (Python/JS), Mockaroo (online). Gere dezenas/centenas de milhares de linhas; (b) USAR PG_DUMP DE PRODUÇÃO MASCARADO em staging — máximo realismo. CUIDADO: anonimize dados sensíveis (LGPD); (c) BENCHMARK com pgbench (PostgreSQL nativo) ou JMeter pra simular concorrência; (d) MONITORAR queries lentas — pg_stat_statements, slow query log; (e) USAR EXPLAIN ANALYZE com dados realistas pra ver planos REAIS. CASO REAL famoso: GitLab perdeu 6h de dados em 2017 (pós-mortem público) — várias raízes incluindo cenários nunca testados em volume realista. Em entrevistas técnicas sênior, capacidade de raciocinar sobre escala é diferencial."
+  }
+]

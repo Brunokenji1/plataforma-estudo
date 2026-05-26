@@ -1,0 +1,585 @@
+---
+titulo: "Análise e Classificação de Requisitos"
+descricao: "Como organizar os requisitos descobertos (FURPS+, ISO/IEC 25010:2023), priorizar (MoSCoW, Kano, RICE, matriz Valor vs Esforço) e preparar terreno pra especificação formal."
+---
+
+As Lições 2 e 3 cobriram como descobrir requisitos: técnicas de elicitação e levantamento de domínio. O resultado é matéria-prima — uma lista grande, desorganizada, com duplicatas, contradições, requisitos vagos e itens em níveis de granularidade diferentes. Antes de especificar formalmente (Lição 5), você precisa **analisar e classificar**.
+
+Análise e classificação respondem três perguntas:
+
+1. **Que tipo de requisito é esse?** (funcional, qualidade, restrição)
+2. **Que importância tem?** (essencial, importante, opcional)
+3. **Como ele se relaciona com os outros?** (dependências, conflitos, sobreposições)
+
+Sem fazer isso, você acaba com 200 requisitos numa planilha — todos parecendo igualmente importantes, todos competindo por atenção, e ninguém sabendo por onde começar. Em projetos reais, isso é receita pra escopo descontrolado e entregas que não satisfazem ninguém.
+
+<Insight>
+Existe um princípio empírico simples: se TUDO é prioridade alta, NADA é prioridade alta. Equipes que classificam 80% dos requisitos como "essencial" estão na verdade declarando que não classificaram nada — só rotularam. Boa classificação força escolhas difíceis: este requisito vale mais que aquele, este pode esperar, este não vai entrar nesta versão.
+</Insight>
+
+## Por que classificar requisitos
+
+Imagine uma planilha com 150 requisitos brutos do sistema de biblioteca, em ordem aleatória:
+
+- "Sistema deve permitir cadastrar leitor"
+- "Tempo de resposta de busca deve ser menor que 2 segundos"
+- "Sistema deve estar em conformidade com LGPD"
+- "Interface deve ter modo escuro"
+- "Sistema deve permitir registrar empréstimo"
+- "Sistema deve gerar relatório de empréstimos atrasados"
+- "Backup automático diário"
+- ...
+
+Essa lista é inútil pra tomada de decisão. Algumas observações:
+
+- Itens 1 e 5 são **funcionalidades centrais** — sem isso o sistema não funciona.
+- Item 2 é **atributo de qualidade** (performance), aplicável a várias funcionalidades.
+- Item 3 é **restrição regulatória** — não negociável.
+- Item 4 é **funcionalidade desejável** — bom ter, mas não impede o sistema de operar.
+- Item 7 é **requisito operacional** — relevante para suporte, não pro usuário final.
+
+Cada item tem natureza diferente e merece tratamento diferente. Classificar é o primeiro passo pra organizar.
+
+## FURPS+ (Robert Grady, HP)
+
+**FURPS** foi criado por **Robert Grady** e **Deborah Caswell** na Hewlett-Packard nos anos 80, descrito originalmente no livro *Software Metrics: Establishing a Company-wide Program* (Prentice Hall, 1987, ISBN 0-13-821844-7). A extensão **FURPS+** foi popularizada por Grady em *Practical Software Metrics for Project Management and Process Improvement* (Prentice Hall, 28 de abril de 1992, ISBN 0-13-720384-5).
+
+O acrônimo categoriza requisitos em cinco grandes grupos, mais um "+" pra capturar restrições:
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">FURPS+ (Grady e Caswell, HP, 1987 + 1992)</text>
+
+  <rect x="40" y="60" width="120" height="100" rx="8" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="100" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">F</text>
+  <text x="100" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Functionality</text>
+  <text x="100" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Funcionalidades,</text>
+  <text x="100" y="138" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">features,</text>
+  <text x="100" y="151" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">segurança</text>
+
+  <rect x="180" y="60" width="120" height="100" rx="8" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="240" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">U</text>
+  <text x="240" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Usability</text>
+  <text x="240" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Usabilidade,</text>
+  <text x="240" y="138" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">acessibilidade,</text>
+  <text x="240" y="151" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">documentação</text>
+
+  <rect x="320" y="60" width="120" height="100" rx="8" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="380" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">R</text>
+  <text x="380" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Reliability</text>
+  <text x="380" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Confiabilidade,</text>
+  <text x="380" y="138" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">disponibilidade,</text>
+  <text x="380" y="151" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">recuperação</text>
+
+  <rect x="460" y="60" width="120" height="100" rx="8" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="520" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">P</text>
+  <text x="520" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Performance</text>
+  <text x="520" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Velocidade,</text>
+  <text x="520" y="138" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">throughput,</text>
+  <text x="520" y="151" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">eficiência</text>
+
+  <rect x="600" y="60" width="100" height="100" rx="8" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="650" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">S</text>
+  <text x="650" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Supportability</text>
+  <text x="650" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Manutenibilidade,</text>
+  <text x="650" y="138" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">portabilidade,</text>
+  <text x="650" y="151" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">testabilidade</text>
+
+  <line x1="40" y1="200" x2="680" y2="200" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text x="360" y="225" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">"+" (restrições adicionadas posteriormente)</text>
+
+  <rect x="40" y="245" width="155" height="70" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeDasharray="4,3" />
+  <text x="117" y="270" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Design</text>
+  <text x="117" y="290" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">arquitetura</text>
+  <text x="117" y="304" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">limitações</text>
+
+  <rect x="210" y="245" width="155" height="70" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeDasharray="4,3" />
+  <text x="287" y="270" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Implementação</text>
+  <text x="287" y="290" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">linguagens,</text>
+  <text x="287" y="304" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">frameworks</text>
+
+  <rect x="380" y="245" width="155" height="70" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeDasharray="4,3" />
+  <text x="457" y="270" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Interface</text>
+  <text x="457" y="290" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">integração</text>
+  <text x="457" y="304" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">com outros sistemas</text>
+
+  <rect x="550" y="245" width="155" height="70" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeDasharray="4,3" />
+  <text x="627" y="270" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Físicas</text>
+  <text x="627" y="290" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">hardware,</text>
+  <text x="627" y="304" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">localização, espaço</text>
+
+  <text x="360" y="355" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">FURPS = requisitos do produto; "+" = restrições do ambiente</text>
+  <text x="360" y="378" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">F é o único grupo funcional; URPS são todos atributos de qualidade não funcionais.</text>
+  <text x="360" y="395" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Restrições não são negociáveis: vêm de regulamentação, hardware, padrões corporativos.</text>
+</svg>
+
+Aplicado ao sistema de biblioteca:
+
+| Categoria | Exemplo no sistema de biblioteca |
+|---|---|
+| **F**unctionality | Registrar empréstimo, renovar, devolver, consultar acervo, cadastrar leitor |
+| **U**sability | Tela de busca acessível pra leitores idosos, interface em português, conformidade WCAG 2.1 nível AA |
+| **R**eliability | Disponibilidade de 99% nos horários de funcionamento, backup diário automático |
+| **P**erformance | Busca no acervo retorna em menos de 2 segundos com 15 mil títulos |
+| **S**upportability | Logs detalhados pra diagnóstico, possibilidade de atualizar sem downtime |
+| **+ Design** | Arquitetura em camadas ou hexagonal, separação clara de responsabilidades |
+| **+ Implementação** | Java 21 + Spring Boot 3.x (definido pela equipe de TI da prefeitura) |
+| **+ Interface** | Integrar com sistema de identidade municipal pra autenticação única |
+| **+ Físicas** | Rodar no servidor local da biblioteca, sem dependência de internet pra empréstimo offline |
+
+**Vantagens do FURPS+**:
+- Cobertura ampla: contempla funcional + qualidades + restrições
+- Acrônimo fácil de lembrar
+- Bem estabelecido na indústria desde os anos 80
+
+**Limitações**:
+- Algumas categorias se sobrepõem (segurança fica em F, mas afeta R)
+- Não diferencia subtipos de qualidade com profundidade
+- A partir de dezembro de 1991, a ISO/IEC 9126 estabeleceu um modelo formal e padronizado de qualidade de software, substituído depois pela ISO/IEC 25010:2011 e atualizado pra 25010:2023
+
+## ISO/IEC 25010:2023 (modelo de qualidade do produto)
+
+Hoje em dia, o padrão internacional pra classificar atributos de qualidade é a **ISO/IEC 25010**, parte da família **SQuaRE** (Systems and software Quality Requirements and Evaluation), série ISO/IEC 25000–25099. A versão atual é a **ISO/IEC 25010:2023**, publicada em novembro de 2023 (segunda edição), que substituiu a ISO/IEC 25010:2011.
+
+A 25010:2023 define **9 características de qualidade do produto** (a 25010:2011 tinha 8 — Safety foi adicionada como nova característica em 2023):
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">ISO/IEC 25010:2023 — 9 características de qualidade do produto</text>
+
+  <ellipse cx="360" cy="230" rx="100" ry="40" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="2" />
+  <text x="360" y="225" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Qualidade do</text>
+  <text x="360" y="243" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Produto</text>
+
+  <rect x="40" y="60" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="125" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Functional suitability</text>
+  <text x="125" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">adequação funcional</text>
+  <text x="125" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">faz o que deveria fazer</text>
+
+  <rect x="270" y="60" width="180" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Performance efficiency</text>
+  <text x="360" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">eficiência de desempenho</text>
+  <text x="360" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">velocidade, capacidade, recursos</text>
+
+  <rect x="510" y="60" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="595" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Compatibility</text>
+  <text x="595" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">compatibilidade</text>
+  <text x="595" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">coexistência, interoperabilidade</text>
+
+  <rect x="40" y="140" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="125" y="162" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Interaction capability</text>
+  <text x="125" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">era "Usability" na 2011</text>
+  <text x="125" y="191" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">aprendizagem, acessibilidade</text>
+
+  <rect x="510" y="140" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="595" y="162" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Reliability</text>
+  <text x="595" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">confiabilidade</text>
+  <text x="595" y="191" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">disponibilidade, tolerância a falhas</text>
+
+  <rect x="40" y="220" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="125" y="242" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Security</text>
+  <text x="125" y="258" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">segurança</text>
+  <text x="125" y="271" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">confidencialidade, integridade</text>
+
+  <rect x="510" y="220" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="595" y="242" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Maintainability</text>
+  <text x="595" y="258" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">manutenibilidade</text>
+  <text x="595" y="271" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">modularidade, testabilidade</text>
+
+  <rect x="40" y="300" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="125" y="322" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Flexibility</text>
+  <text x="125" y="338" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">era "Portability" na 2011</text>
+  <text x="125" y="351" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">adaptabilidade, escalabilidade</text>
+
+  <rect x="510" y="300" width="170" height="60" rx="6" fill="currentColor" fillOpacity="0.08" stroke="#7cae50" strokeWidth="2" />
+  <text x="595" y="322" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Safety (NOVA em 2023)</text>
+  <text x="595" y="338" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">segurança física, riscos</text>
+  <text x="595" y="351" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">fail-safe, hazard warning</text>
+
+  <line x1="210" y1="90" x2="280" y2="200" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="360" y1="120" x2="360" y2="190" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="510" y1="90" x2="440" y2="200" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="210" y1="170" x2="280" y2="220" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="510" y1="170" x2="440" y2="220" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="210" y1="250" x2="280" y2="240" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="510" y1="250" x2="440" y2="240" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="210" y1="330" x2="280" y2="260" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+  <line x1="510" y1="330" x2="440" y2="260" stroke="currentColor" strokeWidth="1" strokeOpacity="0.25" />
+
+  <text x="360" y="395" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Principais mudanças vs ISO/IEC 25010:2011:</text>
+  <text x="360" y="415" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">+ Safety adicionada; Usability → Interaction capability; Portability → Flexibility</text>
+  <text x="360" y="432" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Total: 9 características no modelo de qualidade do produto</text>
+</svg>
+
+Cada característica tem **sub-características** (entre 3 e 5 cada). Exemplo de **Reliability**: maturity, availability, fault tolerance, recoverability. Exemplo de **Security**: confidentiality, integrity, authenticity, accountability, non-repudiation.
+
+A ISO/IEC 25010:2023 também define um modelo separado de **Quality in Use** (qualidade em uso, com 5 características: effectiveness, efficiency, satisfaction, freedom from risk, context coverage) — focado em como o produto se comporta quando usado por usuários reais.
+
+**Quando usar FURPS+ vs ISO 25010**:
+
+- **FURPS+** é mais simples, didático, bom pra equipes que estão começando. O acrônimo facilita memorização.
+- **ISO 25010** é mais rigoroso, padrão internacional, recomendado quando o sistema precisa de certificação formal, auditoria ou licitação pública.
+
+Pra projetos acadêmicos da Fatec, FURPS+ funciona bem. Pra projetos profissionais com auditoria externa ou licitação, vale referenciar ISO 25010:2023.
+
+## Tradicional vs ágil em classificação
+
+Antes de cobrir técnicas específicas de priorização, vale entender a diferença de abordagem.
+
+Em **projetos tradicionais (waterfall, RUP)**: você classifica TODOS os requisitos antes de começar o desenvolvimento. O documento de requisitos (SRS, cobrado na Lição 5) tem requisitos numerados, classificados por tipo (FURPS+ ou 25010) e por prioridade.
+
+Em **projetos ágeis (Scrum, XP, Kanban)**: classificação acontece **continuamente** no backlog. Novos requisitos entram, são priorizados em relação aos existentes, sobem ou descem na ordem. A priorização é feita pelo Product Owner antes de cada sprint.
+
+As técnicas a seguir (MoSCoW, Kano, RICE, matriz Valor vs Esforço) funcionam nos dois contextos — o que muda é a frequência da aplicação (uma vez no tradicional, continuamente no ágil).
+
+## MoSCoW (Dai Clegg, 1994)
+
+Técnica criada por **Dai Clegg** na Oracle em 1994, descrita no livro *Case Method Fast-Track: A RAD Approach* (Dai Clegg e Richard Barker, Addison-Wesley, 1994, ISBN 978-0-201-62432-8). Depois doada ao **DSDM Consortium** e hoje mantida pelo **Agile Business Consortium** como técnica padrão de priorização em projetos DSDM.
+
+O nome **MoSCoW** é um acrônimo (originalmente MSCW, com vogais adicionadas só pra ficar pronunciável e parecer com a capital russa):
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">MoSCoW — Dai Clegg, 1994, DSDM</text>
+
+  <rect x="40" y="60" width="160" height="120" rx="8" fill="#dc3545" fillOpacity="0.15" stroke="#dc3545" strokeWidth="2" />
+  <text x="120" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Must have</text>
+  <text x="120" y="108" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">indispensável</text>
+  <text x="120" y="130" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">sem isso a entrega</text>
+  <text x="120" y="143" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">não tem valor</text>
+  <text x="120" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">ou viola contrato</text>
+  <text x="120" y="172" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">~60% do esforço</text>
+
+  <rect x="220" y="60" width="160" height="120" rx="8" fill="#f0ad4e" fillOpacity="0.15" stroke="#f0ad4e" strokeWidth="2" />
+  <text x="300" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Should have</text>
+  <text x="300" y="108" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">importante</text>
+  <text x="300" y="130" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">desejável mas adia</text>
+  <text x="300" y="143" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">se necessário; tem</text>
+  <text x="300" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">workaround</text>
+  <text x="300" y="172" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">~20% do esforço</text>
+
+  <rect x="400" y="60" width="160" height="120" rx="8" fill="#5bc0de" fillOpacity="0.15" stroke="#5bc0de" strokeWidth="2" />
+  <text x="480" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Could have</text>
+  <text x="480" y="108" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">desejável</text>
+  <text x="480" y="130" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">bom ter, baixo impacto</text>
+  <text x="480" y="143" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">se sobrar tempo</text>
+  <text x="480" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">na timebox</text>
+  <text x="480" y="172" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">~20% do esforço</text>
+
+  <rect x="580" y="60" width="120" height="120" rx="8" fill="#6c757d" fillOpacity="0.15" stroke="#6c757d" strokeWidth="2" />
+  <text x="640" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Won't have</text>
+  <text x="640" y="108" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">fora do escopo</text>
+  <text x="640" y="130" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">não nesta entrega</text>
+  <text x="640" y="148" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">talvez na próxima</text>
+  <text x="640" y="166" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">0% do esforço atual</text>
+
+  <line x1="40" y1="210" x2="700" y2="210" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text x="360" y="235" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Aplicado ao sistema de biblioteca</text>
+
+  <text x="40" y="260" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Must:</text>
+  <text x="90" y="260" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">cadastrar leitor, registrar empréstimo, registrar devolução, consultar acervo</text>
+
+  <text x="40" y="285" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Should:</text>
+  <text x="100" y="285" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">renovar empréstimo online, gerar relatórios de atrasos, notificar leitores</text>
+
+  <text x="40" y="310" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Could:</text>
+  <text x="95" y="310" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">tema escuro na UI, sugestão de leitura por gênero, exportar histórico</text>
+
+  <text x="40" y="335" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Won't:</text>
+  <text x="95" y="335" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">app mobile (versão 2), integração com Goodreads, chatbot de atendimento</text>
+
+  <text x="360" y="365" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Proporção típica DSDM: Must 60% / Should 20% / Could 20% do esforço total em timebox</text>
+</svg>
+
+**Critério prático pra "Must"** (do DSDM Atern Handbook):
+
+- Pergunte "e se este requisito ficar de fora?". Se a resposta for "não entregamos", é Must.
+- Se houver workaround possível (mesmo manual, mesmo trabalhoso), provavelmente é Should ou Could.
+
+**Riscos comuns**:
+
+- **Inflação de Must**: todo mundo quer seu requisito como Must. Sem disciplina, 90% vira Must e a técnica perde valor. Limite arbitrário (regra DSDM): Must não passa de 60% do esforço.
+- **Won't ambíguo**: "Won't have" pode significar "nunca" ou "não nesta entrega". O DSDM esclarece: significa **não nesta entrega**. Pode entrar em entregas futuras.
+- **Confundir importância com urgência**: um requisito pode ser muito importante (Must) mas não urgente. MoSCoW é sobre **importância pra entrega atual**, não sobre prazo.
+
+## Modelo de Kano (1984)
+
+Criado por **Noriaki Kano**, professor da Tokyo University of Science, junto com **Nobuhiko Seraku**, **Fumio Takahashi** e **Shin-ichi Tsuji**, no artigo seminal *"Attractive Quality and Must-Be Quality"* publicado no *Journal of the Japanese Society for Quality Control* (Hinshitsu), vol 14, nº 2, pp. 39-48, em 1984.
+
+A ideia é que a relação entre **quanto uma feature é implementada** (eixo X) e **quanto o usuário fica satisfeito** (eixo Y) **não é linear** — depende da categoria da feature.
+
+Kano identifica 5 categorias:
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Modelo de Kano (Kano, Seraku, Takahashi, Tsuji, 1984)</text>
+
+  <line x1="80" y1="60" x2="80" y2="380" stroke="currentColor" strokeWidth="1.5" />
+  <line x1="80" y1="220" x2="680" y2="220" stroke="currentColor" strokeWidth="1.5" />
+
+  <text x="80" y="55" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">Satisfação</text>
+  <text x="80" y="50" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="9" fillOpacity="0.85">(+)</text>
+  <text x="80" y="395" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="9" fillOpacity="0.85">(−)</text>
+
+  <text x="690" y="240" textAnchor="end" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="9" fillOpacity="0.85">Implementação (+)</text>
+  <text x="95" y="240" textAnchor="start" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="9" fillOpacity="0.85">(ausente)</text>
+
+  <path d="M 100 220 Q 250 215 400 180 Q 550 110 680 80" stroke="#28a745" strokeWidth="2.5" fill="none" />
+  <text x="640" y="70" textAnchor="middle" fill="#28a745" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Attractive</text>
+  <text x="640" y="85" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(Delighters)</text>
+
+  <line x1="100" y1="320" x2="680" y2="120" stroke="#5bc0de" strokeWidth="2.5" />
+  <text x="540" y="145" textAnchor="middle" fill="#5bc0de" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">One-dimensional</text>
+  <text x="540" y="160" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(Performance)</text>
+
+  <path d="M 100 360 Q 250 350 400 240 Q 550 222 680 220" stroke="#dc3545" strokeWidth="2.5" fill="none" />
+  <text x="610" y="210" textAnchor="middle" fill="#dc3545" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Must-be</text>
+  <text x="610" y="195" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(Basic)</text>
+
+  <line x1="100" y1="220" x2="680" y2="220" stroke="#6c757d" strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
+  <text x="200" y="212" textAnchor="middle" fill="#6c757d" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="10" fontWeight="700">Indifferent</text>
+
+  <path d="M 100 120 Q 250 130 400 240 Q 550 350 680 370" stroke="#9b59b6" strokeWidth="2.5" fill="none" strokeDasharray="6,3" />
+  <text x="610" y="385" textAnchor="middle" fill="#9b59b6" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Reverse</text>
+  <text x="610" y="400" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(quanto mais, pior)</text>
+
+  <rect x="40" y="430" width="640" height="25" rx="4" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" />
+  <text x="360" y="448" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Kano também usa "Questionable" pra respostas contraditórias na pesquisa — não é categoria de feature</text>
+</svg>
+
+### As 5 categorias
+
+1. **Must-be (Basic / Threshold)**: features esperadas pelo usuário. A presença não gera satisfação extra (é o esperado); a ausência gera grande insatisfação. **Biblioteca**: empréstimo e devolução funcionando. Se não tiver, sistema é inútil. Se tiver, ninguém elogia — é o mínimo.
+
+2. **One-dimensional (Performance)**: quanto mais, melhor; quanto menos, pior. Relação linear. **Biblioteca**: velocidade da busca. Sistema mais rápido = mais satisfação. Sistema mais lento = mais insatisfação.
+
+3. **Attractive (Delighters / Excitement)**: features que o usuário não esperava. Sua presença gera satisfação alta; sua ausência não gera insatisfação (porque ninguém esperava). **Biblioteca**: recomendação personalizada de leitura baseada no histórico. Ninguém pediu, mas se aparecer, encanta.
+
+4. **Indifferent**: features que o usuário simplesmente não nota. Esforço investido aqui é desperdiçado. **Biblioteca**: opções avançadas de formatação no relatório administrativo que ninguém usa.
+
+5. **Reverse**: features que **pioram** a experiência quando presentes. **Biblioteca**: pop-up de propaganda no terminal de auto-atendimento — sua presença frustra o usuário.
+
+### Insights práticos do Kano
+
+- **Features mudam de categoria com o tempo**: o que era Attractive vira Must-be conforme usuários se acostumam. Wi-Fi grátis em hotel: nos anos 2000 era delighter; hoje é must-be (sua ausência gera reclamação).
+- **Investir em Indifferent é desperdiçar recursos.** Identifique antes de implementar.
+- **Equilíbrio**: garanta os Must-be (sem eles você perde clientes), invista nos Performance (diferencial mensurável), explore os Attractive (diferencial competitivo).
+
+Kano usa um **questionário com dois pares de perguntas** pra cada feature: como você se sentiria se a feature ESTIVESSE presente? Como se sentiria se NÃO estivesse? As respostas mapeiam pra categoria via uma tabela de avaliação.
+
+## Matriz Valor vs Esforço
+
+Técnica simples e visual pra priorização rápida em sessões de planejamento. Cada requisito é plotado em duas dimensões:
+
+- **Valor** (Y): impacto no negócio, no usuário, em métricas de sucesso
+- **Esforço** (X): tempo, complexidade, recursos necessários
+
+Quatro quadrantes resultantes:
+
+| Quadrante | Características | Decisão típica |
+|---|---|---|
+| **Alto valor, baixo esforço** | "Quick wins" | Fazer primeiro |
+| **Alto valor, alto esforço** | "Grandes projetos" | Planejar bem, fazer em segundo |
+| **Baixo valor, baixo esforço** | "Fillers" | Fazer se sobrar tempo |
+| **Baixo valor, alto esforço** | "Time sinks" | Evitar / questionar |
+
+A maior dificuldade prática é estimar **valor**: requer dados ou opinião informada. Esforço é mais fácil (a equipe técnica estima).
+
+## RICE (Sean McBride, Intercom)
+
+Framework de pontuação numérico criado por **Sean McBride** quando era product manager na Intercom (plataforma de comunicação com clientes via chat, email e in-app messages). McBride publicou a técnica no blog da Intercom e a metodologia ficou amplamente conhecida na comunidade de produto.
+
+RICE atribui um **score numérico** a cada requisito usando 4 fatores:
+
+| Letra | Fator | Como medir |
+|---|---|---|
+| **R** | **Reach** (alcance) | Quantas pessoas serão impactadas no período (ex: usuários/mês) |
+| **I** | **Impact** (impacto) | Quanto cada pessoa será impactada — escala fixa: 3 (massivo), 2 (alto), 1 (médio), 0,5 (baixo), 0,25 (mínimo) |
+| **C** | **Confidence** (confiança) | Quão confiante você está nos números acima — 100% (alta), 80% (média), 50% (baixa) |
+| **E** | **Effort** (esforço) | Pessoa-mês ou pessoa-semana estimado |
+
+**Fórmula**: `RICE = (Reach × Impact × Confidence) / Effort`
+
+Quanto maior o score, mais prioritário.
+
+**Exemplo aplicado à biblioteca** (priorizando entre 3 features):
+
+| Feature | Reach (leitores/mês) | Impact | Confidence | Effort (pessoa-semana) | RICE |
+|---|---|---|---|---|---|
+| Renovação online de empréstimo | 800 | 2 | 80% | 4 | (800 × 2 × 0,8) / 4 = **320** |
+| Tema escuro na interface | 200 | 0,5 | 100% | 2 | (200 × 0,5 × 1,0) / 2 = **50** |
+| Recomendação por gênero | 1500 | 1 | 50% | 8 | (1500 × 1 × 0,5) / 8 = **93,75** |
+
+Resultado: priorizar Renovação online (320) → Recomendação (93,75) → Tema escuro (50).
+
+**Vantagens**: força conversa explícita sobre 4 dimensões; números permitem comparação direta; o fator Confidence captura incerteza (algo que MoSCoW e Kano ignoram).
+
+**Limitações**: estimativas erradas em qualquer dos 4 fatores propagam pro resultado; pode dar falsa precisão (3 casas decimais não significa verdade absoluta); requer dados ou suposições calibradas.
+
+## Quando usar cada técnica
+
+| Cenário | Técnica recomendada |
+|---|---|
+| Classificar **tipo** de requisito (funcional, qualidade, restrição) | FURPS+ ou ISO/IEC 25010:2023 |
+| Sistema com auditoria/licitação formal | ISO/IEC 25010:2023 |
+| Priorizar entrega num timebox curto | MoSCoW |
+| Decidir entre features pro próximo ciclo | RICE ou matriz Valor vs Esforço |
+| Entender percepção do usuário em features novas | Kano (com pesquisa estruturada) |
+| Planejamento rápido em workshop ágil | Matriz Valor vs Esforço (visual, intuitiva) |
+| Backlog grande e diverso | Combinar: FURPS+ pra tipo + RICE pra priorização |
+
+Na prática, equipes maduras **combinam** técnicas. Exemplo de fluxo realista:
+
+1. Classificar requisitos por **tipo** com FURPS+
+2. Aplicar **MoSCoW** pro escopo da entrega atual (separar Must / Should / Could / Won't)
+3. Dentro dos Must e Should, usar **RICE** ou **Valor vs Esforço** pra ordenar
+4. Para features novas/inovadoras, validar percepção com **Kano** antes de decidir
+
+## Erros comuns na análise e classificação
+
+**1. Inflação de prioridades.** Todo mundo quer seu requisito como Must/Alto. Sem disciplina, perde sentido. Estabeleça limites (ex: Must máx 60% do esforço).
+
+**2. Confundir importância com urgência.** Importante = impacto no sucesso. Urgente = pressão de prazo. Os dois não coincidem sempre. A matriz Eisenhower (importante × urgente) ajuda a separar.
+
+**3. Priorizar sem dados.** "Acho que é importante" sem base. RICE força quantificação; Kano força pesquisa com usuários. Use técnicas pra evitar opinião pura.
+
+**4. Não revisar prioridades.** Classificação inicial vira lei. Errado — em ágil, prioridades se revisam continuamente. Mesmo em waterfall, vale revisar a cada milestone.
+
+**5. Ignorar dependências.** Requisito A pode ser Must, mas depende de B que está em Could. Resultado: A não entrega. Mapeie dependências antes de finalizar.
+
+**6. Esquecer requisitos não funcionais na priorização.** MoSCoW e RICE são frequentemente aplicados só a funcionalidades. Performance, segurança, acessibilidade também precisam ser priorizadas — frequentemente são Must que ninguém marcou.
+
+**7. Tratar "Won't" como "nunca".** No DSDM original, Won't significa "não nesta entrega". Pode entrar em entregas futuras. Tratar como "nunca" gera frustração e tira o sentido da categoria.
+
+**8. Não envolver stakeholders na priorização.** Priorização feita só pela equipe técnica reflete viés técnico (faz primeiro o que é fácil pra dev). Priorização feita só pelo cliente reflete viés de desejo (tudo é Must). Negociação é essencial.
+
+## Aplicação no sistema de biblioteca
+
+Cenário completo de análise pra biblioteca municipal de médio porte, depois das sessões de elicitação (L2) e levantamento de domínio (L3).
+
+**Passo 1 — Classificar por tipo (FURPS+)**:
+
+Dividir a lista bruta de 150 requisitos em 9 buckets (5 FURPS + 4 do "+"). Identificar overlaps e duplicatas. Esperado: ~50% Functionality, ~30% URPS, ~20% restrições.
+
+**Passo 2 — Aplicar MoSCoW pro MVP da primeira entrega (4 meses)**:
+
+- **Must**: cadastro de leitores, registro de empréstimo e devolução, consulta ao acervo, conformidade LGPD (restrição legal)
+- **Should**: renovação online, notificação por email de devolução próxima, relatório de empréstimos atrasados
+- **Could**: tema escuro, exportação de histórico em CSV, sugestão de leitura por gênero
+- **Won't** (nesta entrega): app mobile, integração com Goodreads, chatbot de atendimento
+
+**Passo 3 — Dentro de Must e Should, usar RICE pra ordenar implementação**:
+
+Restrições regulatórias (LGPD) **não entram no RICE** — são obrigações que vão pra todas as features que tocam dados pessoais. RICE compara features entre si, não tem sentido pontuar uma obrigação legal.
+
+| Feature (Must) | Reach (leitores/mês) | Impact | Confidence | Effort (semanas) | RICE |
+|---|---|---|---|---|---|
+| Cadastro de leitor | 1500 | 2 | 100% | 3 | 1000 |
+| Consulta ao acervo | 2000 | 2 | 100% | 4 | 1000 |
+| Registro de empréstimo | 1500 | 3 | 100% | 6 | 750 |
+| Registro de devolução | 1500 | 3 | 100% | 4 | 1125 |
+
+Ordem por RICE: Devolução (1125) → Cadastro = Consulta (1000) → Empréstimo (750). Mas há **dependência funcional** que sobrepõe RICE: cadastro de leitor precisa existir antes de qualquer operação de empréstimo. Sequência real de implementação: Cadastro → Consulta → Empréstimo → Devolução. RICE informa peso relativo; dependências definem ordem.
+
+**Passo 4 — Validar Attractive features com pesquisa Kano**:
+
+Antes de investir esforço em features tipo "recomendação personalizada" (alto custo de implementação), aplicar questionário Kano com amostra de 30-50 leitores. Se for Indifferent pra maioria, cortar.
+
+**Passo 5 — Mapear NFRs (atributos de qualidade) usando ISO/IEC 25010**:
+
+- **Reliability**: disponibilidade ≥ 99% no horário comercial (8h às 18h)
+- **Performance efficiency**: busca no acervo < 2s com até 50 mil registros
+- **Interaction capability**: conformidade WCAG 2.1 nível AA
+- **Security**: criptografia de dados pessoais em repouso e em trânsito (TLS 1.3)
+- **Maintainability**: cobertura de testes automatizados ≥ 70%
+
+## Aplicação no Carbon Credit Compensation Platform
+
+No projeto Fatec, a classificação dos requisitos do **Carbon Credit Compensation Platform** segue lógica análoga, com algumas particularidades.
+
+**Classificação FURPS+ adaptada ao domínio regulado**:
+
+| Categoria | Requisitos típicos |
+|---|---|
+| **F**unctionality | Submeter inventário de emissões, comprar créditos, solicitar compensação, aposentar crédito, gerar relatório SBCE |
+| **U**sability | Interface acessível pra operador e auditor (perfis diferentes), documentação detalhada |
+| **R**eliability | Disponibilidade alta no fim do ano fiscal (período de submissão de inventários) |
+| **P**erformance | Cálculos de inventário com até 100 mil registros em < 30s |
+| **S**upportability | Logs auditáveis (rastreabilidade exigida pela Lei 15.042/2024) |
+| **+ Design** | Arquitetura em camadas, in-memory repositories (decisão do grupo, ADR-0005) |
+| **+ Implementação** | Java 21 + Spring Boot 3.x (definido pela equipe) |
+| **+ Interface** | Não há integração externa nesta versão (in-memory) |
+| **+ Restrições** | Conformidade com Lei 15.042/2024 (CBE, CRVE, retirement) |
+
+**MoSCoW pra entrega Fatec (prazo curto, in-memory)**:
+
+- **Must**: submeter inventário, registrar compensação, listar compensações por operador, aposentar crédito (cancelamento), logs auditáveis
+- **Should**: relatório de conformidade, busca de compensações por período, validação de duplicidade de aposentadoria
+- **Could**: dashboard de visualização, exportação CSV
+- **Won't** (nesta entrega): persistência em banco (deferido), integração com APIs externas, autenticação SSO
+
+**Restrições regulatórias** (não negociáveis, vêm da Lei 15.042/2024):
+
+- 1 CBE representa o direito de emitir 1 tCO₂e
+- 1 CRVE representa redução verificada de 1 tCO₂e por metodologia credenciada
+- Aposentadoria de crédito é definitiva (não pode ser revertida)
+- Operadores acima de 25 mil tCO₂e/ano participam do mercado regulado
+
+Essas restrições viram **regras de negócio invariantes** no código — implementadas como invariantes de domínio nos agregados (DDD tático).
+
+## Resumo visual
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Análise e Classificação — fluxo recomendado</text>
+
+  <rect x="40" y="60" width="640" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">1. Classificar por TIPO</text>
+  <text x="360" y="103" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">FURPS+ (Grady, HP, 1987+1992) ou ISO/IEC 25010:2023 — 9 características de qualidade</text>
+
+  <rect x="40" y="140" width="640" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="162" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">2. Definir escopo da ENTREGA</text>
+  <text x="360" y="183" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">MoSCoW (Clegg, 1994, DSDM) — Must / Should / Could / Won't</text>
+
+  <rect x="40" y="220" width="640" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="242" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">3. ORDENAR implementação dentro do escopo</text>
+  <text x="360" y="263" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">RICE (McBride, Intercom) ou matriz Valor vs Esforço</text>
+
+  <rect x="40" y="300" width="640" height="60" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="322" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">4. VALIDAR percepção de features novas</text>
+  <text x="360" y="343" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Kano (Kano et al, 1984) — Must-be / Performance / Attractive / Indifferent / Reverse</text>
+
+  <path d="M 360 120 L 360 140" stroke="currentColor" strokeWidth="1.5" />
+  <path d="M 360 200 L 360 220" stroke="currentColor" strokeWidth="1.5" />
+  <path d="M 360 280 L 360 300" stroke="currentColor" strokeWidth="1.5" />
+
+  <rect x="180" y="380" width="360" height="30" rx="6" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="400" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Output: backlog priorizado e classificado → Especificação (L5)</text>
+</svg>
+
+## Próximos passos
+
+| Lição | Tema |
+|---|---|
+| L1 | Introdução à Engenharia de Requisitos |
+| L2 | Elicitação de Requisitos |
+| L3 | Levantamento de Requisitos de Domínio |
+| **L4 (esta)** | Análise e Classificação |
+| **L5 (próxima)** | Especificação e Documentação — SRS, ISO/IEC/IEEE 29148, Volere |
+| L6 | Validação, Verificação e Gestão |
+| L7 | Requisitos Ágeis |
+
+A L5 vai cobrir como **documentar formalmente** os requisitos priorizados — usando padrões como o SRS da ISO/IEC/IEEE 29148:2018 e o template Volere de Suzanne e James Robertson.
+
+---
+
+**Referências canônicas usadas nesta lição**:
+
+- Grady, Robert; Caswell, Deborah. *Software Metrics: Establishing a Company-wide Program*. Prentice Hall, 1987, ISBN 0-13-821844-7. Livro original que introduz FURPS na HP.
+- Grady, Robert. *Practical Software Metrics for Project Management and Process Improvement*. Prentice Hall, 28 de abril de 1992, ISBN 0-13-720384-5. Onde Grady detalha a extensão FURPS+ com restrições.
+- Clegg, Dai; Barker, Richard. *Case Method Fast-Track: A RAD Approach*. Addison-Wesley, 1994, ISBN 978-0-201-62432-8. Publicação original do MoSCoW por Dai Clegg (Oracle).
+- ISO/IEC 25010:2023 — *Systems and software engineering — Systems and software Quality Requirements and Evaluation (SQuaRE) — Product quality model*. Segunda edição, novembro de 2023. Substitui a ISO/IEC 25010:2011.
+- Kano, Noriaki; Seraku, Nobuhiko; Takahashi, Fumio; Tsuji, Shin-ichi. *"Attractive Quality and Must-Be Quality"*. Journal of the Japanese Society for Quality Control (Hinshitsu), vol 14, nº 2, pp. 39-48, 1984. Artigo seminal do Modelo de Kano.
+- McBride, Sean. *"RICE: Simple prioritization for product managers"*. Intercom Blog. Publicação que popularizou o framework RICE na comunidade de produto digital.
+
+**Observações sobre fontes**:
+
+- A ISO/IEC 25010:2011 ainda é amplamente referenciada em livros, artigos acadêmicos e currículos de engenharia de software — particularmente importante saber que a 2023 trouxe Safety, e renomeou Usability e Portability.
+- O acrônimo "FURPS+" às vezes aparece com variações no que o "+" inclui. A versão de Grady (1992) é a referência canônica: Design, Implementation, Interface, Physical.
+- Kaoru Ishikawa, conhecido por outras técnicas de qualidade como diagrama de Ishikawa (espinha de peixe), foi orientador de Noriaki Kano — contexto histórico relevante mas não diretamente parte do modelo Kano.
+- RICE é mais usado em contexto de produto digital (SaaS, apps) que em sistemas tradicionais. Pra projetos sob contrato com escopo fixo, MoSCoW e matriz Valor vs Esforço são mais comuns.

@@ -1,0 +1,127 @@
+[
+  {
+    "id": "jpa-01",
+    "enunciado": "Quem criou o Hibernate e qual sua motivação histórica?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Larry Ellison em 1995, junto com o Oracle TopLink",
+      "Gavin King (desenvolvedor australiano) em 2001 na Cirrus Technologies como alternativa aos Entity Beans do EJB 2. EJB 2 era pesadelo: XML config explosivo, performance terrível, código boilerplate insano, lock-in com servidor de aplicação. Em 2004 Gavin foi pra JBoss; foi membro do expert group do EJB 3 e CONVENCEU O GRUPO A DEPRECAR Entity Beans em favor de JPA, modelada a partir do Hibernate",
+      "Sun Microsystems em 1997",
+      "Spring Framework team em 2003"
+    ],
+    "resposta": 1,
+    "explicacao": "Gavin King, desenvolvedor australiano, em 2001 na Cirrus Technologies, criou Hibernate como alternativa OPEN-SOURCE aos Entity Beans do EJB 2 — padrão oficial da Sun pra persistência em Java na época, que era universalmente odiado: XML configuration explosivo (centenas de linhas pra mapear uma entity), performance terrível, código boilerplate insano, lock-in com servidor de aplicação. Hibernate provou que ORM poderia ser leve, performático e elegante. EM 2004: Gavin e Christian Bauer foram contratados pela JBoss; publicaram 'Hibernate in Action' (Manning) — um dos livros técnicos mais influentes da década. EM 2006: Gavin entrou no expert group do JSR 220 (EJB 3) e CONVENCEU o grupo a DEPRECAR Entity Beans em favor de JPA — modelada a partir do Hibernate. JPA 1.0 nasceu como padrão Java pra ORM. JPA evoluiu: 2.0 (2009) com Criteria API; 2.1 (2013) com @EntityGraph; 2.2 (2017) com Java 8; Jakarta Persistence 3.0+ depois da transição Oracle → Eclipse Foundation. Hibernate continua sendo a implementação dominante (>80% Spring Boot projects)."
+  },
+  {
+    "id": "jpa-02",
+    "enunciado": "O que é o PERSISTENCE CONTEXT no JPA e por que importa?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Um arquivo XML de configuração",
+      "Cache + tracker da transação. Todas as entities que você find() ou persist() ficam GERENCIADAS pelo EntityManager. Mudanças nelas são detectadas AUTOMATICAMENTE (dirty checking) e sincronizadas no commit — você não precisa chamar update() ou save() explicitamente. Implementa o pattern Unit of Work de Martin Fowler",
+      "Apenas um termo técnico sem efeito prático",
+      "Estrutura de dados do PostgreSQL"
+    ],
+    "resposta": 1,
+    "explicacao": "Persistence Context é o CORE conceitual do JPA — um cache + tracker durante a transação. Quando você faz em.find() ou em.persist(), a entity vira MANAGED — fica dentro do contexto. CARACTERÍSTICAS: (1) IDENTITY MAP — duas chamadas find(Aluno.class, 1L) na mesma transação retornam a MESMA INSTÂNCIA Java (==); (2) DIRTY CHECKING — JPA detecta automaticamente mudanças nos campos das entities managed comparando estado inicial vs final, e gera UPDATE no flush/commit — VOCÊ NÃO PRECISA chamar update/save explicitamente; (3) WRITE-BEHIND — UPDATEs são acumulados e enviados em batch no flush, otimizando I/O. EXEMPLO: '@Transactional public void atualizar(Long id, String novoEmail) { Aluno a = em.find(Aluno.class, id); a.setEmail(novoEmail); /* só isso, no commit faz UPDATE automático */ }'. Esse comportamento — TRANSPARENT PERSISTENCE — é uma das ideias centrais do Gavin King no Hibernate original. Atribuído ao pattern UNIT OF WORK de Martin Fowler ('Patterns of Enterprise Application Architecture', 2002). Persistence context vive durante a transação; no commit/rollback as entities viram DETACHED."
+  },
+  {
+    "id": "jpa-03",
+    "enunciado": "Quais são os DEFAULTS de fetch para cada tipo de relacionamento no JPA?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Todos são LAZY por default",
+      "@OneToOne e @ManyToOne = EAGER (CARREGA junto, perigoso); @OneToMany e @ManyToMany = LAZY. RECOMENDAÇÃO UNIVERSAL: declarar fetch = FetchType.LAZY em TODOS os relacionamentos sem exceção. Carregar explicitamente o que precisa via JOIN FETCH ou @EntityGraph. Vlad Mihalcea (autor de High-Performance Java Persistence) repete isso constantemente",
+      "Todos são EAGER por default",
+      "Depende do banco de dados"
+    ],
+    "resposta": 1,
+    "explicacao": "Defaults JPA (memorize, isso pega muita gente): @OneToOne = EAGER; @ManyToOne = EAGER; @OneToMany = LAZY; @ManyToMany = LAZY. PROBLEMA dos defaults EAGER em to-one: criam JOINs IMPLÍCITOS em TODA query. Você busca um Aluno, vem junto Departamento, Curso, Endereco, etc. — mesmo se não precisar. Performance horrível em telas que mostram listas (cada item da lista carrega todas as relações to-one em cascata). PIOR: defaults eager se PROPAGAM — se Aluno tem ManyToOne Departamento eager, e Departamento tem ManyToOne Empresa eager, ao buscar Aluno você traz toda a árvore. RECOMENDAÇÃO UNIVERSAL: '@ManyToOne(fetch = FetchType.LAZY) private Aluno aluno;' SEMPRE. Vlad Mihalcea (Hibernate developer advocate, autor de 'High-Performance Java Persistence') repete isso em todos os artigos: 'sempre LAZY'. Carrega o que precisa EXPLICITAMENTE quando precisa, via JOIN FETCH (JPQL) ou @EntityGraph (declarativo). Quando estiver tentado a deixar eager 'porque sempre precisa do dado relacionado', você quase sempre está errado — torna o código frágil a futuras mudanças no comportamento da query."
+  },
+  {
+    "id": "jpa-04",
+    "enunciado": "O que é o N+1 PROBLEM no JPA e por que ele acontece?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Bug que faz queries falharem com erro",
+      "Antipattern de performance: carrega LISTA de N entities (1 query) e depois ACESSA RELAÇÃO LAZY de cada uma — dispara 1 query adicional por entity. Total: N+1 queries em vez de 1 ou 2. Endpoint que retorna 100 articles com comentários: 101 queries. Performance vai de 10ms a 500ms. Bug silencioso porque o código parece inocente",
+      "Problema só em bancos NoSQL",
+      "Limite de 1 query por segundo"
+    ],
+    "resposta": 1,
+    "explicacao": "N+1 problem é o bug de performance MAIS COMUM em apps Spring Boot/JPA. ACONTECE quando: (1) Carrega lista de N entities — 1 query; (2) Pra cada entity, acessa relação lazy — 1 query adicional POR entity; (3) Total: N+1 queries em vez de 1 (com JOIN) ou 2 (com batch). EXEMPLO CONCRETO: 'List<Article> articles = articleRepo.findAll(); for (Article a : articles) { int count = a.getComentarios().size(); }' — 1 SELECT pra Article + N SELECTs pra Comentario (um por article). Pra 100 articles: 101 queries. SQL gerado: 'SELECT * FROM article;' depois 100 vezes 'SELECT * FROM comentario WHERE article_id = X;'. PROBLEMA SILENCIOSO: código parece inocente, em dev com 10 linhas funciona perfeito, em produção com 10K linhas o endpoint trava. DETECÇÃO: spring.jpa.show-sql=true + spring.jpa.properties.hibernate.format_sql=true, rodar endpoint, CONTAR queries no log. Padrão repetido = N+1. SOLUÇÕES (em ordem de preferência): (1) JOIN FETCH em @Query JPQL — 'SELECT a FROM Article a LEFT JOIN FETCH a.comentarios'; (2) @EntityGraph(attributePaths = {comentarios}) — declarativo, mais limpo; (3) @BatchSize ou hibernate.default_batch_fetch_size=25 — vira N/k+1 queries; (4) DTO Projection — só carrega campos necessários, geralmente mais rápido e mais limpo."
+  },
+  {
+    "id": "jpa-05",
+    "enunciado": "Qual a diferença prática entre JOIN FETCH (JPQL) e @EntityGraph para resolver N+1?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São equivalentes em todos os aspectos",
+      "JOIN FETCH é JPQL custom com LEFT JOIN FETCH — funciona em qualquer @Query manual. @EntityGraph (JPA 2.1+) é DECLARATIVO — declara o grafo de atributos sem escrever JPQL. Vantagem do @EntityGraph: dá pra ter múltiplas variantes do MESMO método base (findAll() com ou sem comentários) sem JPQL custom. Ambos geram SQL similar com LEFT JOIN",
+      "JOIN FETCH só funciona em PostgreSQL",
+      "@EntityGraph é antigo e está deprecado"
+    ],
+    "resposta": 1,
+    "explicacao": "JOIN FETCH (JPQL): 'SELECT a FROM Article a LEFT JOIN FETCH a.comentarios' — força carregamento eager da relação especificada NESSA query, mesmo que esteja marcada lazy na entity. Útil em qualquer @Query custom. @EntityGraph (introduzido em JPA 2.1, 2013): declarativo via anotação, sem precisar escrever JPQL. Exemplo Spring Data: '@EntityGraph(attributePaths = {comentarios}) List<Article> findAll();' — Spring usa o método padrão findAll() do JpaRepository mas com fetch graph aplicado. VANTAGEM @EntityGraph: pode ter VÁRIAS variantes do mesmo método sem JPQL — 'findAll()' simples, 'findAllWithComentarios()' com graph de comentários, 'findAllWithComentariosAndAutor()' com graph mais amplo. Mais flexível pra evolução. AMBOS geram SQL similar com LEFT JOIN — Hibernate trata equivalente em runtime. PROBLEMA COMUM em AMBOS quando coletando: produto cartesiano. Se Article tem N comentários, query retorna N linhas de Article (uma por comentário). Resultado: List<Article> tem N duplicatas do MESMO Article. Solução: use DISTINCT no JPQL OU use Set em vez de List como tipo da coleção (Hibernate dedup automaticamente). Para paginação com fetch join e to-many: cuidado especial — pode causar HHH000104 warning sobre fetching collection in memory."
+  },
+  {
+    "id": "jpa-06",
+    "enunciado": "O que é a LazyInitializationException e quando acontece?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Erro de syntax SQL",
+      "Acontece quando você acessa um atributo LAZY de uma entity FORA DA TRANSAÇÃO/sessão Hibernate. O persistence context fechou ao terminar a transação; o proxy lazy não tem mais conexão com banco pra buscar a relação. Erro clássico em controllers que recebem entity do service e tentam acessar relação lazy",
+      "Erro só em desenvolvimento",
+      "Bug do PostgreSQL"
+    ],
+    "resposta": 1,
+    "explicacao": "LazyInitializationException acontece quando você ACESSA UM ATRIBUTO LAZY de uma entity QUE FOI DETACHED — saiu do persistence context. O proxy Hibernate que representa a relação lazy precisa de uma SESSION ATIVA pra disparar a query de carregamento. Sem session, dispara LazyInitializationException com mensagem 'could not initialize proxy - no Session'. CENÁRIO CLÁSSICO: @Service tem @Transactional method que busca Aluno e retorna; @Controller chama service e tenta acessar aluno.getMatriculas() pra renderizar tela — BOOM. Transação fechou no service, persistence context destruído, entity detached. SOLUÇÕES: (1) Acessar a relação DENTRO da transação — adicionar @Transactional no método controller (ou usar OSIV, anti-pattern); (2) FETCH JOIN ou @EntityGraph — trazer pré-carregado, sem ficar lazy; (3) DTO PROJECTION — retornar DTO já com dados, não entity; (4) Open Session in View (OSIV, anti-pattern, ANTIGO DEFAULT do Spring Boot) — mantém session aberta durante toda request HTTP. PROBLEMA: queries lazy disparadas em template/serialização SEM VISIBILIDADE no service layer, bug N+1 oculto, conexões ocupadas mais tempo. SEMPRE configure 'spring.jpa.open-in-view=false' em application.yml — força carregamento explícito no service, código mais previsível e debugável."
+  },
+  {
+    "id": "jpa-07",
+    "enunciado": "Quando você DEVE modelar uma tabela de junção como entity explícita em vez de usar @ManyToMany puro?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Nunca, @ManyToMany é sempre melhor",
+      "Quando a tabela de junção TEM ATRIBUTOS PRÓPRIOS além das 2 FKs. Exemplo: Matricula entre Aluno e Disciplina, mas com nota, data_matricula, status — esses são atributos do RELACIONAMENTO. @ManyToMany puro só funciona se a junção tem APENAS as 2 FKs. Com atributos extra, modele como entity Matricula com 2 @ManyToOnes",
+      "Apenas em projetos legados",
+      "Apenas no PostgreSQL"
+    ],
+    "resposta": 1,
+    "explicacao": "@ManyToMany funciona BEM quando: tabela de junção tem APENAS as 2 FKs (alunoX_id, disciplinaY_id como composite PK). Hibernate gerencia tudo automaticamente — você adiciona/remove da Set<Disciplina> alunos e Hibernate sincroniza a tabela de junção. ANTI-PATTERN: usar @ManyToMany quando a tabela DE JUNÇÃO TEM ATRIBUTOS PRÓPRIOS — sintoma de que esse relacionamento é na verdade UMA ENTIDADE DE NEGÓCIO, não só uma ligação. EXEMPLO REAL: Aluno N:M Disciplina parece @ManyToMany. Mas matrícula TEM nota, data_matricula, status (ATIVA, TRANCADA, APROVADA), valor_pago, professor_responsavel... essas são propriedades DA MATRÍCULA, não do Aluno nem da Disciplina. MODELE COMO ENTITY: 'class Matricula { @ManyToOne Aluno aluno; @ManyToOne Disciplina disciplina; BigDecimal nota; LocalDate dataMatricula; @Enumerated Status status; }'. No banco continua sendo tabela com 2 FKs + colunas extras — mesma estrutura física, modelagem OO mais rica. VANTAGENS: (1) você pode tem queries sobre matrículas diretamente — 'findByStatus(ATIVA)' faz sentido; (2) cada matrícula tem identidade própria (PK simples + UNIQUE(aluno, disciplina) ou composite PK); (3) pode evoluir adicionando atributos sem refatoração; (4) lifecycle independente — criar matrícula não exige modificar coleção em Aluno. Em Spring Data JPA, MatriculaRepository extends JpaRepository<Matricula, Long> dá acesso direto a CRUD."
+  },
+  {
+    "id": "jpa-08",
+    "enunciado": "Por que usar Lombok @Data em entities JPA é uma má prática conhecida?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Lombok não funciona em entities",
+      "@Data gera equals/hashCode/toString incluindo TODOS os campos — inclusive relacionamentos lazy. ToString recursivo em entities bidirecionais vira LOOP INFINITO ou stack overflow. equals/hashCode em entities é tema sensível — usar todos campos quebra identity map e gera bugs sutis em Set/Map. SOLUÇÃO: usar @Getter @Setter separados, NÃO @Data; equals/hashCode customizados",
+      "Lombok é deprecado",
+      "Só funciona com @Entity Beans antigos"
+    ],
+    "resposta": 1,
+    "explicacao": "Lombok @Data = @Getter + @Setter + @ToString + @EqualsAndHashCode + @RequiredArgsConstructor. PROBLEMAS em entities JPA: (1) @ToString INCLUI TODOS OS CAMPOS — relacionamentos lazy também. Em entity bidirecional (Aluno tem List<Matricula>, Matricula tem Aluno), toString de Aluno chama toString de cada Matricula que chama toString de Aluno... STACK OVERFLOW. Ou se relacionamento é lazy, dispara queries em cascata pra serializar — N+1 ao logar; (2) @EqualsAndHashCode INCLUI TODOS OS CAMPOS por default — instâncias com mesmo ID mas atributos diferentes em momentos diferentes da transação (ex: antes/depois de UPDATE) viram 'diferentes' por equals — quebra identity map, comportamento inesperado em Set; (3) usar id direto em equals tem problema próprio — id é null em entities Transient (antes do persist), null != null nas comparações iniciais; (4) RequiredArgsConstructor pode quebrar contrato JPA (precisa de construtor sem args). SOLUÇÕES: use @Getter @Setter SEPARADOS — sem @ToString automático nem @EqualsAndHashCode. Para toString: implemente manualmente ou @ToString(exclude = {matriculas, comentarios}). Para equals: usar business identity (cpf, email, uuid externo) OU usar 'id != null && Objects.equals(id, other.id)' COM hashCode CONSTANTE 'getClass().hashCode()' (evita rehashing quando id é setado). Alternativa pragmática: usar @Data em DTOs (que não tem essas restrições) e @Getter/@Setter em @Entity."
+  },
+  {
+    "id": "jpa-09",
+    "enunciado": "Por que você deve configurar 'spring.jpa.open-in-view=false' em produção?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Pra economizar memória",
+      "OSIV (Open Session in View) é DEFAULT TRUE no Spring Boot — mantém Persistence Context aberto durante TODA REQUEST HTTP pra evitar LazyInitializationException no controller. PROBLEMAS: queries lazy disparadas em template/serialização SEM VISIBILIDADE no service layer (bug N+1 oculto); conexões DB ocupadas mais tempo; lazy loading no controller cria acoplamento entre web layer e DB; código menos previsível. Setar false força carregamento explícito no service",
+      "Pra desligar o Hibernate",
+      "Pra que controllers funcionem mais rápido"
+    ],
+    "resposta": 1,
+    "explicacao": "OSIV (Open Session in View) é DEFAULT TRUE no Spring Boot — decisão CONTROVERSA da equipe Spring. FUNCIONAMENTO: mantém Hibernate Session (Persistence Context) aberta durante toda a request HTTP, em vez de fechar quando @Transactional do service termina. RAZÃO HISTÓRICA: evitar LazyInitializationException quando o template (Thymeleaf, JSP) ou serializador JSON acessa relação lazy depois do service ter retornado. PROBLEMAS: (1) BUG N+1 OCULTO — controller/template/serializer disparam queries lazy SEM VISIBILIDADE no service onde a query deveria ser estruturada. Difícil debugar, fácil aceitar; (2) CONEXÕES DB OCUPADAS MAIS TEMPO — em apps com alta concorrência, pool de conexões esgota mais rápido; (3) ACOPLAMENTO INADEQUADO — web layer (controllers, templates) ficam acoplados ao banco; (4) TRANSAÇÃO FORA DO SERVICE — controllers podem disparar queries em ambiente sem transação explícita, comportamento inconsistente; (5) MOCKING DIFÍCIL — testes que envolvem serialização precisam mockar todo Persistence Context. SOLUÇÃO: 'spring.jpa.open-in-view=false' em application.yml. FORÇA: (1) carregamento EXPLÍCITO no service via fetch join, EntityGraph ou DTO projection; (2) controller recebe DTOs ou entities completamente carregadas; (3) transações ficam no service onde devem estar; (4) bugs N+1 ficam ÓBVIOS (LazyInitializationException) em vez de silenciosos (queries extras). Vlad Mihalcea e Andy Wilkinson (Spring Boot lead) recomendam abertamente desligar OSIV em produção. O default true é mantido por compatibilidade com apps legadas que assumem comportamento."
+  },
+  {
+    "id": "jpa-10",
+    "enunciado": "Verdadeiro ou falso: alunoRepository.findAll() é seguro para uso em qualquer endpoint, independente do tamanho da tabela.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. findAll() carrega TODAS as linhas da tabela em memória — funciona perfeito em desenvolvimento com 100 linhas, mas em produção com 1 milhão de linhas é OUT OF MEMORY garantido. Ou, se não estourar memória, gera query lenta (tabela inteira via rede) + serialização gigante no controller + payload absurdo na resposta HTTP. CASO REAL: app Spring Boot com 50K alunos. Endpoint /alunos chama alunoRepo.findAll() → JVM com 1GB heap aloca lista, ORM faz hydration de 50K entities (cada uma com relacionamentos lazy = potencialmente 50K proxies), serializer JSON precisa percorrer tudo. Resultado: latência de 30+ segundos, GC pressure brutal, em pico vira OutOfMemoryError. SOLUÇÃO CORRETA: PAGINAÇÃO sempre. Spring Data JPA tem suporte nativo: 'Page<Aluno> findAll(Pageable pageable)' do JpaRepository. Endpoint recebe page/size: '@GetMapping public Page<AlunoDTO> listar(@PageableDefault(size=20) Pageable p) { return alunoRepo.findAll(p).map(AlunoDTO::from); }'. Resultado: Spring retorna primeiros 20 + metadados (totalElements, totalPages, hasNext). Frontend pagina conforme usuário rola. OUTROS PADRÕES PRA EVITAR FULL FETCH: (1) findById quando sabe o ID; (2) findBy<Filter> com WHERE específico; (3) Stream<Aluno> findAllBy() com @Transactional(readOnly = true) pra processar em batch sem manter tudo em memória (cuidado: cursor server-side); (4) Slice<Aluno> em vez de Page<Aluno> quando count(*) é caro — Slice só sabe se tem 'próxima página', evita query count separada. REGRA: findAll() sem paginação só em tabelas DE LOOKUP (estados brasileiros, países, configs) onde você SABE que vai ter <100 linhas pra sempre."
+  }
+]

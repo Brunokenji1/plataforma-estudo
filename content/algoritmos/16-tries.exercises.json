@@ -1,0 +1,127 @@
+[
+  {
+    "id": "trie-01",
+    "enunciado": "De onde vem o nome 'trie' e quem o cunhou?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Edward Fredkin (1960), do MIT, derivado da palavra 'reTRIEval' (recuperação)",
+      "Donald Knuth (1968), em The Art of Computer Programming",
+      "John von Neumann (1945), durante o projeto ENIAC",
+      "Inventado anonimamente em laboratórios da IBM nos anos 1970"
+    ],
+    "resposta": 0,
+    "explicacao": "Edward Fredkin, físico do MIT, cunhou o termo em 1960 no paper 'Trie Memory' (Communications of the ACM 3(9), pp. 490-499). O nome vem das letras do MEIO da palavra 'reTRIEval' (recuperação, em inglês). Fredkin pronunciava como 'tree' (árvore), mas a maioria das pessoas hoje pronuncia como 'try' (tentar) para distinguir verbalmente de 'tree'. Cronologia completa: Axel Thue (1912) descreveu a ideia em forma abstrata; René de la Briandais (1959) publicou descrição concreta no Western Joint Computer Conference; Fredkin (1960) formalizou e nomeou."
+  },
+  {
+    "id": "trie-02",
+    "enunciado": "Qual a complexidade de buscar uma palavra de tamanho L em uma trie contendo N palavras?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(N)",
+      "O(N × L)",
+      "O(L) — INDEPENDENTE do número de palavras armazenadas",
+      "O(log N)"
+    ],
+    "resposta": 2,
+    "explicacao": "O(L), onde L é o tamanho da palavra. Independente de quantas palavras existem na trie. Esse é o superpoder da estrutura: pra dicionários com bilhões de palavras, buscar 'python' custa apenas 6 acessos (6 caracteres). Compare com hash table: O(L) amortizado, mas pra busca POR PREFIXO ('me dê tudo que começa com py'), hash table degrada pra O(N × L) — varrer tudo. Trie faz busca por prefixo em O(L + K) onde K é o número de matches retornados. É por isso que toda barra de busca com autocomplete usa trie ou variante."
+  },
+  {
+    "id": "trie-03",
+    "enunciado": "Qual a DIFERENÇA entre as operações `buscar(palavra)` e `comecaCom(prefixo)` em uma trie?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Não há diferença, são apenas nomes diferentes",
+      "`buscar` percorre a trie E verifica se o último nó tem 'fimDePalavra=true'. `comecaCom` apenas verifica se o caminho existe, sem checar se é palavra completa",
+      "`buscar` é O(L) e `comecaCom` é O(N×L)",
+      "`buscar` funciona com qualquer string e `comecaCom` só com prefixos de tamanho fixo"
+    ],
+    "resposta": 1,
+    "explicacao": "O código é quase idêntico — a diferença está na CHECAGEM FINAL. `buscar(palavra)` retorna true apenas se o caminho existe E o último nó tem fimDePalavra=true (foi marcado como palavra completa inserida). `comecaCom(prefixo)` retorna true se simplesmente o caminho existe — significa que ALGUMA palavra na trie começa com esse prefixo. Exemplo com trie={'car', 'card'}: buscar('ca')=false (não é palavra completa); buscar('car')=true; comecaCom('ca')=true (car e card começam com 'ca'); comecaCom('cd')=false. Essa distinção entre 'palavra completa' e 'prefixo' é IMPOSSÍVEL de fazer eficientemente em hash table."
+  },
+  {
+    "id": "trie-04",
+    "enunciado": "Por que tries usam MAIS MEMÓRIA que hash tables para armazenar strings?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque tries precisam ordenar as strings antes de armazenar",
+      "Porque cada nó da trie geralmente reserva um array de ponteiros para cada caractere possível do alfabeto (26 para a-z, 256 para ASCII, etc.) — overhead grande mesmo quando há poucos filhos reais",
+      "Porque tries armazenam cada string duplicada",
+      "Porque tries usam números reais em vez de inteiros"
+    ],
+    "resposta": 1,
+    "explicacao": "O overhead é por nó: array (ou map) de filhos pra cada caractere do alfabeto. Em sistemas 64-bit com alfabeto a-z, são 26 × 8 bytes = 208 bytes POR NÓ, mesmo que o nó tenha só 1 filho real. Pra alfabetos Unicode (150.000 caracteres), arrays diretos são proibitivos. Soluções: usar HashMap<Character, No> em cada nó (mais lento, menos memória), restringir alfabeto, ou usar Patricia Trie (que comprime caminhos com filho único). Em compensação, tries oferecem operações de prefixo que hash tables simplesmente não fazem eficientemente. Regra: use hash table se for só busca exata; use trie se precisa de prefixo, autocomplete, ou listagem ordenada."
+  },
+  {
+    "id": "trie-05",
+    "enunciado": "Qual estrutura é usada em TABELAS DE ROTEAMENTO em roteadores da internet (Cisco, Juniper, kernel Linux)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Hash table",
+      "Binary search tree",
+      "Patricia Trie (também chamada Radix Tree) — variante de trie que comprime caminhos com filho único em uma única aresta",
+      "B-Tree"
+    ],
+    "resposta": 2,
+    "explicacao": "Patricia Trie. Criada por Donald Morrison em 1968 (paper 'PATRICIA — Practical Algorithm To Retrieve Information Coded in Alphanumeric', JACM 15(4)). A ideia: comprime cadeias de nós com filho único em uma única aresta rotulada com a sequência de caracteres. Resultado: muito menos nós, especialmente em alfabetos pequenos com chaves longas — exatamente o caso de IPs binários (32 bits IPv4, 128 bits IPv6). Usada em: kernel Linux (módulo fib_trie), hardware especializado de roteadores Cisco/Juniper, e qualquer implementação séria de redes. Resolve o 'longest prefix match' em tempo proporcional ao comprimento do endereço IP, independente do número de entradas na tabela."
+  },
+  {
+    "id": "trie-06",
+    "enunciado": "Quem criou o algoritmo Aho-Corasick e em qual ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth e Vaughan Pratt, 1977 (também criadores do KMP)",
+      "Alfred V. Aho e Margaret J. Corasick, 1975, no Bell Labs (Murray Hill, NJ)",
+      "Robert Tarjan e John Hopcroft, 1972",
+      "Edward Fredkin, 1960, no mesmo paper das tries"
+    ],
+    "resposta": 1,
+    "explicacao": "Alfred V. Aho e Margaret J. Corasick, em 1975, no Bell Labs (Aho) e MITRE Corporation (Corasick). Paper: 'Efficient String Matching: An Aid to Bibliographic Search', Communications of the ACM 18(6), pp. 333-340. Algoritmo: busca TODAS as ocorrências de MÚLTIPLOS padrões em um texto em UMA SÓ PASSADA pelo texto, em complexidade O(N + L + Z) — linear no tamanho do texto, independente de quantos padrões existem. A ideia: construir uma trie com todos os padrões, adicionar 'failure links' (similar ao KMP), processar o texto seguindo a trie e usando failure links em mismatches. Aplicações: comando fgrep do Unix (mencionado no paper original), antivírus (detecção de assinaturas de malware), intrusion detection (Snort, Suricata), bioinformática."
+  },
+  {
+    "id": "trie-07",
+    "enunciado": "Qual a complexidade do algoritmo Aho-Corasick para encontrar todas as ocorrências de P padrões em um texto de tamanho N?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(N × P) — uma busca KMP por padrão",
+      "O(N + L + Z), onde L é a soma dos tamanhos dos padrões e Z é o número de matches — LINEAR no texto, INDEPENDENTE do número de padrões",
+      "O(N²)",
+      "O(P × log N)"
+    ],
+    "resposta": 1,
+    "explicacao": "O(N + L + Z). N = tamanho do texto, L = soma dos tamanhos dos padrões (custo de construir a trie + failure links — feito UMA VEZ, offline), Z = número de matches reportados. Crucial: NÃO depende do número de padrões! Compare com a abordagem ingênua de rodar KMP P vezes: O(N × P + L), o que para P grande (10.000 padrões) é muito pior. Por isso antivírus modernos usam Aho-Corasick: construem o automaton uma vez com TODAS as assinaturas de malware conhecidas (centenas de milhares), e depois cada arquivo é escaneado em VELOCIDADE DE I/O — limitado pelo disco, não pelo CPU."
+  },
+  {
+    "id": "trie-08",
+    "enunciado": "Verdadeiro ou falso: o comando `fgrep` do Unix usa o algoritmo Aho-Corasick por baixo dos panos.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. O fgrep (fixed-string grep) é uma variante do grep otimizada para buscar STRINGS LITERAIS (não regex), e usa Aho-Corasick. Mencionado explicitamente no paper original de Aho e Corasick em 1975. Por isso fgrep é muito mais rápido que grep tradicional pra buscar várias strings literais simultaneamente (`fgrep -f padroes.txt arquivo.log`). Outros usos de Aho-Corasick em produção: antivírus (ClamAV, e variantes), intrusion detection (Snort, Suricata), filtros de conteúdo em redes sociais, busca em bases bibliográficas (motivação original do paper), análise de logs em SIEMs, e detecção de plágio."
+  },
+  {
+    "id": "trie-09",
+    "enunciado": "Em qual cenário tries são CLARAMENTE PREFERÍVEIS a hash tables?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando você só precisa de busca por chave exata e nada mais",
+      "Quando memória é o recurso mais escasso",
+      "Quando você precisa de operações de PREFIXO eficientes: autocomplete, listar palavras que começam com 'X', verificar se algum prefixo existe — ou listar entradas em ordem alfabética",
+      "Quando os dados são numéricos em vez de strings"
+    ],
+    "resposta": 2,
+    "explicacao": "Tries são imbatíveis em operações de PREFIXO. Autocomplete (Google search, IDE, navegador): O(L + K) onde L é o prefixo e K é o tamanho da resposta. Em hash table isso seria O(N × L) — varrer todos os N pares testando prefixo. Listar palavras em ordem alfabética: DFS na trie em O(soma dos comprimentos), trivial. Em hash table: O(N log N × L) precisa ordenar. Spell-check com sugestões fuzzy (palavras com edit distance pequena): trie + DP. Tries também garantem O(L) NO PIOR CASO, enquanto hash tables têm O(L) só amortizado (worst case pode degradar com colisões). Pra busca exata pura sem prefixos, hash table tipicamente vence em memória e constante de tempo."
+  },
+  {
+    "id": "trie-10",
+    "enunciado": "O que é uma Suffix Tree, mencionada brevemente na lição?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Uma trie ao contrário (das folhas para a raiz)",
+      "Uma trie contendo todos os SUFIXOS de uma string — permite responder 'esse padrão aparece nessa string?' em O(L) independente do tamanho da string original. Aplicação clássica em bioinformática (comparar genomas)",
+      "Uma trie usada apenas para sufixos de URLs",
+      "Outro nome para Patricia Trie"
+    ],
+    "resposta": 1,
+    "explicacao": "Suffix Tree: trie contendo TODOS os sufixos de uma string. Pra string 'banana', os sufixos são {'banana', 'anana', 'nana', 'ana', 'na', 'a'}. Inserindo todos numa trie, você consegue responder 'esse padrão P aparece em S?' em O(L) onde L é tamanho do PADRÃO — independente do tamanho de S (que pode ser gigantesco). Aplicações: bioinformática (comparar genomas inteiros, sequências de DNA), compressão LZ77 e descendentes, busca em texto indexada. Ukkonen mostrou em 1995 como construir suffix tree em O(n) — uma das construções algorítmicas mais elegantes da história. Alternativa moderna mais compacta: Suffix Array (array indexado em vez de árvore). É um ramo grande de algoritmos de string que merece estudo próprio."
+  }
+]

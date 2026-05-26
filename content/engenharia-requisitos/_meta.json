@@ -1,0 +1,13 @@
+{
+  "titulo": "Engenharia de Requisitos",
+  "descricao": "Da elicitação à gestão...",
+  "licoes": [
+    { "slug": "01-introducao-engenharia-requisitos", "ordem": 1 },
+    { "slug": "02-elicitacao-requisitos", "ordem": 2 },
+    { "slug": "03-levantamento-requisitos-dominio", "ordem": 3 },
+    { "slug": "04-analise-classificacao-requisitos", "ordem": 4 },
+    { "slug": "05-especificacao-documentacao-requisitos", "ordem": 5 },
+    { "slug": "06-validacao-verificacao-gestao-requisitos", "ordem": 6 },
+    { "slug": "07-requisitos-ageis", "ordem": 7 }
+  ]
+}

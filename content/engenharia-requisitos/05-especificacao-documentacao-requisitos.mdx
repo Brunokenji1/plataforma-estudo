@@ -1,0 +1,667 @@
+---
+titulo: "Especificação e Documentação de Requisitos"
+descricao: "Como transformar requisitos analisados (L4) em documentação formal: SRS da ISO/IEC/IEEE 29148:2018, template Volere, casos de uso, user stories com INVEST, critérios de aceitação Gherkin."
+---
+
+Nas Lições 2 a 4 você descobriu, organizou e priorizou os requisitos. Agora vem a parte que muita gente subestima: **escrever esses requisitos de forma que outras pessoas consigam ler, entender e implementar sem ambiguidade**.
+
+Especificação é mais que transcrever. É escolher um formato que sirva ao contexto, escrever cada requisito de forma testável, e organizar tudo num documento (ou backlog) que vire base pra desenvolvimento, validação e contrato.
+
+Existem dois grandes "mundos" pra especificar requisitos:
+
+1. **Tradicional/formal**: documentos estruturados como o **SRS** (Software Requirements Specification) da ISO/IEC/IEEE 29148:2018 ou o **template Volere** dos Robertson
+2. **Ágil**: **user stories** + **critérios de aceitação**, frequentemente em **Gherkin** (Given-When-Then)
+
+Esta lição cobre os dois, porque na vida real você vai encontrar projetos usando ambos — frequentemente no mesmo lugar (especificação inicial formal, evolução em backlog ágil).
+
+<Insight>
+A pergunta certa não é "qual abordagem é melhor?" mas sim "que nível de formalidade meu contexto exige?". Sistema crítico pra prefeitura via licitação pública → SRS formal com cada requisito numerado, rastreável e versionado. App interno pra uma startup → backlog de user stories no Jira com critérios de aceitação em Gherkin. Os dois extremos podem coexistir: muitas equipes começam com um SRS macro e detalham via user stories nos sprints.
+</Insight>
+
+## Por que escrever requisitos formalmente?
+
+Antes do como, o porquê. Requisitos bem especificados servem a propósitos concretos:
+
+- **Comunicação**: cliente, analista, dev, QA, ops, regulador — todos leem o mesmo texto e entendem a mesma coisa. Erros aqui custam caro depois.
+- **Contrato**: em projeto pago, o documento define o escopo entregue. Sem isso, "ah, eu achei que isso ia incluir X" vira disputa.
+- **Base pra estimativa**: estimar sem requisitos claros é chute. Com SRS ou backlog, equipe estima feature a feature.
+- **Base pra teste**: cada requisito vira critério verificável. Sem critério escrito, QA testa "intuição".
+- **Rastreabilidade**: quando um requisito muda em produção, você precisa achar todo código, teste e documentação afetados. Só é possível se cada requisito tem um ID único.
+- **Auditoria**: em sistemas regulados (saúde, financeiro, governo), auditor pede documento mostrando que cada feature implementada veio de requisito aprovado.
+
+Especificação ruim ou ausente gera retrabalho, atraso, conflito com cliente e bugs em produção que ninguém previu.
+
+## Características de um bom requisito (ISO/IEC/IEEE 29148:2018)
+
+A norma define **9 características** que cada requisito individual deve ter. Vale memorizar — é o critério usado em revisão formal:
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">9 características de um bom requisito — ISO/IEC/IEEE 29148:2018</text>
+
+  <rect x="40" y="60" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="140" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">1. Necessary</text>
+  <text x="140" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">necessário — define algo</text>
+  <text x="140" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">que o sistema PRECISA fazer</text>
+  <text x="140" y="128" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">e não apenas seria legal</text>
+
+  <rect x="260" y="60" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">2. Implementation-free</text>
+  <text x="360" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">livre de implementação — diz</text>
+  <text x="360" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"o que" e não "como"</text>
+  <text x="360" y="128" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(salvo restrições explícitas)</text>
+
+  <rect x="480" y="60" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="580" y="82" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">3. Unambiguous</text>
+  <text x="580" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">não ambíguo — uma</text>
+  <text x="580" y="113" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">interpretação possível</text>
+  <text x="580" y="128" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">evitar "rápido", "amigável"</text>
+
+  <rect x="40" y="160" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="140" y="182" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">4. Consistent</text>
+  <text x="140" y="200" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">consistente — não conflita</text>
+  <text x="140" y="213" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">com outros requisitos</text>
+  <text x="140" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">do mesmo documento</text>
+
+  <rect x="260" y="160" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="182" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">5. Complete</text>
+  <text x="360" y="200" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">completo — descreve</text>
+  <text x="360" y="213" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">tudo necessário pra entendê-lo</text>
+  <text x="360" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">sem informação faltando</text>
+
+  <rect x="480" y="160" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="580" y="182" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">6. Singular</text>
+  <text x="580" y="200" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">singular — um requisito</text>
+  <text x="580" y="213" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">expressa uma necessidade</text>
+  <text x="580" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">evitar "AND" no meio</text>
+
+  <rect x="40" y="260" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="140" y="282" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">7. Feasible</text>
+  <text x="140" y="300" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">viável — tecnicamente</text>
+  <text x="140" y="313" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">e economicamente possível</text>
+  <text x="140" y="328" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">com recursos disponíveis</text>
+
+  <rect x="260" y="260" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="360" y="282" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">8. Traceable</text>
+  <text x="360" y="300" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">rastreável — ID único,</text>
+  <text x="360" y="313" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">ligado à origem (stakeholder)</text>
+  <text x="360" y="328" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">e aos artefatos derivados</text>
+
+  <rect x="480" y="260" width="200" height="80" rx="6" fill="currentColor" fillOpacity="0.08" stroke="#7cae50" strokeWidth="2" />
+  <text x="580" y="282" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">9. Verifiable</text>
+  <text x="580" y="300" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">verificável — existe método</text>
+  <text x="580" y="313" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">finito de confirmar que</text>
+  <text x="580" y="328" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">o sistema atende</text>
+
+  <rect x="40" y="370" width="640" height="70" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" />
+  <text x="360" y="392" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">A mais importante na prática: VERIFICABILIDADE</text>
+  <text x="360" y="412" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Se você não consegue escrever um teste que verifica o requisito, ele não está pronto.</text>
+  <text x="360" y="429" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">"Sistema deve ser rápido" → não verificável. "Busca retorna em até 2 segundos" → verificável.</text>
+</svg>
+
+A norma também define **5 características pro conjunto de requisitos** (não pra requisito individual): completeness (cobre todo o escopo), consistency (sem conflitos entre requisitos), affordability (cabe no orçamento), bounded (tem escopo claro) e able to be validated (verificável como um todo).
+
+### Exemplos: bons vs ruins
+
+| Ruim | Por quê | Bom |
+|---|---|---|
+| "Sistema deve ser rápido" | Não verificável (rápido = ?) | "RF-12: Busca no acervo deve retornar resultados em até 2 segundos com até 50 mil títulos cadastrados" |
+| "Interface deve ser amigável" | Ambíguo, não verificável | "RNF-08: Tela de empréstimo deve permitir conclusão da operação por leitor com 60+ anos em até 3 cliques" |
+| "Sistema deve permitir cadastrar leitor e gerar relatórios e enviar email" | Não singular (3 requisitos num) | RF-01, RF-02, RF-03 separados |
+| "Sistema poderia talvez ter modo escuro" | Ambíguo (poderia? talvez?) | "RF-15 (prioridade Could): Interface deve oferecer modo escuro ativável nas configurações" |
+
+## SRS — Software Requirements Specification (ISO/IEC/IEEE 29148:2018)
+
+O **SRS** é o documento padrão definido pela norma **ISO/IEC/IEEE 29148:2018** (segunda edição, publicada em novembro de 2018). É o sucessor do antigo IEEE 830-1998 (que era padrão de fato nos anos 90 e 2000) e da ISO/IEC/IEEE 29148:2011.
+
+A norma define três tipos de documento de requisitos:
+
+- **StRS** (Stakeholder Requirements Specification): requisitos do ponto de vista do stakeholder, em linguagem de negócio
+- **SyRS** (System Requirements Specification): requisitos do sistema como um todo (incluindo hardware, processos, pessoas)
+- **SRS** (Software Requirements Specification): requisitos específicos do software
+
+### Estrutura típica do SRS (29148:2018, cláusula 9)
+
+A norma não obriga uma estrutura fixa, mas define **conteúdo mínimo** organizado tipicamente assim:
+
+```
+1. Introdução
+   1.1 Propósito do documento
+   1.2 Escopo do produto
+   1.3 Definições, acrônimos e abreviações
+   1.4 Referências
+   1.5 Visão geral do documento
+
+2. Descrição geral
+   2.1 Perspectiva do produto (contexto, sistemas relacionados)
+   2.2 Funções do produto (resumo)
+   2.3 Características do usuário (perfis, personas)
+   2.4 Restrições gerais (legais, regulatórias, técnicas)
+   2.5 Premissas e dependências
+
+3. Requisitos específicos
+   3.1 Requisitos funcionais (RF)
+   3.2 Requisitos de interface (UI, externa, hardware, software)
+   3.3 Requisitos de qualidade (NFR, agrupados por característica ISO 25010)
+       - Performance
+       - Reliability
+       - Security
+       - Usability / Interaction capability
+       - Maintainability
+       - etc.
+   3.4 Requisitos de dados (modelo de dados, persistência)
+   3.5 Restrições de design
+
+4. Apêndices (modelos UML, glossário, índice de rastreabilidade)
+```
+
+### Padrão de escrita de cada requisito
+
+A norma 29148:2018 define o conceito de "well-formed textual requirements" — construto textual bem formado com características, atributos e formato consistentes. Um padrão amplamente compatível e popular é o **EARS** (Easy Approach to Requirements Syntax), criado por Alistair Mavin et al. na Rolls-Royce em 2009. Exemplo de requisito bem escrito (no estilo "WHEN trigger, the system SHALL response" do EARS):
+
+> **RF-07**: Quando o leitor solicitar empréstimo de um livro, o sistema deve verificar se o leitor não possui empréstimo em atraso, e somente após confirmação dessa condição, registrar o empréstimo com data de devolução prevista de 14 dias corridos.
+
+Análise desse texto contra as 9 características:
+- **Necessary**: sim, faz parte do core do negócio
+- **Implementation-free**: não diz "usando o método X", diz "o que" precisa acontecer
+- **Unambiguous**: condição clara ("não possui empréstimo em atraso"), ação clara ("registrar com 14 dias")
+- **Consistent**: não conflita com outros requisitos (assumindo que RF-12, por exemplo, sobre renovação, é coerente)
+- **Complete**: descreve precondição, condição, ação e resultado sem deixar lacunas óbvias
+- **Singular**: um único comportamento descrito
+- **Feasible**: implementação direta com regra de negócio
+- **Traceable**: tem ID (RF-07)
+- **Verifiable**: testes possíveis: (1) leitor sem atraso → empréstimo registrado com prazo correto; (2) leitor com atraso → empréstimo recusado
+
+## Template Volere (Robertsons, Atlantic Systems Guild)
+
+O **Volere** foi criado em 1995 por **Suzanne Robertson** e **James Robertson** na **Atlantic Systems Guild** (Londres, Nova York, Aachen). É descrito em detalhes no livro *Mastering the Requirements Process* (Addison-Wesley) — 1ª edição em 1999, atualmente na 3ª edição.
+
+O template atualmente está na **edição 20** (disponível pra download gratuito pra uso acadêmico em volere.org). Tem **27 seções** organizadas em 5 partes:
+
+| Parte | Seções | Foco |
+|---|---|---|
+| **Project Drivers** | 1-3 | Propósito, stakeholders, usuários |
+| **Project Constraints** | 4-7 | Restrições, naming conventions, fatos relevantes, escopo |
+| **Functional Requirements** | 8-9 | Escopo do produto, requisitos funcionais |
+| **Non-functional Requirements** | 10-17 | Look-and-feel, usability, performance, operational, maintainability, security, cultural, legal |
+| **Project Issues** | 18-27 | Open issues, riscos, custos, lições aprendidas, etc. |
+
+### Snow Card (Atomic Requirements Shell)
+
+O elemento mais característico do Volere é a **Snow Card** (também chamada *Atomic Requirements Shell* ou Volere Requirements Shell) — um formato visual pra capturar um requisito individual com todos os atributos relevantes em um único cartão. O site oficial dos Robertsons (volere.org) usa os termos como sinônimos.
+
+<svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Volere Snow Card (Atomic Requirements Shell)</text>
+
+  <rect x="40" y="50" width="640" height="380" rx="8" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1.5" />
+
+  <rect x="55" y="65" width="300" height="35" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Requirement #:</text>
+  <text x="155" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">RF-07</text>
+  <text x="200" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Type:</text>
+  <text x="235" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Funcional</text>
+  <text x="65" y="95" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Use Case #:</text>
+  <text x="140" y="95" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">UC-03 (Registrar Empréstimo)</text>
+
+  <rect x="365" y="65" width="300" height="35" rx="4" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="1" />
+  <text x="375" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Priority:</text>
+  <text x="425" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Must (MoSCoW)</text>
+  <text x="540" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">RICE:</text>
+  <text x="580" y="80" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">750</text>
+  <text x="375" y="95" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Originator:</text>
+  <text x="445" y="95" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Bibliotecária-chefe</text>
+
+  <rect x="55" y="110" width="610" height="55" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="125" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Description:</text>
+  <text x="65" y="142" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Quando o leitor solicitar empréstimo de um livro, o sistema deve verificar se o leitor não possui</text>
+  <text x="65" y="156" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">empréstimo em atraso, e somente após confirmação, registrar o empréstimo com 14 dias de prazo.</text>
+
+  <rect x="55" y="175" width="610" height="45" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="190" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Rationale:</text>
+  <text x="65" y="207" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Evitar acúmulo de empréstimos em atraso pelo mesmo leitor. Política da biblioteca municipal</text>
+  <text x="65" y="218" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">desde 2018 — sem essa regra, taxa de devolução em atraso passa de 30%.</text>
+
+  <rect x="55" y="230" width="610" height="55" rx="4" fill="currentColor" fillOpacity="0.08" stroke="#7cae50" strokeWidth="1.5" />
+  <text x="65" y="245" fill="#7cae50" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Fit Criterion (testável):</text>
+  <text x="65" y="262" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">- Dado leitor SEM atraso, ao solicitar empréstimo: sistema registra empréstimo com data atual + 14 dias</text>
+  <text x="65" y="276" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">- Dado leitor COM 1+ empréstimo em atraso: sistema bloqueia e exibe lista dos empréstimos pendentes</text>
+
+  <rect x="55" y="295" width="295" height="40" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="310" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Customer Satisfaction: 5/5</text>
+  <text x="65" y="327" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(alta — sem isso, biblioteca não funciona)</text>
+
+  <rect x="360" y="295" width="305" height="40" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="370" y="310" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Customer Dissatisfaction: 5/5</text>
+  <text x="370" y="327" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(ausência gera grande insatisfação)</text>
+
+  <rect x="55" y="345" width="610" height="35" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="360" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Dependencies / Conflicts:</text>
+  <text x="65" y="375" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Depende de RF-01 (Cadastro Leitor) e RF-05 (Consulta Acervo). Sem conflitos.</text>
+
+  <rect x="55" y="390" width="610" height="30" rx="4" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1" />
+  <text x="65" y="408" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">History:</text>
+  <text x="115" y="408" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Criado 12/03/2026 — Revisado QG 18/03/2026 — Aprovado 20/03/2026</text>
+</svg>
+
+O atributo mais importante da Snow Card é o **fit criterion** — critério verificável de aceitação. A filosofia Volere é "**começar a testar o requisito assim que você começa a escrevê-lo**". Se você não consegue formular um fit criterion, o requisito está mal definido. Esse princípio veio antes do Gherkin (que veremos adiante) e influenciou o BDD.
+
+### Volere vs ISO/IEC/IEEE 29148
+
+| Aspecto | Volere | ISO/IEC/IEEE 29148 |
+|---|---|---|
+| Origem | Atlantic Systems Guild, 1995 | IEEE/ISO/IEC, 2018 (2ª edição) |
+| Custo | Gratuito pra uso acadêmico, pago pra comercial | Norma paga (CHF 200+) |
+| Estilo | Prático, voltado pra equipes | Formal, voltado pra padronização |
+| Snow Card | Atributo central | Não tem equivalente direto |
+| Granularidade | Atomic requirements | Requisitos numerados em seções |
+| Adoção | Comunidade de análise de negócios | Governo, defesa, sistemas críticos |
+
+Pra projetos Fatec ou startups, **Volere** é mais prático e didático. Pra licitação pública e sistemas auditados, **29148** é o padrão exigido.
+
+## Casos de uso (Use Cases)
+
+Casos de uso são uma técnica complementar à especificação textual. Foram popularizados por **Ivar Jacobson** no método **OOSE** (Object-Oriented Software Engineering, 1992) e formalizados depois na **UML**. Um caso de uso descreve uma **interação completa** entre um ator (usuário ou sistema externo) e o sistema, com fluxo principal, fluxos alternativos e fluxos de exceção.
+
+### Exemplo: UC-03 Registrar Empréstimo (biblioteca)
+
+```
+Caso de Uso: UC-03 Registrar Empréstimo
+Ator principal: Atendente da biblioteca
+Atores secundários: Leitor (presencial)
+Pré-condições: Atendente autenticado; leitor cadastrado; livro disponível
+Pós-condição (sucesso): Empréstimo registrado; livro marcado como emprestado
+Pós-condição (falha): Sistema em estado inalterado; mensagem ao atendente
+
+Fluxo principal:
+1. Atendente seleciona "Novo empréstimo"
+2. Atendente informa código do leitor (ou busca por nome)
+3. Sistema exibe dados do leitor e verifica situação
+4. Atendente informa código do livro (ou escaneia código de barras)
+5. Sistema verifica disponibilidade do livro
+6. Sistema calcula data de devolução (data atual + 14 dias)
+7. Sistema exibe resumo da operação
+8. Atendente confirma
+9. Sistema registra empréstimo e atualiza status do livro
+10. Sistema imprime comprovante
+
+Fluxos alternativos:
+3a. Leitor possui empréstimo em atraso:
+    3a.1. Sistema exibe lista de empréstimos atrasados
+    3a.2. Sistema bloqueia novo empréstimo
+    3a.3. Caso de uso encerra
+
+5a. Livro não está disponível (emprestado/extraviado):
+    5a.1. Sistema informa indisponibilidade
+    5a.2. Atendente pode cancelar ou tentar outro livro
+    5a.3. Retorna ao passo 4
+
+Fluxos de exceção:
+*. Em qualquer ponto, falha de comunicação com banco:
+    *.1. Sistema exibe erro
+    *.2. Operação não é persistida
+    *.3. Atendente pode tentar novamente
+```
+
+Casos de uso bem escritos:
+- Têm **um único objetivo** identificado no título
+- Descrevem **passos numerados** e **observáveis** (cliente pode verificar)
+- Cobrem **todos os caminhos importantes** (não só o "happy path")
+- Usam **vocabulário do domínio** (definido no Ubiquitous Language da L3)
+- Definem **pré e pós-condições** claras
+
+A Lição 1 da **Trilha B (UML 2.0)** vai cobrir **diagramas de casos de uso** com notação gráfica formal — atores, sistemas, relações de include e extend.
+
+## User Stories (formato ágil)
+
+No mundo ágil, requisitos são frequentemente expressos como **user stories** (histórias de usuário) — formato curto, narrativo, focado em valor pro usuário. Surgiu no **Extreme Programming (XP)** no fim dos anos 90, foi formalizado pelo **time da Connextra em Londres, 2001**, e generalizado por **Mike Cohn** no livro *User Stories Applied: For Agile Software Development* (Addison-Wesley, 2004).
+
+### Formato Connextra
+
+O formato mais usado tem três partes:
+
+```
+Como [persona/role],
+eu quero [funcionalidade/objetivo],
+para [benefício/valor].
+```
+
+Exemplos do sistema de biblioteca:
+
+```
+US-01: Como atendente, eu quero registrar empréstimo escaneando 
+       código de barras do livro, para agilizar atendimento e 
+       reduzir erros de digitação.
+
+US-02: Como leitor, eu quero ver minha lista de empréstimos ativos 
+       online, para acompanhar prazos sem precisar ir até a biblioteca.
+
+US-03: Como bibliotecária-chefe, eu quero relatório mensal de 
+       empréstimos por gênero literário, para tomar decisões 
+       de aquisição de novos títulos.
+```
+
+### Os 3 Cs (Ron Jeffries, 2001)
+
+**Ron Jeffries** (um dos fundadores do XP) propôs em 2001, no livro *Extreme Programming Installed* (Addison-Wesley), que toda user story tenha 3 elementos:
+
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">3 Cs de User Story (Ron Jeffries, 2001)</text>
+
+  <rect x="40" y="60" width="200" height="180" rx="10" fill="#dc3545" fillOpacity="0.12" stroke="#dc3545" strokeWidth="2" />
+  <text x="140" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">Card</text>
+  <text x="140" y="115" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Cartão</text>
+  <text x="140" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">o texto curto da story</text>
+  <text x="140" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">(post-it, Trello, Jira)</text>
+  <text x="140" y="180" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">"placeholder pra</text>
+  <text x="140" y="194" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">conversa"</text>
+  <text x="140" y="220" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">curto, sem detalhes técnicos</text>
+
+  <rect x="260" y="60" width="200" height="180" rx="10" fill="#f0ad4e" fillOpacity="0.12" stroke="#f0ad4e" strokeWidth="2" />
+  <text x="360" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">Conversation</text>
+  <text x="360" y="115" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Conversa</text>
+  <text x="360" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">discussão entre dev e</text>
+  <text x="360" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">PO/cliente sobre detalhes</text>
+  <text x="360" y="180" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">acontece em refinement,</text>
+  <text x="360" y="194" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">planning, durante sprint</text>
+  <text x="360" y="220" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">o que NÃO está no cartão</text>
+
+  <rect x="480" y="60" width="200" height="180" rx="10" fill="#28a745" fillOpacity="0.12" stroke="#28a745" strokeWidth="2" />
+  <text x="580" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="20" fontWeight="700">Confirmation</text>
+  <text x="580" y="115" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Confirmação</text>
+  <text x="580" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">critérios de aceitação</text>
+  <text x="580" y="156" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">como saber se a</text>
+  <text x="580" y="180" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">story foi entregue</text>
+  <text x="580" y="194" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">testes automatizáveis</text>
+  <text x="580" y="220" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Gherkin, exemplos, testes</text>
+
+  <text x="360" y="265" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Card é um "lembrete pra conversa"; Conversation revela detalhes; Confirmation valida entrega.</text>
+</svg>
+
+### INVEST — Bill Wake, 2003
+
+Pra avaliar a qualidade de uma user story, **Bill Wake** propôs em 2003 (em artigo sobre Extreme Programming) o acrônimo **INVEST**:
+
+| Letra | Significado | Pergunta-chave |
+|---|---|---|
+| **I** | **Independent** | A story pode ser implementada sem depender de outra ainda não pronta? |
+| **N** | **Negotiable** | O escopo pode ser ajustado em conversa (sem ser contrato rígido)? |
+| **V** | **Valuable** | Entrega valor mensurável pro usuário final ou negócio? |
+| **E** | **Estimable** | A equipe consegue estimar esforço com confiança? |
+| **S** | **Small** | Cabe num sprint (1-2 semanas tipicamente)? |
+| **T** | **Testable** | Tem critérios de aceitação claros e testáveis? |
+
+Esses critérios competem entre si — algumas vezes independência conflita com tamanho pequeno (separar muito gera dependências). É um guia, não regra absoluta.
+
+## Critérios de aceitação em Gherkin (Given-When-Then)
+
+A **confirmação** dos 3 Cs frequentemente é escrita em **Gherkin**, uma linguagem semi-estruturada usada por ferramentas como **Cucumber** pra automatizar testes de aceitação.
+
+**Gherkin** foi criado como DSL do Cucumber (criado por **Aslak Hellesøy** em 2008). A estrutura **Given-When-Then** foi proposta por **Dan North** e **Chris Matts** em 2006 como parte do **Behavior-Driven Development (BDD)**, que North articulou no artigo *"Introducing BDD"* (2006).
+
+### Sintaxe básica
+
+```gherkin
+Feature: Registrar empréstimo
+  Como atendente
+  Eu quero registrar empréstimo de livro
+  Para que o leitor possa levá-lo
+
+  Scenario: Leitor sem pendências realiza empréstimo
+    Given um leitor cadastrado "João Silva" sem empréstimos em atraso
+    And um livro "Dom Casmurro" disponível no acervo
+    When o atendente registrar o empréstimo
+    Then o sistema deve confirmar o empréstimo
+    And a data de devolução deve ser 14 dias após a data atual
+    And o status do livro deve mudar para "emprestado"
+
+  Scenario: Leitor com empréstimo em atraso tem pedido bloqueado
+    Given um leitor cadastrado "Maria Santos" com 1 empréstimo em atraso
+    And um livro "1984" disponível no acervo
+    When o atendente tentar registrar o empréstimo
+    Then o sistema deve bloquear a operação
+    And exibir mensagem com a lista de empréstimos em atraso
+    And o status do livro deve permanecer "disponível"
+```
+
+### Boas práticas Gherkin
+
+- **Cada cenário descreve UM comportamento** específico (singular)
+- **Linguagem do domínio** — não fala em "clicar no botão", fala em "registrar empréstimo"
+- **Given define contexto** (estado antes); **When define ação**; **Then define resultado esperado**
+- **And** estende qualquer cláusula (Given, When ou Then)
+- **Cenários independentes** — cada cenário pode rodar isoladamente
+- **Dados concretos** ("João Silva", "Dom Casmurro") em vez de abstratos ("um leitor X")
+- **Evite detalhes de implementação** — não diga `POST /api/loans com payload {...}`; diga "registrar empréstimo"
+
+### Cuidado prático
+
+Gherkin é frequentemente mal usado. **Anti-padrões comuns**:
+
+- **Gherkin imperativo**: descreve cliques e interações em vez de comportamento. "When o usuário clica em Login" em vez de "When o usuário se autentica"
+- **Cenários gigantes** com 15+ passos: indica que o cenário cobre múltiplos comportamentos
+- **Gherkin sem automação**: escrever Gherkin que nunca vira teste automatizado é cerimônia sem valor
+
+Dan North e Aslak Hellesøy frequentemente reforçam que **BDD é sobre conversa e descoberta, não sobre ferramenta**. Gherkin é só uma forma de escrever a confirmação dos 3 Cs.
+
+## Tradicional vs ágil: comparação
+
+| Aspecto | Tradicional (SRS/Volere) | Ágil (User Stories/Gherkin) |
+|---|---|---|
+| **Granularidade** | Requisitos numerados, hierárquicos | Stories pequenas e independentes |
+| **Tempo de escrita** | Upfront (antes de codificar) | Just-in-time (antes de cada sprint) |
+| **Mudanças** | Change request formal | Backlog reordenado, story renegociada |
+| **Detalhamento** | Profundo desde o início | Crescente conforme story se aproxima |
+| **Documentação** | Documento versionado | Backlog vivo + critérios de aceitação |
+| **Quem escreve** | Analista de requisitos | PO + equipe |
+| **Audiência principal** | Contrato + equipe + auditor | Equipe + PO |
+| **Quando se "termina"** | Documento aprovado | Sprint encerra com story aceita |
+
+Não são mutuamente exclusivos. **Híbridos comuns**:
+
+- **SRS macro + user stories nos sprints**: contrato formal define escopo geral; sprints detalham com stories
+- **Volere snow cards reaproveitadas como base pra user stories**: o fit criterion vira Gherkin
+- **EARS pattern em backlog ágil**: requisitos no Jira escritos no padrão "Quando X, sistema deve Y"
+
+## Erros comuns na especificação
+
+**1. Requisitos vagos.** "Sistema deve ser rápido", "Interface deve ser amigável". Sempre quantifique. Sem critério verificável, o requisito é inútil.
+
+**2. Mistura "o que" com "como".** Especificar implementação no requisito tira flexibilidade da equipe técnica. Restrições explícitas (LGPD, framework obrigatório) vão pra seção de restrições.
+
+**3. Stories grandes demais.** "Como usuário quero gerenciar minha biblioteca pessoal" — não é story, é épico. Quebre.
+
+**4. Critérios de aceitação ausentes.** Story sem AC vira "o que você achou". AC define quando está pronta.
+
+**5. Ignorar requisitos não funcionais.** Equipes focam em features e esquecem performance, segurança, acessibilidade. Esses precisam de seção própria no SRS ou stories técnicas dedicadas.
+
+**6. Documento "morto".** SRS escrito uma vez, nunca atualizado, divergente do código. Pior que não ter documento. Mantenha atualizado ou abandone.
+
+**7. Gherkin como cerimônia.** Escrever Gherkin que nunca automatiza vira retrabalho. Ou automatiza, ou usa formato mais simples.
+
+**8. Falta de rastreabilidade.** Requisito sem ID, sem origem, sem ligação com casos de teste. Em projeto grande, isso impede análise de impacto e auditoria.
+
+**9. Especificar sozinho.** Analista escreve sem validar com cliente e dev. Resultado: documento "perfeito" no papel que não bate com a realidade. Especificação é atividade colaborativa (lembrar L2).
+
+## Aplicação no sistema de biblioteca
+
+Pra biblioteca municipal de médio porte, abordagem híbrida típica em projeto sob contrato com prefeitura:
+
+**SRS macro (Volere edição reduzida)**:
+- Seção 1-3: drivers, stakeholders, usuários (definidos na L2)
+- Seção 8-9: escopo + ~25 requisitos funcionais agrupados por subsistema (Acervo, Empréstimo, Leitor, Relatórios)
+- Seção 10-17: ~15 NFRs cobrindo performance, security, usability, etc., usando ISO 25010
+- Seção 4 + restrições: conformidade LGPD, integração com sistema municipal de identidade
+
+**Detalhamento via user stories**:
+Cada RF do SRS macro vira 3-5 user stories quando entra no sprint. Exemplo de quebra:
+
+```
+RF-07 (SRS): Sistema deve registrar empréstimo com 
+            verificação de pendências
+↓
+US-07.1: Como atendente, eu quero buscar leitor por nome ou 
+         código, para iniciar empréstimo
+US-07.2: Como atendente, eu quero ver pendências do leitor 
+         antes de confirmar empréstimo, para evitar acúmulo
+US-07.3: Como atendente, eu quero registrar empréstimo com 
+         prazo automático de 14 dias, para padronizar política
+US-07.4: Como atendente, eu quero imprimir comprovante de 
+         empréstimo, para entregar ao leitor
+```
+
+**Cada story tem Gherkin no Jira (ou ferramenta similar)**:
+
+```gherkin
+Feature: US-07.3 Registrar empréstimo com prazo automático
+
+  Scenario: Empréstimo de leitor sem pendências
+    Given leitor "João" cadastrado sem empréstimos em atraso
+    And livro "Dom Casmurro" disponível
+    When o atendente confirmar o empréstimo
+    Then o empréstimo é registrado com data de devolução 14 dias após hoje
+    And o status do livro muda para "emprestado"
+
+  Scenario: Empréstimo bloqueado por pendência
+    Given leitor "Maria" com empréstimo em atraso
+    When o atendente tentar registrar empréstimo
+    Then a operação é bloqueada
+    And uma mensagem lista as pendências
+```
+
+**Rastreabilidade**: cada story tem campo "Requisito SRS" apontando pra RF-07. Mudanças no SRS geram revisão das stories filhas. Mudanças nas stories notificam o documento.
+
+## Aplicação no Carbon Credit Compensation Platform
+
+Pro projeto Fatec, dado o prazo curto e ausência de auditoria externa, abordagem **mais ágil** funciona melhor:
+
+**Documento leve (3-5 páginas, não SRS completo)**:
+- Visão geral, atores (Operador, Auditor), escopo
+- 8-12 requisitos funcionais principais
+- 5-6 NFRs (performance dos cálculos, logs auditáveis)
+- Restrições legais (Lei 15.042/2024) listadas explicitamente como restrições
+
+**User stories no Trello/GitHub Projects**:
+
+```
+US-CC-01: Como operador, eu quero submeter inventário anual de 
+          emissões, para cumprir obrigação regulatória SBCE.
+
+US-CC-02: Como operador, eu quero comprar créditos CBE no mercado, 
+          para compensar emissões acima da meta.
+
+US-CC-03: Como operador, eu quero aposentar crédito CRVE, para 
+          retirá-lo permanentemente de circulação após uso.
+
+US-CC-04: Como auditor, eu quero ver histórico imutável de 
+          aposentadorias, para verificar conformidade.
+```
+
+**Gherkin pros casos críticos** (aposentadoria é definitiva — não pode haver bug):
+
+```gherkin
+Feature: US-CC-03 Aposentar crédito CRVE
+
+  Scenario: Aposentadoria de crédito válido
+    Given um operador "Empresa X" com 1000 CRVEs disponíveis
+    And um inventário de 500 tCO2e a compensar
+    When o operador solicitar aposentadoria de 500 CRVEs
+    Then 500 CRVEs ficam permanentemente indisponíveis
+    And um registro imutável é criado no audit log
+    And o inventário aparece como "compensado"
+
+  Scenario: Aposentadoria de crédito já aposentado é bloqueada
+    Given um crédito CRVE "CR-001" já aposentado
+    When uma nova tentativa de aposentadoria do mesmo crédito ocorrer
+    Then a operação é rejeitada com erro de invariante de domínio
+    And o estado do crédito permanece "aposentado"
+```
+
+Note como o Gherkin **espelha a regra de negócio invariante** identificada na L3 (aposentadoria é definitiva). Cada cenário se torna teste automatizado no JUnit + Cucumber-JVM.
+
+## Resumo visual
+
+<svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Especificação — formatos por contexto</text>
+
+  <rect x="40" y="55" width="200" height="160" rx="8" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="140" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">TRADICIONAL</text>
+  <text x="140" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">SRS 29148:2018</text>
+  <text x="140" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">numerados, hierárquicos</text>
+  <text x="140" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">RF/RNF agrupados</text>
+  <text x="140" y="160" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Volere (Robertsons)</text>
+  <text x="140" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">snow cards</text>
+  <text x="140" y="192" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">fit criterion central</text>
+  <text x="140" y="207" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">contrato + auditoria</text>
+
+  <rect x="260" y="55" width="200" height="160" rx="8" fill="currentColor" fillOpacity="0.08" stroke="#7cae50" strokeWidth="2" />
+  <text x="360" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">HÍBRIDO</text>
+  <text x="360" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">SRS macro</text>
+  <text x="360" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">+ user stories nos sprints</text>
+  <text x="360" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">rastreabilidade SRS → US</text>
+  <text x="360" y="160" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Contexto típico</text>
+  <text x="360" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">prefeitura, empresa média</text>
+  <text x="360" y="192" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">contrato + agilidade</text>
+  <text x="360" y="207" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">o mais comum hoje</text>
+
+  <rect x="480" y="55" width="200" height="160" rx="8" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="580" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">ÁGIL</text>
+  <text x="580" y="105" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">User Stories Connextra</text>
+  <text x="580" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"Como X, quero Y, pra Z"</text>
+  <text x="580" y="140" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">3 Cs + INVEST</text>
+  <text x="580" y="160" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700">Gherkin (BDD)</text>
+  <text x="580" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Given-When-Then</text>
+  <text x="580" y="192" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Cucumber, JUnit</text>
+  <text x="580" y="207" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">startup, produto digital</text>
+
+  <line x1="40" y1="240" x2="680" y2="240" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text x="360" y="265" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">9 características de bom requisito (29148:2018)</text>
+
+  <text x="120" y="295" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Necessary</text>
+  <text x="270" y="295" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Implementation-free</text>
+  <text x="450" y="295" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Unambiguous</text>
+  <text x="600" y="295" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Consistent</text>
+
+  <text x="120" y="320" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Complete</text>
+  <text x="270" y="320" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Singular</text>
+  <text x="450" y="320" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Feasible</text>
+  <text x="600" y="320" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Traceable</text>
+
+  <text x="360" y="350" textAnchor="middle" fill="#7cae50" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Verifiable (a mais importante na prática)</text>
+
+  <rect x="40" y="375" width="640" height="55" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" />
+  <text x="360" y="395" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Princípio Volere e BDD convergem:</text>
+  <text x="360" y="412" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">comece a testar o requisito assim que começar a escrevê-lo</text>
+  <text x="360" y="425" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(fit criterion no Volere; critério de aceitação Gherkin nas user stories)</text>
+</svg>
+
+## Próximos passos
+
+| Lição | Tema |
+|---|---|
+| L1 | Introdução à Engenharia de Requisitos |
+| L2 | Elicitação de Requisitos |
+| L3 | Levantamento de Requisitos de Domínio |
+| L4 | Análise e Classificação |
+| **L5 (esta)** | Especificação e Documentação |
+| **L6 (próxima)** | Validação, Verificação e Gestão — rastreabilidade, change management, métricas |
+| L7 | Requisitos Ágeis — story mapping, épicos, refinement |
+
+A L6 vai cobrir como **garantir que o requisito escrito está correto** (validação com stakeholders), como **verificar que o sistema atende ao requisito** (testes), e como **gerenciar mudanças** ao longo do ciclo de vida — incluindo rastreabilidade bidirecional e métricas de qualidade dos requisitos.
+
+---
+
+**Referências canônicas usadas nesta lição**:
+
+- ISO/IEC/IEEE 29148:2018 — *Systems and software engineering — Life cycle processes — Requirements engineering*. Segunda edição, novembro de 2018. Substitui ISO/IEC/IEEE 29148:2011 (que substituiu o IEEE 830-1998).
+- Robertson, Suzanne; Robertson, James. *Mastering the Requirements Process*. Addison-Wesley. 1ª edição 1999, 2ª edição 2006 (ISBN 0-321-41949-9), 3ª edição 2012. Volere foi introduzido em 1995 pela Atlantic Systems Guild.
+- Cohn, Mike. *User Stories Applied: For Agile Software Development*. Addison-Wesley, 2004, ISBN 978-0-321-20568-1. Generalização do conceito de user story criado pelo time da Connextra (Londres, 2001).
+- Jeffries, Ron; Anderson, Ann; Hendrickson, Chet. *Extreme Programming Installed*. Addison-Wesley, 2001, ISBN 978-0-201-70842-4. Onde Jeffries propõe os 3 Cs (Card, Conversation, Confirmation).
+- Wake, Bill. *"INVEST in Good Stories, and SMART Tasks"*. XP123 Blog, 2003. Publicação original do acrônimo INVEST.
+- North, Dan. *"Introducing BDD"*. Better Software Magazine, March 2006. Artigo que estabeleceu publicamente Behavior-Driven Development. Given-When-Then atribuído a Dan North e Chris Matts.
+- Jacobson, Ivar. *Object-Oriented Software Engineering: A Use Case Driven Approach*. Addison-Wesley, 1992, ISBN 978-0-201-54435-0. Origem dos casos de uso.
+
+**Observações sobre fontes**:
+
+- O formato "As a [role], I want [feature], so that [benefit]" é frequentemente atribuído a Mike Cohn, mas foi criado pelo time da Connextra em Londres em 2001 — Cohn generalizou e popularizou em 2004. Rachel Davies (membro da equipe Connextra na época) é às vezes citada, mas ela própria credita a equipe inteira.
+- Gherkin é a DSL do Cucumber, criada por Aslak Hellesøy em 2008 (Cucumber). A estrutura Given-When-Then que Gherkin usa foi proposta antes, por Dan North e Chris Matts em 2006.
+- O **EARS (Easy Approach to Requirements Syntax)** foi criado por Alistair Mavin, Philip Wilkinson, Adrian Harwood e Mark Novak na Rolls-Royce plc, publicado em 2009 no IEEE RE'09 (paper pp. 317-322). É um padrão estrutural popular e compatível com as recomendações de "well-formed textual requirements" da 29148:2018, mas não é o único formato endossado pela norma.
+- O termo "snow card" e "Atomic Requirements Shell" são usados como sinônimos no site oficial dos Robertsons (volere.org) — não há explicação canônica documentada sobre a etimologia do termo "snow card". O atributo "fit criterion" é o elemento central e original do Volere.

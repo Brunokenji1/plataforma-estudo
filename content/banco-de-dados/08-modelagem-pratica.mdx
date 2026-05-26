@@ -1,0 +1,700 @@
+---
+titulo: "Modelagem Prática: Do Requisito ao Schema SQL em um Case Real"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "Peter Chen (1976), 'The Entity-Relationship Model—Toward a Unified View of Data', ACM TODS Vol. 1 No. 1 — notação ER original"
+  - "Carlos A. Heuser, 'Projeto de Banco de Dados', 6ª ed., Bookman 2009 — notação adotada pelo brModelo, base do ensino acadêmico brasileiro"
+  - "Cândido Lima da Silva Dias — autor original do software brModelo (monografia 'brModelo: Ferramenta de Modelagem Conceitual de Banco de Dados')"
+  - "Elmasri & Navathe, 'Fundamentals of Database Systems', 7ª ed., Pearson 2015 — referência sobre min-max notation"
+  - "C. J. Date, 'An Introduction to Database Systems', 8ª ed., Addison-Wesley 2003"
+  - "brModelo Web — https://www.brmodeloweb.com/lang/pt-br/index.html (versão online moderna do brModelo)"
+  - "dbdiagram.io — alternativa moderna, baseada em DSL textual"
+  - "DBeaver Community Edition — visualização ER reverso a partir de schema existente"
+---
+
+## Por que modelagem prática é diferente de teoria
+
+Você passou 7 lições aprendendo modelo relacional, normalização, SQL, índices, transações, ORM. **Teoria pura**. Hora de fazer o que toda startup, todo banco, toda empresa corporativa precisa **antes de escrever uma linha de código**: **modelar o sistema do zero**.
+
+Modelar bem é a **diferença entre um sistema que evolui por anos** e um que vira **dívida técnica em 6 meses**. Esquema mal desenhado gera:
+- Refatorações dolorosas (migration de tabela com milhões de linhas)
+- Queries lentas que parecem inevitáveis (mas eram só normalização errada)
+- Bugs sutis de integridade (FK fraca, constraint ausente)
+- Dificuldade de adicionar features sem quebrar o existente
+
+Nesta lição, vamos **modelar um sistema real do zero**: uma plataforma de QA Automation com:
+
+- Times que gerenciam projetos
+- Projetos que têm casos de teste
+- Casos de teste com execuções (passed/failed)
+- Bugs reportados a partir das execuções
+- Usuários com diferentes papéis
+
+Sistema com **complexidade real** — 10+ entidades, vários relacionamentos N:M, especializações, auditoria. Vamos seguir o **fluxo industrial padrão**:
+
+1. **Requisitos em linguagem natural** — entender o domínio
+2. **Modelo Conceitual (ER)** — entidades, atributos, relacionamentos, sem se preocupar com SQL
+3. **Modelo Lógico** — converte ER em tabelas com FKs, normaliza até 3NF/BCNF
+4. **Modelo Físico** — DDL SQL específica do SGBD (PostgreSQL no nosso caso)
+5. **Índices estratégicos** — baseado nas queries que sabemos que vão acontecer
+
+No fim, você tem **template completo** pra modelar QUALQUER sistema novo. É o método que sua trilha da Fatec e seu estágio no PDVx esperam que você domine.
+
+---
+
+## Ferramentas: o que usar pra modelar
+
+**Antes de começar, escolha a ferramenta**:
+
+| Ferramenta | Tipo | Quando usar |
+|---|---|---|
+| **brModelo** (desktop ou web) | ER visual com notação Heuser | Faculdade brasileira, trabalhos acadêmicos, prova ENADE |
+| **dbdiagram.io** | DSL textual → diagrama | Projetos práticos, versionar com Git (texto plano) |
+| **drawSQL** | ER visual moderno | Equipes que preferem clicar |
+| **DBeaver ER View** | Engenharia reversa | Banco já existente, gerar diagrama do schema atual |
+| **MySQL Workbench** | EER visual | Projetos MySQL específicos |
+| **Lucidchart / Miro** | Genéricos | Quando precisa colaborar com não-técnicos |
+
+**Sugestão prática**: aprende **brModelo** pra trabalhos acadêmicos (notação que sua faculdade exige) E **dbdiagram.io** pra projetos reais (DSL textual versiona bem em Git, e gera SQL automaticamente).
+
+### Notação brModelo (Heuser)
+
+O brModelo foi escrito por **Cândido Lima da Silva Dias** como ferramenta acadêmica, adotando a notação do **Prof. Carlos A. Heuser** (autor de "Projeto de Banco de Dados", Bookman) em vez da original de Peter Chen. É a notação **padrão de ensino no Brasil**.
+
+**Convenções principais**:
+
+- **Entidades**: retângulos
+- **Atributos**: elipses ligadas à entidade
+- **Relacionamentos**: losangos
+- **Cardinalidade `(min, max)`**: escrita **DO LADO OPOSTO** ao da entidade que descreve
+
+```
+[Aluno] ──(1,n)── <Cursa> ──(0,n)── [Disciplina]
+         ↑                              ↑
+   "1 aluno cursa                 "1 disciplina é
+    de 0 a n disciplinas"          cursada por
+                                    0 a n alunos"
+```
+
+<Aviso>
+**Pegadinha clássica do brModelo**: a cardinalidade próxima à entidade X descreve **quantos X's existem por instância da outra ponta** — NÃO quantos da outra ponta cada X tem. É contra-intuitivo. **Memorize**: o número que você lê perto da entidade fala do **outro lado**. Eu mesmo já errei isso vendo diagrama de aluno — é fácil confundir. Se ficar em dúvida, **lê a frase em voz alta**: "Para CADA UM `X`, existem (min, max) `Y`s" — e veja se faz sentido.
+</Aviso>
+
+---
+
+## Passo 1: Requisitos do nosso case
+
+Imagina que você foi contratado pelo PDVx como júnior backend pra construir uma **plataforma interna de gestão de QA**. Conversa com PM e tech lead. Requisitos coletados (sempre escreva isso em linguagem natural primeiro):
+
+> **A empresa tem TIMES de QA, cada um com vários membros. Cada time gerencia múltiplos PROJETOS (sistemas internos). Cada projeto tem CASOS DE TESTE descritos por um analista. Os casos de teste são EXECUTADOS em ciclos de regressão — cada execução tem resultado (PASSED, FAILED, BLOCKED, SKIPPED) e duração. Quando uma execução falha, um BUG pode ser aberto, com prioridade e responsável atribuído. USUÁRIOS têm papéis (ANALISTA, TESTER, GERENTE) que determinam o que podem fazer no sistema. Todo cadastro tem timestamp de criação e última modificação.**
+
+Identificando **substantivos importantes** (candidatos a entidades):
+
+- Time
+- Membro / Usuário
+- Projeto
+- Caso de Teste
+- Execução (de caso de teste)
+- Bug
+- Papel (Role)
+
+**Verbos importantes** (candidatos a relacionamentos):
+
+- Time **gerencia** Projetos
+- Projeto **tem** Casos de Teste
+- Caso de Teste **é executado** N vezes (Execução)
+- Execução **gera** Bug (opcional)
+- Usuário **pertence a** Time(s)
+- Usuário **tem** Papel
+- Bug **é atribuído a** Usuário
+
+Já dá pra sentir os **relacionamentos críticos**:
+- Usuário ↔ Time: pode ser N:M (um analista trabalha em vários times?) — **vamos definir como N:M** com data de entrada/saída como atributo do relacionamento (entity Membro)
+- Projeto ↔ Time: cada projeto pertence a 1 time → **1:N**
+- Caso de Teste ↔ Projeto: cada caso pertence a 1 projeto → **1:N**
+- Execução ↔ Caso de Teste: cada execução é de 1 caso → **1:N**
+- Bug ↔ Execução: cada bug **opcional** ligado a 1 execução → **1:1** ou **1:0..1**
+- Bug ↔ Usuário (responsável): **N:1** (um usuário pode ter vários bugs atribuídos)
+
+---
+
+## Passo 2: Modelo Conceitual (ER)
+
+O modelo conceitual **ignora** detalhes técnicos (tipo de dado, índices, sintaxe SQL). Foco: **entidades, atributos, relacionamentos**.
+
+<svg width="100%" viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Modelo conceitual ER do sistema de QA</title>
+<desc>Diagrama ER mostrando entidades Usuario, Time, Projeto, CasoTeste, Execucao, Bug com seus relacionamentos e cardinalidades</desc>
+
+<rect x="30" y="40" width="120" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="90" y="70" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Usuario</text>
+
+<rect x="30" y="180" width="120" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="90" y="210" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Time</text>
+
+<rect x="30" y="320" width="120" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="90" y="350" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Projeto</text>
+
+<rect x="280" y="320" width="130" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="345" y="350" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">CasoTeste</text>
+
+<rect x="540" y="320" width="120" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="600" y="350" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Execucao</text>
+
+<rect x="540" y="40" width="120" height="50" fill="#1d4d3f" stroke="#7F77DD" strokeWidth="2"/>
+<text x="600" y="70" fontFamily="monospace" fontSize="13" fill="#ffffff" fontWeight="bold" textAnchor="middle">Bug</text>
+
+<polygon points="50,135 90,115 130,135 90,155" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="90" y="139" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Membro</text>
+
+<line x1="90" y1="90" x2="90" y2="115" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="58" y="103" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,n)</text>
+
+<line x1="90" y1="155" x2="90" y2="180" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="58" y="170" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,n)</text>
+
+<polygon points="50,275 90,255 130,275 90,295" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="90" y="279" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Gerencia</text>
+
+<line x1="90" y1="230" x2="90" y2="255" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="58" y="245" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,n)</text>
+
+<line x1="90" y1="295" x2="90" y2="320" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="58" y="312" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,1)</text>
+
+<polygon points="200,345 240,325 280,345 240,365" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="240" y="349" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Possui</text>
+
+<line x1="150" y1="345" x2="200" y2="345" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="170" y="338" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,n)</text>
+
+<line x1="280" y1="345" x2="280" y2="345" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="295" y="338" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,1)</text>
+
+<polygon points="450,345 490,325 530,345 490,365" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="490" y="349" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Executa</text>
+
+<line x1="410" y1="345" x2="450" y2="345" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="425" y="338" fontFamily="monospace" fontSize="10" fill="#cccccc">(0,n)</text>
+
+<line x1="530" y1="345" x2="540" y2="345" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="535" y="338" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,1)</text>
+
+<polygon points="580,150 620,130 660,150 620,170" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="620" y="154" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Gera</text>
+
+<line x1="600" y1="320" x2="620" y2="170" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="618" y="270" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,1)</text>
+
+<line x1="620" y1="130" x2="600" y2="90" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="635" y="115" fontFamily="monospace" fontSize="10" fill="#cccccc">(0,1)</text>
+
+<polygon points="350,80 390,60 430,80 390,100" fill="#5c4a1a" stroke="#FFC857" strokeWidth="1.5"/>
+<text x="390" y="84" fontFamily="monospace" fontSize="10" fill="#ffffff" textAnchor="middle">Atribuido</text>
+
+<line x1="150" y1="65" x2="350" y2="80" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="200" y="58" fontFamily="monospace" fontSize="10" fill="#cccccc">(0,n)</text>
+
+<line x1="430" y1="80" x2="540" y2="65" stroke="#7F77DD" strokeWidth="1.5"/>
+<text x="500" y="58" fontFamily="monospace" fontSize="10" fill="#cccccc">(1,1)</text>
+
+<text x="380" y="490" fontFamily="sans-serif" fontSize="11" fill="#888888" textAnchor="middle">Lê: "Para cada Usuário, existem (1,n) Membros (no relacionamento Membro com Time)"</text>
+<text x="380" y="508" fontFamily="sans-serif" fontSize="11" fill="#888888" textAnchor="middle">Notação Heuser/brModelo — cardinalidade do lado OPOSTO da entidade</text>
+</svg>
+
+### Lendo as cardinalidades
+
+Vamos interpretar cada relacionamento:
+
+**Usuario ↔ Time** (via Membro, N:M):
+- `(1,n)` perto de Usuario, vindo de Time → "1 time tem de 1 a n usuários"
+- `(1,n)` perto de Time, vindo de Usuario → "1 usuário pertence a 1 a n times" (analista pode trabalhar em vários times)
+
+**Time ↔ Projeto** (Gerencia, 1:N):
+- `(1,n)` perto de Time → "1 projeto pertence a 1 ou n times" (geralmente 1, mas pode haver projeto compartilhado)
+- `(1,1)` perto de Projeto → "1 time gerencia 1 projeto..." espera, isso tá errado. Vou re-explicar.
+
+Aqui vai o **detalhe que confunde**: a cardinalidade próxima a uma entidade descreve quantos **da outra ponta** existem **por instância** dela. No brModelo, **a leitura é cruzada**.
+
+Re-lendo: cardinalidade `(1,1)` perto de Projeto = **um projeto está ligado a 1 e exatamente 1 time** (não pode haver projeto sem time, e cada projeto pertence a um único time). `(1,n)` perto de Time = **um time gerencia de 1 a n projetos**.
+
+**Bug ↔ Execução** (Gera, 1:0..1):
+- `(0,1)` perto de Bug → "1 execução PODE gerar 0 ou 1 bug" (nem toda execução vira bug; quando vira, é só 1)
+- `(1,1)` perto de Execução → "1 bug está obrigatoriamente ligado a 1 execução"
+
+**Bug ↔ Usuário** (Atribuido, N:1):
+- `(0,n)` perto de Bug → "1 usuário PODE ter de 0 a n bugs atribuídos"
+- `(1,1)` perto de Usuario → "1 bug é atribuído a exatamente 1 usuário"
+
+### Atributos das entidades (modelo conceitual)
+
+Identificando atributos com base nos requisitos:
+
+```
+Usuario: id, nome, email, criado_em
+Time: id, nome, criado_em
+Projeto: id, nome, descricao, criado_em
+CasoTeste: id, titulo, descricao, prioridade, autor, criado_em
+Execucao: id, data, resultado (PASSED|FAILED|BLOCKED|SKIPPED), duracao_segundos, observacoes
+Bug: id, titulo, descricao, prioridade, status (ABERTO|EM_PROGRESSO|FECHADO), criado_em
+```
+
+**Atributos de relacionamentos** (quando relacionamento N:M tem dados próprios — vira entidade no físico):
+
+```
+Membro (entre Usuario e Time): data_entrada, data_saida (NULL se ativo)
+```
+
+### Sobre os papéis (roles)
+
+Decisão de design: papel (ANALISTA, TESTER, GERENTE) é **especialização** de Usuario ou **enum/lookup**?
+
+- **Especialização** faz sentido se cada papel tem **atributos próprios** (ex: ANALISTA tem certificação_iso, TESTER tem nível_proficiência)
+- **Enum/coluna** faz sentido se papel é só um label sem atributos extras
+
+No nosso case, papéis não têm atributos próprios → **vai ser uma coluna `papel` em Usuario** com tipo ENUM. Decisão pragmática.
+
+---
+
+## Passo 3: Modelo Lógico — convertendo ER pra tabelas
+
+Agora aplicamos as **regras de conversão** que vimos na Lição 1:
+
+1. **Cada entidade vira tabela** com PK surrogate
+2. **Cada atributo simples vira coluna**
+3. **Relacionamento 1:N**: FK no lado N
+4. **Relacionamento N:M com atributos próprios**: tabela intermediária com FKs e atributos extra (caso Membro)
+5. **Atributos multivalorados** (não temos aqui, mas se houvesse): tabela separada
+
+**Resultado em estrutura textual** (formato dbdiagram.io):
+
+```dbml
+Table usuario {
+  id           bigserial [pk]
+  nome         varchar(100) [not null]
+  email        varchar(150) [not null, unique]
+  papel        varchar(20)  [not null, note: 'ANALISTA|TESTER|GERENTE']
+  criado_em    timestamptz  [default: 'now()']
+  atualizado_em timestamptz [default: 'now()']
+}
+
+Table time {
+  id           bigserial [pk]
+  nome         varchar(80) [not null, unique]
+  criado_em    timestamptz [default: 'now()']
+}
+
+Table membro {
+  usuario_id   bigint [ref: > usuario.id]
+  time_id      bigint [ref: > time.id]
+  data_entrada date   [not null, default: 'CURRENT_DATE']
+  data_saida   date
+
+  indexes {
+    (usuario_id, time_id) [pk]
+  }
+}
+
+Table projeto {
+  id           bigserial [pk]
+  time_id      bigint    [ref: > time.id, not null]
+  nome         varchar(120) [not null]
+  descricao    text
+  criado_em    timestamptz [default: 'now()']
+}
+
+Table caso_teste {
+  id           bigserial [pk]
+  projeto_id   bigint [ref: > projeto.id, not null]
+  autor_id     bigint [ref: > usuario.id, not null]
+  titulo       varchar(200) [not null]
+  descricao    text
+  prioridade   varchar(10) [note: 'BAIXA|MEDIA|ALTA|CRITICA']
+  criado_em    timestamptz [default: 'now()']
+}
+
+Table execucao {
+  id                bigserial [pk]
+  caso_teste_id    bigint  [ref: > caso_teste.id, not null]
+  executor_id      bigint  [ref: > usuario.id, not null]
+  data             timestamptz [not null, default: 'now()']
+  resultado        varchar(15) [not null, note: 'PASSED|FAILED|BLOCKED|SKIPPED']
+  duracao_segundos integer
+  observacoes      text
+}
+
+Table bug {
+  id           bigserial [pk]
+  execucao_id  bigint    [ref: > execucao.id, unique]
+  responsavel_id bigint  [ref: > usuario.id, not null]
+  titulo       varchar(200) [not null]
+  descricao    text
+  prioridade   varchar(10) [note: 'BAIXA|MEDIA|ALTA|CRITICA']
+  status       varchar(15) [note: 'ABERTO|EM_PROGRESSO|FECHADO']
+  criado_em    timestamptz [default: 'now()']
+}
+```
+
+**Observações importantes**:
+
+1. **Tabela `membro`** tem PK composta `(usuario_id, time_id)` — não precisa de id surrogate, e impede duplicatas naturalmente
+2. **Bug tem `execucao_id UNIQUE`** — implementa o 1:0..1 (uma execução tem no máximo 1 bug)
+3. **`papel`, `resultado`, `prioridade`, `status`** são strings com check constraint, não FKs pra tabela de lookup — decisão de simplicidade (poderia ser lookup pra i18n)
+4. **`criado_em` e `atualizado_em` em quase tudo** — pattern de auditoria
+
+### Verificando normalização (lição 2)
+
+Repassando cada tabela:
+
+- **1NF**: todas têm valores atômicos ✓
+- **2NF**: PKs simples (exceto `membro`); em `membro` os atributos `data_entrada`/`data_saida` dependem da chave inteira ✓
+- **3NF**: nenhum atributo não-chave depende de outro não-chave ✓
+- **BCNF**: todas as dependências têm determinante = superkey ✓
+
+Modelo está em **3NF/BCNF**, sem redundância problemática.
+
+---
+
+## Passo 4: Modelo Físico — DDL PostgreSQL
+
+Conversão direta do lógico pra SQL, com decisões físicas concretas:
+
+```sql
+-- Habilitar UUID extension caso queira usar (opcional)
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Enum types (PostgreSQL — mais limpos que VARCHAR + CHECK)
+CREATE TYPE papel_enum AS ENUM ('ANALISTA', 'TESTER', 'GERENTE');
+CREATE TYPE prioridade_enum AS ENUM ('BAIXA', 'MEDIA', 'ALTA', 'CRITICA');
+CREATE TYPE resultado_enum AS ENUM ('PASSED', 'FAILED', 'BLOCKED', 'SKIPPED');
+CREATE TYPE bug_status_enum AS ENUM ('ABERTO', 'EM_PROGRESSO', 'FECHADO');
+
+-- =======================
+-- USUARIOS
+-- =======================
+CREATE TABLE usuario (
+    id              BIGSERIAL PRIMARY KEY,
+    nome            VARCHAR(100) NOT NULL,
+    email           VARCHAR(150) NOT NULL UNIQUE,
+    papel           papel_enum   NOT NULL,
+    criado_em       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    atualizado_em   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_email_formato CHECK (email LIKE '%@%')
+);
+
+-- =======================
+-- TIMES
+-- =======================
+CREATE TABLE time_qa (
+    -- "time" é palavra reservada em alguns SGBDs, evitamos
+    id           BIGSERIAL PRIMARY KEY,
+    nome         VARCHAR(80) NOT NULL UNIQUE,
+    criado_em    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =======================
+-- MEMBRO — N:M entre USUARIO e TIME_QA, com atributos
+-- =======================
+CREATE TABLE membro (
+    usuario_id    BIGINT      NOT NULL,
+    time_id       BIGINT      NOT NULL,
+    data_entrada  DATE        NOT NULL DEFAULT CURRENT_DATE,
+    data_saida    DATE,
+
+    CONSTRAINT pk_membro PRIMARY KEY (usuario_id, time_id),
+    CONSTRAINT fk_membro_usuario
+        FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE,
+    CONSTRAINT fk_membro_time
+        FOREIGN KEY (time_id) REFERENCES time_qa(id) ON DELETE CASCADE,
+
+    CONSTRAINT chk_membro_datas
+        CHECK (data_saida IS NULL OR data_saida >= data_entrada)
+);
+
+-- =======================
+-- PROJETOS
+-- =======================
+CREATE TABLE projeto (
+    id           BIGSERIAL    PRIMARY KEY,
+    time_id      BIGINT       NOT NULL,
+    nome         VARCHAR(120) NOT NULL,
+    descricao    TEXT,
+    criado_em    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_projeto_time
+        FOREIGN KEY (time_id) REFERENCES time_qa(id) ON DELETE RESTRICT,
+
+    -- Nome do projeto único dentro de cada time (não globalmente)
+    CONSTRAINT uk_projeto_time_nome UNIQUE (time_id, nome)
+);
+
+-- =======================
+-- CASOS DE TESTE
+-- =======================
+CREATE TABLE caso_teste (
+    id           BIGSERIAL    PRIMARY KEY,
+    projeto_id   BIGINT       NOT NULL,
+    autor_id     BIGINT       NOT NULL,
+    titulo       VARCHAR(200) NOT NULL,
+    descricao    TEXT,
+    prioridade   prioridade_enum NOT NULL DEFAULT 'MEDIA',
+    criado_em    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_caso_projeto
+        FOREIGN KEY (projeto_id) REFERENCES projeto(id) ON DELETE CASCADE,
+    CONSTRAINT fk_caso_autor
+        FOREIGN KEY (autor_id) REFERENCES usuario(id) ON DELETE RESTRICT
+);
+
+-- =======================
+-- EXECUCOES
+-- =======================
+CREATE TABLE execucao (
+    id                BIGSERIAL   PRIMARY KEY,
+    caso_teste_id    BIGINT      NOT NULL,
+    executor_id      BIGINT      NOT NULL,
+    data             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resultado        resultado_enum NOT NULL,
+    duracao_segundos INTEGER     CHECK (duracao_segundos >= 0),
+    observacoes      TEXT,
+
+    CONSTRAINT fk_execucao_caso
+        FOREIGN KEY (caso_teste_id) REFERENCES caso_teste(id) ON DELETE CASCADE,
+    CONSTRAINT fk_execucao_executor
+        FOREIGN KEY (executor_id) REFERENCES usuario(id) ON DELETE RESTRICT
+);
+
+-- =======================
+-- BUGS
+-- =======================
+CREATE TABLE bug (
+    id             BIGSERIAL   PRIMARY KEY,
+    execucao_id    BIGINT      UNIQUE,   -- UNIQUE garante 1:0..1
+    responsavel_id BIGINT      NOT NULL,
+    titulo         VARCHAR(200) NOT NULL,
+    descricao      TEXT,
+    prioridade     prioridade_enum NOT NULL DEFAULT 'MEDIA',
+    status         bug_status_enum NOT NULL DEFAULT 'ABERTO',
+    criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_bug_execucao
+        FOREIGN KEY (execucao_id) REFERENCES execucao(id) ON DELETE SET NULL,
+    CONSTRAINT fk_bug_responsavel
+        FOREIGN KEY (responsavel_id) REFERENCES usuario(id) ON DELETE RESTRICT
+);
+```
+
+### Decisões físicas explicadas
+
+**1. Por que `BIGSERIAL` e não `SERIAL`?**
+
+`SERIAL` = INTEGER (32 bits, max ~2 bilhões). `BIGSERIAL` = BIGINT (64 bits). Pra tabelas que podem crescer (execução, bug — pode ser milhões), **BIGSERIAL evita problemas no futuro** sem custo perceptível.
+
+**2. Por que `time_qa` em vez de `time`?**
+
+**`TIME` é palavra reservada em SQL padrão** (tipo data/hora). Em algumas configurações do PostgreSQL/MySQL pode causar problemas. **Boa prática**: nunca use nomes que conflitam com keywords. Outros candidatos perigosos: `user`, `order`, `group`, `select`, `from`.
+
+**3. ENUM types nativos do PostgreSQL**
+
+```sql
+CREATE TYPE papel_enum AS ENUM ('ANALISTA', 'TESTER', 'GERENTE');
+```
+
+Mais limpo que `VARCHAR + CHECK`. Validação automática, ordenação natural, menor armazenamento. **Trade-off**: adicionar/remover valores exige `ALTER TYPE` (migration) — não pode ser feito em transação em alguns casos.
+
+**Em JPA**: `@Enumerated(EnumType.STRING)` mapeia perfeitamente — Hibernate converte automaticamente.
+
+**4. `ON DELETE CASCADE` vs `RESTRICT` vs `SET NULL`**
+
+| Estratégia | Comportamento | Quando usar |
+|---|---|---|
+| `RESTRICT` (default) | Bloqueia DELETE do pai se há filhos | Maior parte dos casos (proteção) |
+| `CASCADE` | Deleta filhos automaticamente | Quando filho **não faz sentido** sem pai (membro sem usuário/time) |
+| `SET NULL` | Filho fica com FK NULL após delete do pai | Quando referência é opcional |
+
+No nosso schema:
+- `membro` → CASCADE em usuario/time (membro não faz sentido sem ambos)
+- `projeto` → RESTRICT em time (não delete time se tem projeto)
+- `caso_teste` → CASCADE em projeto (deletar projeto remove seus casos)
+- `bug` → SET NULL em execucao (bug pode "sobreviver" sem execução de origem)
+
+**5. UNIQUE composta vs apenas em uma coluna**
+
+`uk_projeto_time_nome UNIQUE (time_id, nome)` — nome de projeto **único dentro de cada time**, não globalmente. Faz sentido: time A pode ter "Sistema Principal" e time B também.
+
+---
+
+## Passo 5: Índices estratégicos
+
+Pensando nas queries que **vão acontecer** no sistema:
+
+```sql
+-- 1. Dashboard mostra execuções recentes — query MUITO frequente
+SELECT * FROM execucao
+WHERE resultado = 'FAILED' AND data > NOW() - INTERVAL '7 days'
+ORDER BY data DESC;
+-- Índice composto (resultado, data DESC) ajuda
+
+CREATE INDEX idx_execucao_resultado_data
+    ON execucao (resultado, data DESC);
+
+-- 2. Listar todos os casos de um projeto — query frequente
+SELECT * FROM caso_teste WHERE projeto_id = ?;
+-- FK já costuma ter índice automático em algumas bases, mas crie explicitamente em PostgreSQL
+
+CREATE INDEX idx_caso_teste_projeto ON caso_teste (projeto_id);
+
+-- 3. Bugs abertos por responsável — dashboard pessoal
+SELECT * FROM bug WHERE responsavel_id = ? AND status = 'ABERTO';
+
+CREATE INDEX idx_bug_responsavel_status
+    ON bug (responsavel_id, status)
+    WHERE status IN ('ABERTO', 'EM_PROGRESSO');  -- partial index
+
+-- 4. Histórico de execuções por caso de teste
+SELECT * FROM execucao WHERE caso_teste_id = ? ORDER BY data DESC;
+
+CREATE INDEX idx_execucao_caso_data ON execucao (caso_teste_id, data DESC);
+
+-- 5. Membros ativos de um time (data_saida IS NULL)
+SELECT u.* FROM usuario u
+JOIN membro m ON u.id = m.usuario_id
+WHERE m.time_id = ? AND m.data_saida IS NULL;
+
+CREATE INDEX idx_membro_ativo ON membro (time_id) WHERE data_saida IS NULL;
+```
+
+**Importante**: PostgreSQL **não cria índice automático em FK** (diferente do MySQL/InnoDB). Sempre crie explicitamente em colunas FK que aparecem em WHERE/JOIN frequentemente.
+
+---
+
+## Anti-patterns: o que evitar
+
+### 1. Tabela "do" / God table
+
+```sql
+-- ❌ Tudo numa tabela só
+CREATE TABLE projeto_caso_execucao_bug (
+    projeto_nome VARCHAR,
+    caso_titulo VARCHAR,
+    execucao_data TIMESTAMPTZ,
+    bug_titulo VARCHAR,
+    ... 50 colunas ...
+);
+```
+
+Vimos no curso de Normalização (Lição 2) — gera anomalias de inserção, atualização e remoção. **Sempre normalize até 3NF/BCNF**.
+
+### 2. Soft delete inconsistente
+
+```sql
+-- ❌ Algumas tabelas têm 'deletado_em', outras não — inconsistência total
+```
+
+**Decida no início**: vai usar soft delete (coluna `deletado_em`) em todas as tabelas? Ou só algumas? Padronize. Se for soft delete: **crie partial index** `WHERE deletado_em IS NULL` em queries frequentes.
+
+### 3. Falta de auditoria
+
+```sql
+-- ❌ Sem criado_em, atualizado_em
+CREATE TABLE bug (id BIGSERIAL PK, titulo VARCHAR, ...);
+```
+
+**Toda tabela transacional deve ter** `criado_em` e `atualizado_em`. Pra atualizado_em automático, use trigger:
+
+```sql
+CREATE OR REPLACE FUNCTION atualizar_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.atualizado_em = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_bug_atualizar
+BEFORE UPDATE ON bug
+FOR EACH ROW EXECUTE FUNCTION atualizar_timestamp();
+```
+
+Em **JPA/Spring**: usar `@CreatedDate` e `@LastModifiedDate` resolve isso (vimos na Lição 7).
+
+### 4. Strings em vez de enums/lookups
+
+```sql
+-- ❌ Status como string livre, sem validação
+status VARCHAR(50)
+-- "aberto", "Aberto", "ABERTO", "open", "OPEN" — bagunça
+
+-- ✓ Enum ou check constraint
+status bug_status_enum NOT NULL
+```
+
+### 5. FK fraca (sem ON DELETE definido)
+
+Default no PostgreSQL é `NO ACTION` (parecido com RESTRICT mas adiável). **Sempre defina explicitamente** ON DELETE pra cada FK — força você a pensar no comportamento.
+
+### 6. Sem teste de carga
+
+Modele com **dados realistas** (não 10 linhas locais). Ferramentas:
+- **pgbench** (PostgreSQL nativo) — benchmark padrão
+- **Faker** (Python/JS) — gerar dados realistas
+- **Datafaker** (Java) — gerar dados realistas em Java/Spring
+
+---
+
+## Recap
+
+**Modelagem prática** = fluxo industrial de 5 passos:
+
+1. **Requisitos em linguagem natural** — entender o domínio, listar substantivos (entidades) e verbos (relacionamentos)
+2. **Modelo Conceitual (ER)** — entidades, atributos, relacionamentos, cardinalidades. **Sem se preocupar com SQL**. Use **brModelo** (notação Heuser, padrão acadêmico brasileiro) ou **dbdiagram.io** (DSL textual moderna)
+3. **Modelo Lógico** — converte ER em tabelas: cada entidade vira tabela com PK; 1:N vira FK no lado N; N:M com atributos próprios vira entity separada; verifica 3NF/BCNF
+4. **Modelo Físico** — DDL SQL específica: tipos concretos, ENUMs, constraints CHECK, ON DELETE strategies, naming
+5. **Índices estratégicos** — baseado em queries previsíveis: WHERE comuns, FKs em PostgreSQL (não auto-indexa), partial indexes pra fração consultada
+
+**Notação brModelo (Heuser)**: cardinalidade próxima à entidade descreve **quantos da outra ponta** existem **por instância** dela — leitura cruzada, **pega muita gente** no começo.
+
+**Conversão ER → tabelas**:
+- Entidade → tabela com PK surrogate (`BIGSERIAL` em PostgreSQL, evita problemas futuros)
+- Atributos simples → colunas com tipos apropriados
+- Relacionamento 1:N → FK no lado N
+- Relacionamento N:M sem atributos → tabela de junção com 2 FKs PK composta
+- Relacionamento N:M com atributos próprios → **entity própria** (caso `Membro` com `data_entrada`)
+- 1:1 ou 1:0..1 → FK com `UNIQUE` no lado opcional
+
+**Decisões físicas críticas**:
+- Evite nomes reservados (`time` → `time_qa`)
+- Use ENUMs nativos PostgreSQL pra status, prioridade, papel
+- **ON DELETE** explícito: RESTRICT default (proteção), CASCADE quando filho não faz sentido sem pai, SET NULL quando opcional
+- PostgreSQL **não indexa FK automático** — crie explicitamente
+
+**Auditoria padrão**: `criado_em TIMESTAMPTZ DEFAULT NOW()` em toda tabela transacional; `atualizado_em` via trigger ou via JPA `@LastModifiedDate`.
+
+**Anti-patterns**:
+- Tabela "do tudo" (god table) — viola 3NF
+- Soft delete inconsistente entre tabelas
+- Falta de auditoria
+- Status como string livre sem validação
+- FK sem ON DELETE explícito
+- Testar com 10 linhas locais e produção quebra com 1M
+
+**Workflow recomendado pra projetos reais**:
+1. brModelo (acadêmico) ou dbdiagram.io (DSL textual versionada em Git) pro conceitual
+2. Gerar DDL automaticamente (dbdiagram.io exporta SQL) ou escrever manual
+3. **Migrations versionadas** (Flyway ou Liquibase) — nunca SQL solto em produção
+4. DBeaver pra **visualizar ER reverso** do schema atual e validar
+5. pgbench/Datafaker pra teste com volume realista
+
+A trilha de **Bancos de Dados** está agora completa com 8 lições — cobertura sólida desde teoria fundadora até prática industrial. Você consegue modelar, implementar, consultar, otimizar e integrar com Spring Boot um sistema novo do zero.
+
+Próximas direções:
+
+- **NoSQL** — quando relacional não é a melhor escolha; tipos (key-value, document, column, graph); CAP theorem
+- **Performance avançada** — particionamento, replicação, sharding, connection pooling
+- **Mudar de trilha** — Arquitetura de Software (Clean Arch + DDD que casa com seu projeto Fatec), Sistemas Operacionais, Redes
+
+Manda qual quer.

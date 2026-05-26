@@ -1,0 +1,117 @@
+[
+  {
+    "id": "sort-01",
+    "enunciado": "Qual a complexidade de tempo do MERGE SORT no pior caso?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(n)", "O(n log n)", "O(n²)", "O(2ⁿ)"],
+    "resposta": 1,
+    "explicacao": "O(n log n) no pior, médio e melhor caso. A profundidade da recursão é sempre log n (divide pela metade), e cada nível faz O(n) de trabalho no merge. Diferente do quick sort, merge sort não tem pior caso degenerado — ele garante O(n log n) sempre. O preço dessa garantia é precisar de O(n) de memória auxiliar para fazer o merge."
+  },
+  {
+    "id": "sort-02",
+    "enunciado": "Quando você chama Arrays.sort() em Java passando um int[], qual algoritmo é executado?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Bubble Sort",
+      "Merge Sort tradicional",
+      "Dual-Pivot Quicksort (Yaroslavskiy)",
+      "TimSort"
+    ],
+    "resposta": 2,
+    "explicacao": "Pra tipos primitivos (int[], long[], double[], etc.), Arrays.sort do Java usa DualPivotQuicksort criado por Vladimir Yaroslavskiy em 2009 e adotado pelo Java 7 em 2011. Pra arrays de objetos (Integer[], String[], etc.), Java usa TimSort. A razão da distinção é estabilidade: estabilidade é irrelevante pra primitivos (dois ints iguais são indistinguíveis), mas importa pra objetos (preserva ordem original quando há empate de chave)."
+  },
+  {
+    "id": "sort-03",
+    "enunciado": "O que torna um algoritmo de ordenação ESTÁVEL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Não pode quebrar em arrays grandes",
+      "Elementos com chaves iguais mantêm sua ordem relativa original após a ordenação",
+      "Tem complexidade O(n log n) garantida",
+      "Não precisa de memória adicional"
+    ],
+    "resposta": 1,
+    "explicacao": "Um algoritmo é estável se elementos com chaves iguais mantêm sua ordem relativa original. Importa quando se ordena por múltiplas chaves: ordenar primeiro por nome e depois por nota com algoritmo estável preserva a ordem alfabética dentro de cada grupo de notas iguais. Algoritmos estáveis: Merge Sort, Insertion Sort, Bubble Sort, TimSort, Counting Sort. NÃO estáveis: Quick Sort, Heap Sort, Selection Sort, Dual-Pivot Quicksort. SQL usa essa propriedade implicitamente em ORDER BY com múltiplas colunas."
+  },
+  {
+    "id": "sort-04",
+    "enunciado": "Qual a complexidade do Quick Sort no PIOR caso, e quando ele acontece?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(n log n), em qualquer caso",
+      "O(n²), quando o pivot escolhido é sempre o menor ou maior elemento",
+      "O(n), em arrays já ordenados",
+      "O(n!), em arrays aleatórios"
+    ],
+    "resposta": 1,
+    "explicacao": "Quick Sort tem O(n²) no pior caso, que acontece quando o pivot escolhido é sempre o menor (ou maior) elemento da subseção atual. Exemplo clássico: usar 'último elemento' como pivot num array já ordenado. A partição vira 0 elementos de um lado e n-1 do outro, recursão vira cadeia de profundidade n, total O(n²). Defesas: pivot aleatório, mediana de três, ou Introsort (que muda pra Heapsort se a profundidade da recursão excede 2 × log₂(n))."
+  },
+  {
+    "id": "sort-05",
+    "enunciado": "Qual a complexidade do TIMSORT no MELHOR caso (array já ordenado)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(1)", "O(n)", "O(n log n)", "O(log n)"],
+    "resposta": 1,
+    "explicacao": "O(n) no melhor caso. TimSort detecta um array já ordenado como um único 'natural run' e termina após apenas verificar que tudo está em ordem — sem fazer merges nem comparações desnecessárias. Esse comportamento adaptativo é o diferencial: enquanto merge sort clássico faz O(n log n) mesmo em entrada já ordenada, TimSort cai pra O(n). Por isso é o algoritmo preferido pra dados parcialmente ordenados, que são a regra (não exceção) em workloads do mundo real."
+  },
+  {
+    "id": "sort-06",
+    "enunciado": "Por que o Dual-Pivot Quicksort de Yaroslavskiy é mais rápido na prática que o quicksort tradicional, mesmo fazendo MAIS swaps?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque é compilado pelo JIT mais agressivamente",
+      "Porque tem melhor cache locality e aproveita melhor o pipeline de CPU moderna",
+      "Porque usa menos memória",
+      "Porque é estável"
+    ],
+    "resposta": 1,
+    "explicacao": "Apesar de fazer ~30% mais swaps que o single-pivot, o dual-pivot é 20-30% mais rápido no wall clock devido a cache locality. O padrão de acesso à memória da partição em 3 regiões aproveita melhor o cache L1 do processador moderno. Wild, Nebel e Neininger (2014) demonstraram isso formalmente em paper acadêmico. É um exemplo clássico de quanto Big O esconde: dois algoritmos O(n log n), mas as constantes ocultas (cache misses) fazem uma diferença gigante. Big O é metade da história; a outra metade é benchmark em arquitetura real."
+  },
+  {
+    "id": "sort-07",
+    "enunciado": "Counting Sort tem complexidade O(n + k). O que é 'k' nessa fórmula, e quando o algoritmo é ÚTIL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "k é a quantidade de chaves duplicadas; útil para arrays com muitos repetidos",
+      "k é o range dos valores (max - min); útil quando k é pequeno comparado a n",
+      "k é o número de buckets; útil para qualquer tipo de dado",
+      "k é a profundidade da recursão; útil pra evitar stack overflow"
+    ],
+    "resposta": 1,
+    "explicacao": "k é o range dos valores. Counting Sort usa um array auxiliar de tamanho k+1 para contar ocorrências de cada valor. É útil quando k é pequeno em relação a n. Exemplos: ordenar idades (k ≤ 120), notas (k ≤ 100), pixels (k = 256). Inviável pra range grande: ordenar floats arbitrários ou inteiros de 64 bits sem restrição daria k astronômico. Por isso bibliotecas-padrão não usam counting sort — elas precisam ser gerais. Mas em problemas específicos de ICPC e jogos, counting sort entrega O(n) verdadeiro."
+  },
+  {
+    "id": "sort-08",
+    "enunciado": "Em C++, qual algoritmo std::sort usa por padrão?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Pure Quicksort",
+      "Merge Sort estável",
+      "Introsort (híbrido Quicksort + Heapsort + Insertion Sort)",
+      "TimSort"
+    ],
+    "resposta": 2,
+    "explicacao": "std::sort usa Introsort, criado por David Musser em 1997. Combina três algoritmos: Quicksort como principal, Heapsort como fallback quando a profundidade da recursão excede 2 × log₂(n) (protege contra pior caso O(n²)), e Insertion Sort em sub-arrays pequenos (tipicamente menos de 16 elementos). Introsort NÃO é estável. Pra ordenação estável em C++, use std::stable_sort, que internamente é uma variante de Merge Sort. O Java pra primitivos usa abordagem similar mas com Dual-Pivot Quicksort em vez de single-pivot."
+  },
+  {
+    "id": "sort-09",
+    "enunciado": "Verdadeiro ou falso: qualquer algoritmo de ordenação BASEADO EM COMPARAÇÕES tem pior caso pelo menos O(n log n).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. É um teorema clássico de teoria da informação: existem n! permutações possíveis de um array de n elementos. Uma árvore de decisões binárias (cada comparação tem 2 resultados) precisa de profundidade pelo menos log₂(n!) ≈ n log n pra distinguir entre todas elas. Por isso TODO algoritmo baseado em comparações é Ω(n log n) no pior caso. Counting Sort e Radix Sort QUEBRAM esse limite porque NÃO comparam — eles exploram a estrutura específica dos dados (range pequeno, dígitos discretos), o que escapa do teorema."
+  },
+  {
+    "id": "sort-10",
+    "enunciado": "Por que insertion sort, apesar de ser O(n²), aparece DENTRO de implementações sérias como o DualPivotQuicksort do Java?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por compatibilidade com versões antigas",
+      "Porque tem overhead muito baixo e é rapidíssimo em arrays pequenos (< 32-47 elementos)",
+      "Porque é mais fácil de paralelizar",
+      "Porque ele garante estabilidade que o quicksort perde"
+    ],
+    "resposta": 1,
+    "explicacao": "Insertion sort tem overhead muito baixo (sem recursão, sem partição, sem buffer auxiliar) e é mais rápido que algoritmos sofisticados em arrays pequenos. Quando a recursão do quicksort chega em sub-arrays pequenos (Java usa threshold de 47 elementos no DualPivotQuicksort, C++ usa cerca de 16), trocar pra insertion sort acelera o algoritmo global. É a regra geral: Big O importa pra n grande, constantes importam pra n pequeno, e algoritmos híbridos exploram os dois mundos. Outro motivo (relacionado): insertion sort tem O(n) no melhor caso, então em dados quase ordenados ele é imbatível."
+  }
+]

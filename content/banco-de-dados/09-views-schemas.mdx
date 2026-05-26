@@ -1,0 +1,515 @@
+---
+titulo: "Views, Schemas e Organização: Camadas de Abstração Sobre Tabelas"
+trilha: "banco-de-dados"
+duracaoMin: 75
+dificuldade: "intermediario"
+referencias:
+  - "PostgreSQL Documentation 18 (atual), 'CREATE VIEW' — postgresql.org/docs/current/sql-createview.html"
+  - "PostgreSQL Documentation 18, 'CREATE MATERIALIZED VIEW' — postgresql.org/docs/current/sql-creatematerializedview.html"
+  - "PostgreSQL Documentation 18, 'REFRESH MATERIALIZED VIEW' — postgresql.org/docs/current/sql-refreshmaterializedview.html"
+  - "PostgreSQL Documentation 18, '5.10. Schemas' — postgresql.org/docs/current/ddl-schemas.html"
+  - "Microsoft Learn, 'CREATE VIEW (Transact-SQL)' — learn.microsoft.com/en-us/sql/t-sql/statements/create-view-transact-sql"
+  - "Microsoft Learn, 'Create Indexed Views' — learn.microsoft.com/en-us/sql/relational-databases/views/create-indexed-views"
+  - "PostgreSQL Release Notes 9.3 (set 2013) — introdução de Materialized Views nativas"
+  - "PostgreSQL Release Notes 15 (out 2022) — mudança de permissões padrão do schema public"
+---
+
+## Por que views existem
+
+Você passou 8 lições aprendendo a **modelar tabelas, indexar, consultar com SQL avançado, transacionar com ACID, integrar com JPA, modelar do zero**. Tudo isso operando **direto nas tabelas físicas**.
+
+Em sistemas reais, **isso é frágil**. Quando 50 partes do sistema fazem `SELECT * FROM funcionario JOIN departamento JOIN cargo` espalhado pelo código, **mudar o schema vira impossível**. Renomear uma coluna quebra 200 queries. Adicionar uma tabela intermediária força refatoração em cascata.
+
+**Views resolvem isso** — elas são uma **camada de abstração** entre as tabelas físicas e as consultas que o resto do sistema faz. Você define uma "tabela virtual" com a query que quiser; o resto do sistema usa a view; quando a tabela base muda, **só a view precisa ser atualizada**, não os 200 lugares que consultavam ela.
+
+**Schemas** vão um passo além: são **namespaces** que organizam objetos do banco (tabelas, views, funções, triggers) em grupos lógicos. Um banco corporativo grande pode ter `schema.vendas`, `schema.financeiro`, `schema.rh`, cada um com suas tabelas, sem conflito de nome.
+
+Esta lição cobre:
+
+1. **Views regulares** (consultas virtuais) — `CREATE VIEW`, casos de uso, limitações
+2. **Materialized Views** (resultados pré-calculados em disco) — quando vale o trade-off
+3. **Updatable Views** — quando view aceita INSERT/UPDATE/DELETE
+4. **Indexed Views (SQL Server)** vs **Materialized Views (PostgreSQL)** — diferenças
+5. **`WITH SCHEMABINDING`** (SQL Server) — proteção da view contra mudanças
+6. **Schemas como namespaces** — `CREATE SCHEMA`, `search_path`, separação multi-tenant
+7. **Quando NÃO usar** views — pitfalls reais
+
+Tudo baseado em **documentação oficial** do PostgreSQL e Microsoft.
+
+---
+
+## Views regulares: tabelas virtuais
+
+**Definição** (PostgreSQL docs): *"Views são tabelas virtuais cuja informação é definida por uma consulta. Toda vez que a view é referenciada, a consulta é executada."*
+
+Uma view **não armazena dados** — armazena a **definição de uma query**. Quando você consulta a view, o SGBD executa a query subjacente em tempo real.
+
+### Sintaxe básica
+
+```sql
+-- PostgreSQL e SQL Server (compatível)
+CREATE VIEW funcionarios_ativos AS
+SELECT id, nome, email, departamento_id, salario
+FROM funcionario
+WHERE data_demissao IS NULL;
+
+-- Agora pode consultar como se fosse tabela:
+SELECT * FROM funcionarios_ativos WHERE salario > 5000;
+```
+
+Por baixo, o SGBD **substitui** a referência à view pela query original — chama-se **view expansion** ou **view inlining**.
+
+### Casos de uso reais
+
+**Caso 1 — Esconder complexidade**:
+
+```sql
+-- Query complexa que aparece em 50 telas do sistema:
+SELECT
+    f.id,
+    f.nome,
+    d.nome AS departamento,
+    c.titulo AS cargo,
+    c.salario_base + COALESCE(SUM(b.valor), 0) AS remuneracao_total
+FROM funcionario f
+JOIN departamento d ON f.departamento_id = d.id
+JOIN cargo c ON f.cargo_id = c.id
+LEFT JOIN beneficio b ON b.funcionario_id = f.id
+GROUP BY f.id, f.nome, d.nome, c.titulo, c.salario_base;
+```
+
+Em vez de copiar isso em 50 lugares, **encapsule numa view**:
+
+```sql
+CREATE VIEW v_funcionario_completo AS
+SELECT
+    f.id, f.nome, d.nome AS departamento, c.titulo AS cargo,
+    c.salario_base + COALESCE(SUM(b.valor), 0) AS remuneracao_total
+FROM funcionario f
+JOIN departamento d ON f.departamento_id = d.id
+JOIN cargo c ON f.cargo_id = c.id
+LEFT JOIN beneficio b ON b.funcionario_id = f.id
+GROUP BY f.id, f.nome, d.nome, c.titulo, c.salario_base;
+
+-- Resto do sistema usa simples:
+SELECT * FROM v_funcionario_completo WHERE remuneracao_total > 10000;
+```
+
+**Caso 2 — Segurança / esconder colunas**:
+
+```sql
+-- Dá acesso só aos campos não-sensíveis pra equipe de marketing:
+CREATE VIEW v_cliente_publico AS
+SELECT id, nome, cidade, estado, data_cadastro
+FROM cliente;
+-- Sem CPF, telefone, email, endereco completo
+
+GRANT SELECT ON v_cliente_publico TO marketing_role;
+REVOKE SELECT ON cliente FROM marketing_role;
+```
+
+**Caso 3 — Compatibilidade após refactoring**:
+
+Você renomeou a tabela `usuario` pra `app_user` (palavra reservada). Em vez de quebrar todo código antigo:
+
+```sql
+CREATE VIEW usuario AS SELECT * FROM app_user;
+```
+
+Sistema antigo continua funcionando. Migra gradualmente.
+
+<Insight>
+**Princípio prático**: view é como uma **API pra seu schema**. Sistemas externos consomem as views, não as tabelas físicas. Você pode mudar estrutura física à vontade — desde que mantenha o contrato das views, ninguém quebra. É **encapsulamento aplicado ao banco**.
+</Insight>
+
+### Limitações de views regulares
+
+Views **não armazenam dados** — toda consulta executa a query. Consequências:
+
+- Performance da view = performance da query original (sem ganho mágico)
+- Query lenta na view = lentidão toda vez que alguém consulta
+- View sobre view sobre view = pode gerar plano de execução horrível
+
+Pra esses casos: **Materialized Views**.
+
+---
+
+## Materialized Views: caching no banco
+
+**Definição** (PostgreSQL docs, citação literal traduzida): *"Materialized views in PostgreSQL use the rule system like views do, but persist the results in a table-like form."*
+
+Ou seja: view materializada **armazena fisicamente** o resultado da query, como uma tabela. **Não recalcula em tempo real**. Você precisa **refrescar manualmente** (ou agendar) pra atualizar os dados.
+
+**PostgreSQL 9.3 introduziu materialized views nativas** (set/2013). Antes disso, era um padrão DIY com `CREATE TABLE AS`.
+
+### Sintaxe de materialized view
+
+```sql
+-- PostgreSQL
+CREATE MATERIALIZED VIEW mv_vendas_mensal AS
+SELECT
+    DATE_TRUNC('month', data_venda) AS mes,
+    COUNT(*) AS total_vendas,
+    SUM(valor) AS receita,
+    AVG(valor) AS ticket_medio
+FROM venda
+GROUP BY DATE_TRUNC('month', data_venda);
+
+-- Consulta como tabela normal
+SELECT * FROM mv_vendas_mensal WHERE mes >= '2025-01-01';
+
+-- Atualizar dados (recomputa toda a query)
+REFRESH MATERIALIZED VIEW mv_vendas_mensal;
+```
+
+### Trade-off central
+
+| Característica | View regular | Materialized View |
+|---|---|---|
+| Armazena dados? | Não | **Sim** |
+| Dados sempre frescos? | Sim | Não — depende do último REFRESH |
+| Consulta rápida? | = query original | Muito rápida (= consultar tabela) |
+| Pode indexar? | Não (no PostgreSQL) | **Sim** |
+| Custo de manutenção | Zero | REFRESH consome recursos |
+| Uso ideal | Abstração simples, queries leves | Agregações pesadas, dashboards |
+
+**Caso típico**: dashboard executivo que agrega vendas por mês/região. Query original demora 30 segundos sobre 50M de linhas. Materialized view atualizada de hora em hora dá dado "quase fresco" em 50ms. **Trade-off de latência por performance**.
+
+### REFRESH CONCURRENTLY
+
+`REFRESH MATERIALIZED VIEW` padrão **bloqueia leitores** durante o refresh. Em produção 24x7, isso pode ser problema.
+
+A documentação oficial diz: *"Refresh the materialized view without locking out concurrent selects on the materialized view."*
+
+```sql
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_vendas_mensal;
+```
+
+**Pré-requisito documentado**: a materialized view precisa ter **pelo menos um UNIQUE index** sobre colunas (sem expressões, sem WHERE) pra `CONCURRENTLY` funcionar.
+
+```sql
+CREATE UNIQUE INDEX idx_mv_vendas_mes ON mv_vendas_mensal (mes);
+-- Agora pode usar REFRESH CONCURRENTLY
+```
+
+<Aviso>
+**Custo do CONCURRENTLY**: a documentação oficial avisa que sem CONCURRENTLY, refresh tende a usar **menos recursos e completar mais rápido**, mas bloqueia leituras. Com CONCURRENTLY, leitores ficam livres, mas refresh **pode demorar mais e consumir mais recursos**. Em produção 24x7 com dashboards consultando direto, CONCURRENTLY costuma valer a pena. Em job noturno sem leitores ativos, REFRESH simples é mais eficiente.
+</Aviso>
+
+### Estratégias de refresh em produção
+
+Existem várias abordagens — escolha conforme requisito de "atualidade":
+
+```sql
+-- 1. Refresh agendado (pg_cron extension, ou cron do SO chamando psql)
+-- A cada hora:
+SELECT cron.schedule('refresh-vendas', '0 * * * *',
+    'REFRESH MATERIALIZED VIEW CONCURRENTLY mv_vendas_mensal');
+
+-- 2. Refresh manual após batch de carga
+INSERT INTO venda (...) VALUES (...);
+-- depois do batch:
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_vendas_mensal;
+
+-- 3. Refresh por trigger (cuidado — pode ficar custoso)
+-- Geralmente NÃO recomendado pra views grandes
+```
+
+---
+
+## Indexed Views (SQL Server)
+
+O equivalente do SQL Server pra Materialized View é **Indexed View** — mas com diferenças importantes documentadas na Microsoft Learn.
+
+### Diferenças principais
+
+| Aspecto | PostgreSQL Materialized View | SQL Server Indexed View |
+|---|---|---|
+| Armazena dados? | Sim (após `REFRESH`) | Sim (continuamente, via clustered index) |
+| Atualização | Manual via `REFRESH` | **Automática** — SQL Server mantém em sincronia |
+| Latência | Pode estar desatualizada | Sempre atualizada |
+| Custo de escrita | Zero até refresh | INSERT/UPDATE/DELETE nas tabelas base **atualiza a view também** |
+| Requer SCHEMABINDING? | Não | **Sim** (obrigatório) |
+| Edition do SQL Server | — | Funcionalidade completa só em Enterprise/Developer |
+
+A Microsoft documenta que pra criar indexed view precisa:
+- View criada `WITH SCHEMABINDING`
+- View referencia só tabelas base **no mesmo database** (sem outras views aninhadas)
+- Two-part names (`schema.tabela`)
+- Se tem `GROUP BY`, precisa `COUNT_BIG(*)` e não pode ter `HAVING`
+- Restrições no SELECT — não pode ter `MIN`, `MAX`, `TOP`, `outer joins`, várias outras
+
+```sql
+-- SQL Server
+CREATE VIEW dbo.vw_vendas_mensal
+WITH SCHEMABINDING       -- obrigatório
+AS
+SELECT
+    YEAR(data_venda) AS ano,
+    MONTH(data_venda) AS mes,
+    COUNT_BIG(*) AS total,    -- COUNT_BIG, não COUNT
+    SUM(valor) AS receita
+FROM dbo.venda             -- two-part name obrigatório
+GROUP BY YEAR(data_venda), MONTH(data_venda);
+GO
+
+-- Indexar — cria armazenamento físico
+CREATE UNIQUE CLUSTERED INDEX idx_vw_vendas_mensal
+ON dbo.vw_vendas_mensal (ano, mes);
+```
+
+**Resultado** documentado pela Microsoft: o otimizador pode **substituir automaticamente** uma query que faria `SELECT ... FROM venda GROUP BY ano, mes` pra ler diretamente da indexed view — **mesmo sem você referenciar a view na query**.
+
+### WITH SCHEMABINDING — proteção real
+
+Citação literal da documentação Microsoft: *"When SCHEMABINDING is specified, the base table or tables cannot be modified in a way that would affect the view definition. The view definition itself must first be modified or dropped to remove dependencies on the table that is to be modified."*
+
+Significado prático: **se uma view tem SCHEMABINDING, você não consegue dropar nem alterar a estrutura de colunas que ela usa**. Tem que dropar a view primeiro, alterar a tabela, recriar a view.
+
+```sql
+CREATE VIEW dbo.vw_cliente_simples
+WITH SCHEMABINDING
+AS
+SELECT id, nome FROM dbo.cliente;
+GO
+
+-- Isso vai FALHAR:
+ALTER TABLE dbo.cliente DROP COLUMN nome;
+-- Msg 5074: The object 'vw_cliente_simples' is dependent on column 'nome'.
+
+-- Pra dropar a coluna, precisa primeiro:
+DROP VIEW dbo.vw_cliente_simples;
+ALTER TABLE dbo.cliente DROP COLUMN nome;
+```
+
+**Vantagem**: protege contra mudanças acidentais que quebrariam views/sistema. **Custo**: cerimônia extra pra modificar tabelas.
+
+PostgreSQL **não tem equivalente direto** — views regulares quebram silenciosamente se você dropar coluna referenciada. Materialized views são mais protegidas porque persistem o resultado, mas também quebram em REFRESH se a base mudou incompatível.
+
+---
+
+## Updatable Views: quando view aceita INSERT/UPDATE
+
+**Updatable view** = view que aceita comandos DML (`INSERT`, `UPDATE`, `DELETE`). Não é só `SELECT`.
+
+A documentação do PostgreSQL define **regras estritas** pra uma view ser automaticamente updatable. Pelo manual oficial, a view precisa atender **todas** estas condições simultaneamente:
+
+- `FROM` contém **exatamente uma entrada**, e essa entrada precisa ser **tabela** ou **outra view updatable**
+- Não pode ter `WITH`, `DISTINCT`, `GROUP BY`, `HAVING`, `LIMIT`, `OFFSET`
+- Não pode ter operações de conjunto (`UNION`, `INTERSECT`, `EXCEPT`)
+- Lista de seleção não pode conter agregações, window functions ou retornar conjuntos
+- Outras restrições técnicas detalhadas no manual
+
+Ou seja: views "simples" (filtros e renomeação) são updatable; views com `JOIN`, agregação, etc., não são.
+
+```sql
+-- View updatable (PostgreSQL)
+CREATE VIEW v_funcionario_rh AS
+SELECT id, nome, email, cargo
+FROM funcionario
+WHERE departamento = 'RH';
+
+-- Funciona:
+UPDATE v_funcionario_rh SET cargo = 'Analista RH Pleno' WHERE id = 42;
+INSERT INTO v_funcionario_rh (nome, email, cargo) VALUES (...);
+DELETE FROM v_funcionario_rh WHERE id = 99;
+```
+
+**Pegadinha do WHERE**: ao inserir via view com filtro `WHERE departamento = 'RH'`, **nada impede você de inserir um registro com departamento = 'TI'** — a linha entra na tabela base, mas **não aparece na view** (porque o filtro a exclui). Pra prevenir isso, use `WITH CHECK OPTION`:
+
+```sql
+CREATE VIEW v_funcionario_rh AS
+SELECT id, nome, email, cargo, departamento
+FROM funcionario
+WHERE departamento = 'RH'
+WITH CHECK OPTION;
+-- Agora INSERT/UPDATE só aceita linhas que satisfaçam o WHERE da view
+```
+
+**INSTEAD OF triggers** permitem tornar **qualquer view** updatable, mesmo as complexas — você define manualmente o que cada INSERT/UPDATE/DELETE faz. Ferramenta avançada, fora do escopo desta lição (volta na Lição 10).
+
+---
+
+## Schemas: namespaces no banco
+
+A documentação oficial do PostgreSQL define schema diretamente: *"A schema is essentially a namespace: it contains named objects (tables, data types, functions, and operators) whose names can duplicate those of other objects existing in other schemas."*
+
+Ou seja: schema é uma **pasta lógica** dentro do database. Mesmo nome de tabela pode existir em schemas diferentes:
+
+- `vendas.cliente` e `crm.cliente` são **tabelas distintas** com o mesmo nome
+- Acessadas via "two-part name": `schema.objeto`
+
+### Sintaxe de schemas
+
+```sql
+-- Criar schemas
+CREATE SCHEMA vendas;
+CREATE SCHEMA financeiro AUTHORIZATION usuario_fin;
+CREATE SCHEMA IF NOT EXISTS rh;
+
+-- Criar tabela em schema específico
+CREATE TABLE vendas.pedido (
+    id BIGSERIAL PRIMARY KEY,
+    valor NUMERIC(10, 2)
+);
+
+CREATE TABLE financeiro.pagamento (
+    id BIGSERIAL PRIMARY KEY,
+    pedido_id BIGINT REFERENCES vendas.pedido(id)
+);
+
+-- Consultar — qualificando o nome
+SELECT * FROM vendas.pedido;
+SELECT * FROM financeiro.pagamento p JOIN vendas.pedido pe ON p.pedido_id = pe.id;
+```
+
+### search_path: resolver nomes sem qualificação
+
+Em vez de escrever `vendas.pedido` toda hora, você pode configurar o **search_path**:
+
+```sql
+-- Ver atual
+SHOW search_path;
+-- Resultado típico: "$user", public
+
+-- Modificar
+SET search_path TO vendas, public;
+
+-- Agora isso funciona sem qualificar:
+SELECT * FROM pedido;       -- equivale a vendas.pedido
+SELECT * FROM users;        -- procura primeiro em vendas, depois em public
+```
+
+**Como funciona** (documentação oficial): quando você usa nome não-qualificado, PostgreSQL procura nos schemas do search_path **na ordem**, e usa o **primeiro match**. Isso é equivalente ao `PATH` do shell Unix.
+
+### O schema `public` e a mudança do PostgreSQL 15
+
+Todo banco PostgreSQL vem com schema `public` por padrão. Antes da versão 15, **qualquer usuário** tinha permissão `CREATE` e `USAGE` em `public` — qualquer um podia criar tabela lá.
+
+**PostgreSQL 15 (out/2022) mudou esse default por questão de segurança**: agora apenas `USAGE` é concedido por padrão. Pra criar objetos em `public`, precisa de `GRANT CREATE` explícito.
+
+Documentação oficial sobre isso (note papel histórico): *"In the SQL standard, the notion of objects in the same schema being owned by different users does not exist. (...) For maximum conformance to the standard, you should not use the public schema."*
+
+Recomendação prática: **não use `public` em produção**. Crie schemas explícitos por contexto (`vendas`, `financeiro`, `rh`).
+
+### Multi-tenant via schemas
+
+Padrão comum em SaaS: **um schema por cliente (tenant)**. Cada cliente tem suas próprias tabelas, sem misturar dados.
+
+```sql
+CREATE SCHEMA cliente_acme;
+CREATE SCHEMA cliente_globex;
+CREATE SCHEMA cliente_initech;
+
+-- Mesma estrutura em cada schema
+CREATE TABLE cliente_acme.usuario (id BIGSERIAL PRIMARY KEY, nome VARCHAR);
+CREATE TABLE cliente_globex.usuario (id BIGSERIAL PRIMARY KEY, nome VARCHAR);
+
+-- Aplicação seta search_path por requisição:
+SET search_path TO cliente_acme;
+SELECT * FROM usuario;  -- usa cliente_acme.usuario
+```
+
+**Vantagens**: isolamento natural, backup/restore por tenant simples, controle de acesso granular.
+**Desvantagens**: muitos tenants viram **milhares de schemas** — manutenção (alterações de schema) vira complicada.
+
+Alternativa comum: **uma coluna `tenant_id`** em cada tabela compartilhada. Mais simples de migrar, mas exige cuidado pra não vazar dados entre tenants em queries mal escritas (use Row-Level Security do PostgreSQL pra forçar filtro).
+
+---
+
+## SQL Server: dbo e schemas
+
+No SQL Server, todo objeto vive em um schema. O default é `dbo` (database owner). Sintaxe similar:
+
+```sql
+-- SQL Server
+CREATE SCHEMA vendas AUTHORIZATION dbo;
+
+CREATE TABLE vendas.pedido (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    valor MONEY
+);
+
+SELECT * FROM vendas.pedido;
+```
+
+**Diferença prática**: SQL Server não tem `search_path` equivalente — é mais comum **sempre qualificar** com `schema.tabela`. E como a documentação oficial sobre views indica: pra criar `WITH SCHEMABINDING`, two-part name é obrigatório.
+
+Schemas do sistema no SQL Server (úteis pra explorar metadata):
+- `sys` — catálogo do sistema (`sys.tables`, `sys.columns`, `sys.views`)
+- `INFORMATION_SCHEMA` — padrão ANSI SQL pra metadata
+- `dbo` — default pra objetos de usuário
+
+---
+
+## Quando NÃO usar views
+
+Views são poderosas mas têm armadilhas reais. Casos onde devem ser evitadas:
+
+### 1. Views aninhadas profundamente
+
+```sql
+CREATE VIEW v1 AS SELECT ... FROM tabela;
+CREATE VIEW v2 AS SELECT ... FROM v1 JOIN ...;
+CREATE VIEW v3 AS SELECT ... FROM v2 JOIN ...;
+CREATE VIEW v4 AS SELECT ... FROM v3 JOIN ...;
+-- ...
+SELECT * FROM v4 WHERE coluna_filtro = 'X';
+```
+
+O otimizador **tenta** desfazer (inline) tudo, mas o plano resultante pode ser horrível. Em produção, dependência de view sobre view sobre view vira **dívida técnica imensa**. Limite-se a no máximo 2 níveis.
+
+### 2. Views como substituto pra cache de aplicação
+
+Materialized view é **boa** pra agregações pesadas. Mas pra "lookup table com 100 linhas" usado em todo request, **cache de aplicação** (Redis, memória local) costuma ser melhor — sem custo de REFRESH, latência microssegundos.
+
+### 3. View que esconde performance ruim
+
+Se a query subjacente é lenta, **a view continua lenta**. Encapsular query lenta em view não acelera nada — só esconde o problema. Otimize a query primeiro, encapsule depois.
+
+### 4. Updatable view complexa sem necessidade
+
+Pra updatar dados, prefira **mexer direto na tabela** (ou via ORM). Updatable views complexas com INSTEAD OF triggers viram código difícil de debugar. Use só quando há razão concreta (compatibilidade com sistema legado, abstração necessária).
+
+### 5. View como "documentação" do schema
+
+Documentação fica em **arquivos do projeto** (markdown, dbdocs, schemaspy), não em views fake do tipo `v_documentacao_tabela_x`. View tem custo de manutenção real — só crie se algo vai consumi-la.
+
+---
+
+## Recap
+
+**Views regulares** são **tabelas virtuais** — armazenam definição de query, não dados. Toda consulta executa a query subjacente (PostgreSQL Documentation). Casos de uso: esconder complexidade (encapsular JOINs), segurança (esconder colunas sensíveis), compatibilidade após refactoring de schema. Limitação central: performance = performance da query original, sem ganho mágico.
+
+**Materialized Views** persistem o resultado em disco, como tabela. PostgreSQL **9.3 (set/2013)** introduziu materialized views nativas. Trade-off: dados podem ficar **desatualizados** entre refreshes (latência por performance). `REFRESH MATERIALIZED VIEW CONCURRENTLY` permite refresh sem bloquear leitores — exige **UNIQUE index** na materialized view (documentação oficial). Estratégias de refresh: agendado (pg_cron), pós-batch, manual.
+
+**Indexed Views (SQL Server)** são equivalentes mas com diferenças importantes (Microsoft Learn): atualização **automática** (SQL Server mantém em sincronia conforme tabelas base mudam), sem REFRESH manual; obriga `WITH SCHEMABINDING`; restrições do SELECT (sem `MIN`/`MAX`/`TOP`/outer joins; precisa `COUNT_BIG(*)` se houver GROUP BY); two-part names obrigatórios. Custo: INSERT/UPDATE/DELETE nas tabelas base atualiza a view também (escrita mais cara).
+
+**WITH SCHEMABINDING (SQL Server)** — citação literal da documentação: *"the base table or tables cannot be modified in a way that would affect the view definition"*. Protege contra mudanças acidentais. PostgreSQL não tem equivalente direto.
+
+**Updatable Views** — views simples (sem JOIN, GROUP BY, DISTINCT, agregação) são **automaticamente updatable** no PostgreSQL conforme regras documentadas. Pra views complexas, usa **INSTEAD OF triggers** (Lição 10). `WITH CHECK OPTION` impede INSERT/UPDATE de linhas que não satisfaçam o WHERE da view.
+
+**Schemas** são **namespaces** (PostgreSQL Documentation: *"essentially a namespace"*). Objetos com mesmo nome podem coexistir em schemas diferentes. Acesso via two-part name (`schema.objeto`) ou via `search_path` (PostgreSQL) que resolve nomes não-qualificados na ordem.
+
+**Schema `public`** no PostgreSQL: **PostgreSQL 15 (out/2022)** mudou default — antes qualquer usuário tinha `CREATE+USAGE` em `public`, agora só `USAGE`. Documentação oficial recomenda **não usar `public` em produção** — crie schemas explícitos por contexto.
+
+**Multi-tenant via schemas**: padrão SaaS comum — um schema por cliente. Vantagens: isolamento natural, backup por tenant. Desvantagens: muitos tenants viram milhares de schemas, manutenção complicada. Alternativa: coluna `tenant_id` + Row-Level Security.
+
+**SQL Server schemas**: default `dbo`; precisa **sempre qualificar** (não tem `search_path`); schemas de sistema: `sys`, `INFORMATION_SCHEMA`, `dbo`.
+
+**Quando NÃO usar views**:
+- Views aninhadas mais que 2 níveis (otimizador trava)
+- Cache de lookup table (use Redis)
+- Esconder query lenta (otimize a query, não encapsule)
+- Updatable views complexas sem necessidade
+- "Documentação" do schema (vai em markdown/dbdocs)
+
+Próximas lições da trilha:
+
+- **Triggers e Auditoria** — `AFTER`/`BEFORE`/`INSTEAD OF`, tabelas `INSERTED`/`DELETED`, pattern de auditoria, performance
+- **Stored Procedures e Functions** — `CREATE PROCEDURE`, params OUTPUT, UDFs escalares/table-valued, trade-offs vs código aplicação
+- **Especialização e Herança ER** — `(t,c)`/`(t,e)`/`(p,c)`/`(p,e)`, 3 estratégias de mapeamento
+- **SQL Server vs PostgreSQL** — diferenças práticas de sintaxe
+- **NoSQL Básico** — quando NÃO usar relacional
+
+Manda qual quer.

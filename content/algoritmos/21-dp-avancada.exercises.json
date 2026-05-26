@@ -1,0 +1,127 @@
+[
+  {
+    "id": "dpadv-01",
+    "enunciado": "Como o problema de Maximum Independent Set se comporta em GRAFOS gerais vs em ÁRVORES?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Igual nos dois — sempre O(N²)",
+      "Em grafos gerais é NP-DIFÍCIL (sem algoritmo polinomial conhecido); em ÁRVORES é resolvível em O(N) usando Tree DP — diferença gritante que ilustra como a estrutura mais restrita das árvores viabiliza problemas computacionalmente intratáveis em grafos gerais",
+      "Em árvores é mais difícil",
+      "Só funciona em grafos bipartidos"
+    ],
+    "resposta": 1,
+    "explicacao": "Em grafos gerais, Maximum Independent Set é NP-DIFÍCIL — um dos 21 problemas clássicos de Karp (1972). Sem algoritmo polinomial conhecido, e provavelmente não existe (depende de P vs NP). Em ÁRVORES, resolve-se em O(N) com Tree DP: estado dp[v][0/1] = melhor soma na subárvore com/sem pegar v. Recorrência simples. Esse contraste — NP-difícil em grafos, polinomial em árvores — aparece muitas vezes: TSP, Vertex Cover, Dominating Set. Árvores têm estrutura recursiva natural que permite DP simples. Em grafos gerais, ciclos quebram essa estrutura."
+  },
+  {
+    "id": "dpadv-02",
+    "enunciado": "Qual a ORDEM CORRETA de processamento em DP em árvore?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "BFS começando da raiz",
+      "DFS pré-ordem (visita o nó antes dos filhos)",
+      "DFS PÓS-ORDEM (visita os filhos primeiro, depois o nó) — porque o estado do nó depende dos estados dos filhos. Implementação natural: chamada recursiva nos filhos, depois combina os resultados",
+      "Ordem alfabética dos nós"
+    ],
+    "resposta": 2,
+    "explicacao": "DFS pós-ordem. O estado do nó v depende dos estados dos filhos — então os filhos precisam estar calculados antes de v. Implementação natural: 'dfs(v): para cada filho u: dfs(u); combinar dp[u] em dp[v]'. A recursão é o pós-ordem implícito. Exemplo de Maximum Independent Set: dp[v][1] = valor[v] + sum(dp[u][0]) para filhos u — precisa dp[u][0] antes de dp[v][1]. Complexidade: O(N) total porque cada nó é visitado uma vez e o trabalho é proporcional ao número de filhos (soma dos graus = 2(N-1) em árvore)."
+  },
+  {
+    "id": "dpadv-03",
+    "enunciado": "Como encontrar o DIÂMETRO de uma árvore (maior caminho entre quaisquer dois nós) em O(N)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Floyd-Warshall em O(N³)",
+      "Para cada nó v, em uma única DFS, calcular a maior e a SEGUNDA MAIOR profundidades dos filhos; o diâmetro passa por algum nó como ponto mais alto e vale 'maior + segundo maior' — máximo desses valores sobre todos os nós",
+      "Dijkstra entre todos pares",
+      "Sempre é igual à altura da árvore"
+    ],
+    "resposta": 1,
+    "explicacao": "Insight clássico: o diâmetro passa por ALGUM nó como ponto mais alto (LCA dos dois extremos do diâmetro). Para esse nó, o diâmetro é a soma dos dois MAIORES caminhos descendentes. Algoritmo: uma DFS, para cada nó v calcula a maior profundidade de filho (essa sobe pro pai como contribuição de v); guarda a maior e a segunda maior profundidades de filhos pra atualizar 'diametro = max(diametro, maior + segundo)'. O(N) total. Existe também o 'two-BFS trick': BFS de qualquer nó pra achar o nó mais distante u; BFS de u pra achar o nó mais distante v; dist(u, v) é o diâmetro. Funciona em árvores não-ponderadas e com pesos positivos."
+  },
+  {
+    "id": "dpadv-04",
+    "enunciado": "O que é a técnica de REROOTING em DP em árvore?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Mudar fisicamente a raiz da árvore",
+      "Técnica que computa uma resposta PARA CADA NÓ como se ele fosse a raiz, em O(N) total, usando 2 DFS: primeira calcula dp pra raiz fixa, segunda 'reposiciona' a raiz pra cada filho atualizando em O(1) — em vez de fazer N DFS separadas (O(N²))",
+      "Forma de balancear árvores",
+      "Algoritmo de rotação em AVL trees"
+    ],
+    "resposta": 1,
+    "explicacao": "Rerooting (rerooting DP) é uma técnica de 2 DFS: (1) PRIMEIRA DFS bottom-up: calcula valores normalmente com uma raiz fixa; (2) SEGUNDA DFS top-down: 'move' a raiz para cada filho atualizando em O(1). Quando movemos a raiz de u pra v (filho de u), só 2 valores mudam — o subárvore de v ganha o resto do grafo como descendente; o que era subárvore de u (excluindo v) vira descendente de u na nova orientação. A matemática exata depende do problema. Total: O(N). Aplicação clássica: 'pra cada nó, qual a soma das distâncias para todos os outros?'. Brute force seria O(N²) (DFS pra cada nó); rerooting faz em O(N)."
+  },
+  {
+    "id": "dpadv-05",
+    "enunciado": "Em BITMASK DP, qual operação bitwise é usada para TESTAR se o elemento i está no subconjunto representado por mask?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "mask + i",
+      "mask & (1 << i) — desloca o bit 1 para a posição i, depois faz AND com mask. Se resultado é ZERO, o bit i está desligado (elemento não está); se diferente de zero, está",
+      "mask / 2^i",
+      "mask | i"
+    ],
+    "resposta": 1,
+    "explicacao": "mask & (1 << i). (1 << i) cria um inteiro com APENAS o bit i ligado (10000... onde o 1 está na posição i). O AND com mask 'mascara' tudo exceto o bit i. Resultado zero = bit desligado = elemento não está; resultado não-zero = bit ligado = elemento está. Outras operações úteis: mask | (1 << i) ADICIONA elemento i; mask & ~(1 << i) REMOVE elemento i; mask ^ (1 << i) TOGGLE; Integer.bitCount(mask) [Java] ou __builtin_popcount(mask) [C++/GCC] conta bits ligados. Itera todos subconjuntos: for (int m = 0; m < (1 << n); m++). Bitmask DP típica: N ≤ 22 porque 2^22 ≈ 4 milhões — viável; 2^25 ≈ 33 milhões fica no limite."
+  },
+  {
+    "id": "dpadv-06",
+    "enunciado": "Quem inventou o Held-Karp algorithm para TSP, e em que ano?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, 1968",
+      "Richard Bellman, em 1962 ('Dynamic Programming Treatment of the Travelling Salesman Problem', JACM 9(1)) E Michael Held e Richard M. Karp, em 1962 ('A dynamic programming approach to sequencing problems', J. SIAM 10(1)) — independentemente, mesmo ano. Por isso é também chamado 'Bellman-Held-Karp algorithm'",
+      "Edsger Dijkstra, 1959",
+      "John von Neumann, 1955"
+    ],
+    "resposta": 1,
+    "explicacao": "Descoberta dupla independente em 1962: Richard Bellman ('Dynamic Programming Treatment of the Travelling Salesman Problem', JACM 9(1), pp. 61-63) E Michael Held + Richard M. Karp ('A dynamic programming approach to sequencing problems', Journal of SIAM 10(1), pp. 196-210). Outro caso da Lei de Stigler (relembre da Lição 19). Bellman estava continuando seu trabalho em DP iniciado em 1953; Held e Karp trabalhavam na IBM Research em problemas de 'sequencing' (ordenamento ótimo de operações industriais). O algoritmo é chamado 'Held-Karp' ou 'Bellman-Held-Karp'. Reduz TSP de O(N!) para O(N²·2^N) — viável até N ≈ 20-25 cidades. Ainda é o MELHOR algoritmo exato conhecido pra TSP em geral — nenhum algoritmo com complexidade menor que O((2-ε)^N) é conhecido."
+  },
+  {
+    "id": "dpadv-07",
+    "enunciado": "Qual a complexidade do Held-Karp para resolver TSP com N cidades?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(N!) — fatorial",
+      "O(N³) — cúbico",
+      "O(N² · 2^N) tempo e O(N · 2^N) memória — exponencial, mas DRASTICAMENTE melhor que brute force O(N!)",
+      "O(N log N)"
+    ],
+    "resposta": 2,
+    "explicacao": "O(N²·2^N) tempo, O(N·2^N) memória. Apesar de exponencial, é uma melhoria DRAMÁTICA sobre brute force O(N!). Compare pra N=20: brute force = 20! ≈ 2.4 × 10^18 (impossível mesmo em supercomputador); Held-Karp = 20² × 2^20 ≈ 4 × 10^8 (alguns segundos em laptop). Viável até N ≈ 20-25. Estado dp[mask][i] = menor custo para visitar todos vértices em mask terminando em i. 2^N subconjuntos × N posições finais = N·2^N estados; cada um transita em O(N) testando origens possíveis. Total: O(N²·2^N). É o MELHOR algoritmo exato conhecido pra TSP em geral — nenhum algoritmo com complexidade O((2-ε)^N) foi descoberto, e prova-se que esse limite é apertado sob Strong Exponential Time Hypothesis."
+  },
+  {
+    "id": "dpadv-08",
+    "enunciado": "Quais problemas se beneficiam de BITMASK DP?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Apenas TSP",
+      "Problemas onde N é pequeno (≤ 22) E o estado natural envolve 'quais elementos já considerei/visitei' — exemplos: TSP, Hamiltonian path, Assignment problem (N pessoas e N tarefas), coloração de grafos com poucas cores, Set Cover com universos pequenos, Steiner Tree em grafos pequenos",
+      "Apenas problemas de ordenação",
+      "Apenas grafos com pesos positivos"
+    ],
+    "resposta": 1,
+    "explicacao": "Bitmask DP brilha quando N ≤ ~22 e o estado natural é 'qual subconjunto'. Padrões: (1) TSP — visitar todas cidades; (2) Hamiltonian path/cycle — existência ou contagem; (3) Assignment problem — N agentes, N tarefas, minimizar custo total; (4) Coloração de grafos com K ≤ ~5 cores; (5) Set Cover — escolher mínimo de subconjuntos pra cobrir o universo; (6) Steiner Tree em grafos pequenos; (7) Bitmask sobre 'colunas selecionadas' em problemas matriciais. Em ICPC e entrevistas, ver N ≤ 20-22 é PISTA FORTE pra Bitmask DP. N ≤ 25 ainda pode ser viável com otimizações (2^25 ≈ 33M)."
+  },
+  {
+    "id": "dpadv-09",
+    "enunciado": "Em DIGIT DP, qual o propósito da flag 'tight'?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Indica se o número é par ou ímpar",
+      "Indica se ainda estamos 'PRESOS' ao limite superior R durante a construção dígito-a-dígito. Se tight=1, o próximo dígito é limitado por R[pos]; se tight=0, podemos colocar qualquer dígito 0-9. Garante que não contamos números maiores que R",
+      "Marca o último dígito",
+      "Conta quantos dígitos faltam"
+    ],
+    "resposta": 1,
+    "explicacao": "Tight é a parte mais confusa de Digit DP e a mais importante. Construindo um número ≤ R = '123' dígito-a-dígito: se colocou '12' até agora, próximo dígito SÓ PODE ser 0-3 (tight=1, limitado por R[2]=3). Se colocou '11', próximo pode ser QUALQUER 0-9 (tight=0, já estamos abaixo de R). Sem tight, contaria números maiores que R. Implementação: 'limite = tight ? R[pos] : 9'; 'novoTight = (tight && d == limite) ? 1 : 0'. A flag se 'desliga' permanentemente assim que você escolhe um dígito menor que o limite. Padrão clássico: count(R) - count(L-1) pra range [L, R]."
+  },
+  {
+    "id": "dpadv-10",
+    "enunciado": "Verdadeiro ou falso: Digit DP permite contar números com propriedades específicas em ranges GIGANTES (como [1, 10^18]) em tempo INDEPENDENTE do tamanho do range — depende só do número de dígitos (~19).",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Complexidade típica de Digit DP: O(D × K × 2 × 10) onde D = dígitos (~19 pra long de 64 bits), K = valores possíveis do estado extra (depende do problema), 2 = flag tight, 10 = base decimal. Pra problemas comuns (soma de dígitos, dígitos específicos, etc), K é pequeno (10-100). Total: algumas centenas a milhares de operações — INDEPENDENTE de quanto é R. Pra R = 10^18, brute force iteraria quintilhões; Digit DP responde em microssegundos. Limitação: precisa que a propriedade seja 'composicional sobre dígitos' (pode ser avaliada construindo dígito-a-dígito). Aplicações: contagem com soma de dígitos = K, números sem dígitos repetidos, números divisíveis por M, palíndromos, lucky numbers (problema clássico da escola russa de ICPC com dígitos 4 e 7)."
+  }
+]

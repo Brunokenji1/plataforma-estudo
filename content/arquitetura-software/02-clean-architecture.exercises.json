@@ -1,0 +1,127 @@
+[
+  {
+    "id": "clean-01",
+    "enunciado": "Quem formalizou a Clean Architecture e em que data?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Martin Fowler em 2003, no livro 'Patterns of Enterprise Application Architecture'",
+      "Robert C. Martin (Uncle Bob), em 13 de agosto de 2012, no post 'The Clean Architecture' no Clean Coder Blog. Expandida em 2017 no livro 'Clean Architecture: A Craftsman's Guide to Software Structure and Design' (432 páginas, Prentice Hall). NÃO foi invenção do zero — consolidou Hexagonal (Cockburn, 2005), Onion (Palermo, 2008), BCE (Jacobson, 1992) e DCI (Reenskaug)",
+      "Eric Evans em 2003 no livro 'Domain-Driven Design'",
+      "Alistair Cockburn em 2005 no blog dele"
+    ],
+    "resposta": 1,
+    "explicacao": "Robert C. Martin (Uncle Bob), americano, signatário do Manifesto Ágil, publicou em 13 de agosto de 2012 o post 'The Clean Architecture' no Clean Coder Blog (URL canônica: blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html). Em 2017 expandiu no livro 'Clean Architecture: A Craftsman's Guide to Software Structure and Design' (Prentice Hall, 432 páginas). A contribuição própria foi: (1) o diagrama icônico dos 4 círculos concêntricos; (2) The Dependency Rule formulada de forma simples e universal; (3) conceitos concretos como Interactors, Boundaries, Input/Output Ports; (4) popularização massiva. RECONHECIMENTO EXPLÍCITO DAS INFLUÊNCIAS no próprio post original: Alistair Cockburn (Hexagonal Architecture / Ports and Adapters, 2005), Jeffrey Palermo (Onion Architecture, 2008), Ivar Jacobson (Boundary-Control-Entity, 1992), Trygve Reenskaug (DCI), Steve Freeman & Nat Pryce ('Growing Object-Oriented Software, Guided by Tests', 2009). Uncle Bob não inventou — consolidou e popularizou. Em entrevistas técnicas, mencionar essa linhagem demonstra maturidade. Outros livros importantes do mesmo autor: 'Clean Code' (2008), 'The Clean Coder' (2011), 'Clean Agile' (2019)."
+  },
+  {
+    "id": "clean-02",
+    "enunciado": "Qual é The Dependency Rule e por que ela é a regra MAIS importante da Clean Architecture?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Toda classe deve ter no máximo 3 dependências",
+      "Citação literal do post original de Uncle Bob: 'Source code dependencies can only point inwards. Nothing in an inner circle can know anything at all about something in an outer circle'. Ou seja: DEPENDÊNCIAS EM CÓDIGO APONTAM SEMPRE PRA DENTRO. Coisa do círculo interno NÃO PODE referenciar coisa do círculo externo (nem import, nem nome). Quando precisa de fluxo de fora pra dentro, aplica Dependency Inversion Principle (DIP) com Input/Output Ports",
+      "Use Dependency Injection em tudo",
+      "Apenas evite circular imports"
+    ],
+    "resposta": 1,
+    "explicacao": "The Dependency Rule é a regra UNIVERSAL da Clean Architecture, citada literalmente no post de 2012: 'Source code dependencies can only point inwards. Nothing in an inner circle can know anything at all about something in an outer circle. In particular, the name of something declared in an outer circle must not be mentioned by the code in the inner circle. That includes functions, classes, variables, or any other named software entity'. IMPLICAÇÕES PRÁTICAS: (1) Entity NÃO importa Spring, JPA, Jackson — Java puro; (2) UseCase NÃO importa controllers nem repositories concretos; (3) Adapter PODE importar UseCase e Entity (sentido permitido); (4) Frameworks PODEM referenciar tudo. PROBLEMA APARENTE: como um Use Case 'salva no banco' sem importar o Repository concreto? Resposta: DEPENDENCY INVERSION (DIP). Use Case define INTERFACE (Output Port) no próprio círculo do use case; Adapter externo IMPLEMENTA a interface. O FLUXO DE DADOS vai de dentro pra fora (use case chama repository, repository chama banco), MAS a DEPENDÊNCIA DE CÓDIGO vai de fora pra dentro (adapter importa a interface; interface não importa nada do adapter). É a inversão central que permite toda a arquitetura. SEM ESSA REGRA, Clean vira só 'mais 4 packages' sem benefício real."
+  },
+  {
+    "id": "clean-03",
+    "enunciado": "Quais são os 4 círculos da Clean Architecture, do centro pra fora, e qual o conteúdo de cada?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Controllers, Services, Repositories, Database",
+      "(1) ENTITIES — Enterprise Business Rules (regras de negócio mais estáveis, ex: Conta, Pedido em Java puro); (2) USE CASES — Application Business Rules (Interactors orquestrando entities, com Input/Output Ports e DTOs); (3) INTERFACE ADAPTERS — Controllers, Presenters, Gateways (traduzem entre formato externo e interno); (4) FRAMEWORKS & DRIVERS — Spring, JPA, banco, libs HTTP (detalhes voláteis)",
+      "Model, View, Controller, Service",
+      "Domain, Application, Persistence, UI"
+    ],
+    "resposta": 1,
+    "explicacao": "Os 4 círculos concêntricos (do MAIS ESTÁVEL no centro ao MAIS VOLÁTIL na periferia): (1) ENTITIES (centro): encapsulam ENTERPRISE BUSINESS RULES — as regras de negócio mais críticas e estáveis. Independentes de framework, sem @Entity JPA, sem Spring. Encapsulam invariantes do domínio (ex: Conta nunca tem saldo negativo). Em Spring Boot, package 'domain/'. Mudam só se a regra fundamental do negócio mudar; (2) USE CASES: encapsulam APPLICATION BUSINESS RULES — fluxos específicos da aplicação (criar pedido, transferir dinheiro, calcular desconto). Cada Use Case é uma classe (Interactor) que orquestra Entities. Define Input Port (interface do que o use case faz) e usa Output Ports (interfaces pra acessar persistência). Trabalha com DTOs próprios, sem conhecer UI nem banco. Package 'application/'; (3) INTERFACE ADAPTERS: traduzem entre formato externo (HTTP request, registro de banco) e formato interno (DTOs do use case). Aqui ficam @RestController, JpaRepository implementations, Presenters. Pode importar use cases e entities, mas use cases não importam nada daqui. Package 'adapters/'; (4) FRAMEWORKS & DRIVERS (mais externo): tudo volátil — Spring framework, JPA/Hibernate, banco específico, biblioteca HTTP, framework UI. Idealmente MUITO POUCO CÓDIGO mora aqui — só configs e bootstrap. Uncle Bob: 'onde tudo acontece, mas onde nada importante é decidido'. Package 'infrastructure/'."
+  },
+  {
+    "id": "clean-04",
+    "enunciado": "O que é um INPUT PORT e o que é um OUTPUT PORT em Clean Architecture?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São portas de rede TCP",
+      "INPUT PORT: interface que o Use Case OFERECE pra ser chamado de fora (ex: TransferirDinheiroUseCase). Adapter de entrada (Controller) chama essa interface. OUTPUT PORT: interface que o Use Case PRECISA pra funcionar (ex: ContaRepository). Adapter de saída (Repository) IMPLEMENTA essa interface. Ambos ficam no círculo do Use Case — quem implementa fica nos círculos externos",
+      "Portas USB",
+      "Termos sinônimos pra interface"
+    ],
+    "resposta": 1,
+    "explicacao": "Conceitos centrais de Clean Architecture (também de Hexagonal/Ports & Adapters). INPUT PORT (Driving Port): interface que o Use Case EXPÕE pra adapters externos chamarem. Define O QUE o use case faz. Exemplo: 'public interface TransferirDinheiroUseCase { TransferirDinheiroResponse executar(TransferirDinheiroRequest req); }'. Controllers HTTP, CLIs, agendadores chamam essa interface — não conhecem a implementação. ADAPTER DE ENTRADA (Driving Adapter) chama o Input Port; vai NA DIREÇÃO da camada interna. OUTPUT PORT (Driven Port): interface que o Use Case PRECISA pra funcionar — DEPENDÊNCIAS que ele tem. Define O QUE O USE CASE PRECISA do mundo externo. Exemplo: 'public interface ContaRepository { Optional<Conta> buscarPorNumero(String numero); void salvar(Conta conta); }'. Use Case usa essa interface sem saber se vai ser JPA, MongoDB, in-memory ou mock. ADAPTER DE SAÍDA (Driven Adapter) IMPLEMENTA o Output Port; vai DA DIREÇÃO da camada externa. CRÍTICO: AMBAS as interfaces (Input e Output Port) ficam NO CÍRCULO DO USE CASE (package application/ports/ por convenção). É o coração da Dependency Inversion — quem define a interface é o INNER circle; quem implementa é o OUTER circle. Resultado: Use Case nunca importa adapters; adapters importam Use Case. Tudo apontando pra dentro como manda a Dependency Rule. EM SPRING BOOT: ContaRepository fica em application/ports/; JpaContaRepository (com @Repository) fica em adapters/out/persistence/ e implementa ContaRepository."
+  },
+  {
+    "id": "clean-05",
+    "enunciado": "Por que separar @Entity JPA (ex: ContaJpaEntity) de Entity de domínio (ex: Conta) em Clean Architecture?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por convenção do Spring",
+      "(1) DOMÍNIO FICA PURO — sem anotações Hibernate, instanciável em qualquer contexto, sem ClassPath do Spring; (2) DOMÍNIO EVOLUI INDEPENDENTE DO SCHEMA — mudar coluna no banco não força mudança no Domain; (3) TESTES TRIVIAIS — sem Hibernate, sem H2, sem Spring Context; (4) IMPEDE VAZAMENTO de @Entity, @OneToMany, FetchType pro domínio; (5) PERMITE PERSISTIR DOMÍNIO EM MÚLTIPLOS BACKENDS (JPA + ElasticSearch + cache) sem poluir. CUSTO: mais código de mapeamento (toDomain/toEntity)",
+      "Pra deixar o código mais longo",
+      "Apenas por questão de naming"
+    ],
+    "resposta": 1,
+    "explicacao": "Decisão arquitetural importante. JPA Entity (anotada com @Entity, @Table, @Id, @OneToMany) é uma representação OTIMIZADA PRA PERSISTÊNCIA RELACIONAL. Domain Entity é uma representação OTIMIZADA PRA REGRAS DE NEGÓCIO. São coisas DIFERENTES, mesmo quando têm campos similares. BENEFÍCIOS da separação: (1) DOMÍNIO PURO — Conta domain.Conta pode ser instanciada em CLI, batch, mobile, teste unitário, sem precisar de Spring Context, EntityManager, ou banco. Testes voam (50ms vs 5s); (2) EVOLUÇÃO INDEPENDENTE — você pode renomear coluna no banco, dividir tabela, mudar tipo, sem QUEBRAR domínio. Mapper absorve a mudança; (3) NO LEAKY ABSTRACTION — não tem risco de @OneToMany(fetch = LAZY) escondido vazar pra UseCase e gerar LazyInitializationException. ContaJpaEntity pode ter Lazy loading, Conta domain não tem nada disso; (4) MULTI-BACKEND — pode persistir Conta em PostgreSQL VIA JpaContaRepository E em ElasticSearch via ElasticContaRepository, mesmo Domain, dois Output Port impls; (5) ENCAPSULAMENTO — domain Conta tem construtor validador, sem setter público. ContaJpaEntity tem setter pra Hibernate funcionar, mas isso fica isolado. CUSTO REAL: mais código de mapeamento (toDomain/toEntity). Ferramentas como MapStruct geram automaticamente. QUANDO ACEITAR COMBINAR (anti-pattern mas pragmático): projetos CRUD simples sem regras de domínio, MVPs, microservices pequenos. Maioria dos projetos do mercado real combina — não é pecado, é trade-off. RECONHECER a decisão é o que diferencia."
+  },
+  {
+    "id": "clean-06",
+    "enunciado": "O que é o ANEMIC DOMAIN MODEL e por que é considerado anti-pattern?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando o domínio é muito grande",
+      "Anti-pattern descrito por Martin Fowler em 2003 (artigo 'AnemicDomainModel' em martinfowler.com). Entities viram DTOs — só getters/setters, ZERO comportamento. Lógica de negócio que deveria estar nas entities fica espalhada em Services. ENCAPSULAMENTO QUEBRADO — qualquer um chama setSaldo(-9999). USE CASES VIRAM GIGANTES porque concentram lógica que devia estar nas entities. VIOLA princípio de POO de unir dados e comportamento",
+      "É padrão recomendado pelo Spring",
+      "Apenas problema em C++"
+    ],
+    "resposta": 1,
+    "explicacao": "ANEMIC DOMAIN MODEL é um anti-pattern descrito por Martin Fowler em 2003 no artigo 'AnemicDomainModel' (martinfowler.com/bliki/AnemicDomainModel.html). DEFINIÇÃO: o modelo de domínio se torna ANÊMICO quando entities têm SÓ DADOS (getters/setters) e nenhum comportamento — toda lógica de negócio é externalizada em Services. EXEMPLO RUIM: 'class Conta { String numero; BigDecimal saldo; public BigDecimal getSaldo(){return saldo;} public void setSaldo(BigDecimal s){this.saldo=s;}}' + '@Service class ContaService { void debitar(Conta c, BigDecimal v){ if(v.compareTo(c.getSaldo())>0) throw...; c.setSaldo(c.getSaldo().subtract(v)); }}'. PROBLEMAS: (1) ENCAPSULAMENTO QUEBRADO — qualquer um pode chamar conta.setSaldo(-99999) e violar invariantes. A 'proteção' depende de TODOS os callers chamarem ContaService.debitar() corretamente, o que não é garantido; (2) LÓGICA ESPALHADA — pra entender 'o que Conta faz', tem que ler ContaService, OutraConta...Service, BatchService, RelatorioService. Sem coesão; (3) FOWLER: 'It's worth emphasizing that putting behavior into the domain objects should not contradict the solid approach of using layering to separate domain logic from persistence...'. NÃO é sobre acoplar domínio à persistência, é sobre unir DADOS + COMPORTAMENTO no mesmo objeto; (4) VIOLA PRINCÍPIO BÁSICO DA POO — 'tell, don't ask'. Em vez de 'pegar saldo, calcular novo, setar', você diz 'debitar valor'. SOLUÇÃO: comportamentos NA entity (debitar, creditar, transferir como métodos), construtor com validações que garantem estado inicial válido, setters APENAS para campos genuinamente mutáveis sem invariantes (e mesmo assim, prefira métodos como mudarEmail() em vez de setEmail()). Em apps Spring com JPA, isso É possível mesmo com @Entity — Hibernate aceita construtores não-default pra mapeamento."
+  },
+  {
+    "id": "clean-07",
+    "enunciado": "Em Clean Architecture, em qual camada deve ficar a anotação @Service do Spring?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Em qualquer lugar, não importa",
+      "DEPENDE da pureza desejada. (a) PURISTA: domain e application camadas devem ser SEM Spring — define beans em @Configuration no infrastructure/. Interactor é classe pura, Spring instancia via @Bean; (b) PRAGMÁTICO: aceita @Service no Interactor pra economizar código de configuração — viola pureza mas custo aceitável. NUNCA @Service em Entity de domínio — domain deve ser Java/C++ puro, ZERO framework",
+      "Em @RestController",
+      "Em @Entity JPA"
+    ],
+    "resposta": 1,
+    "explicacao": "Decisão arquitetural com trade-off real. ABORDAGEM PURISTA (recomendada por Tom Hombergs no livro 'Get Your Hands Dirty on Clean Architecture'): apenas adapters e infrastructure podem ter anotações Spring. Interactor é uma classe pura: 'public class TransferirDinheiroInteractor implements TransferirDinheiroUseCase { ... }' sem @Service. Spring instancia via @Configuration: '@Bean public TransferirDinheiroUseCase transferirDinheiroUseCase(ContaRepository repo) { return new TransferirDinheiroInteractor(repo); }'. BENEFÍCIO: Use Case é 100% framework-agnostic, pode rodar em qualquer contexto. CUSTO: mais código de configuração. ABORDAGEM PRAGMÁTICA (comum no mercado): aceita @Service no Interactor por simplicidade — Spring auto-injeta dependências. PERDA DE PUREZA mas economia significativa de boilerplate. Justificativa: '@Service é só metadado, não vaza lógica Spring pro código'. CONSENSO da comunidade: aceitável se você tem CONSCIÊNCIA do trade-off. PROIBIDO em qualquer caso: @Service, @Component, @Entity, @Autowired NO DOMÍNIO (círculo central). Domain deve ser Java/C++ puro, zero framework. Isso é INEGOCIÁVEL — porque Domain é a parte que precisa ser MAIS estável e MAIS reusável. EXEMPLO de violação: '@Service class CalculadoraJurosDomain' em domain/ — não pode. Mova pra application/services/ e mantenha CalculadoraJurosDomain pura em domain/, OU faça @Bean em DomainBeansConfig em infrastructure/config/. DICA: use ferramenta ArchUnit pra escrever testes que VALIDAM essas regras automaticamente: 'noClasses().that().resideInAPackage(\"..domain..\").should().dependOnClassesThat().resideInAPackage(\"org.springframework..\")'."
+  },
+  {
+    "id": "clean-08",
+    "enunciado": "Hexagonal, Onion e Clean Architecture são arquiteturas diferentes ou variantes do mesmo padrão?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "São completamente diferentes e incompatíveis",
+      "São VARIANTES da MESMA ideia central: isolar domínio de detalhes técnicos. Cronologia: Hexagonal (Alistair Cockburn, 2005) → Onion (Jeffrey Palermo, 2008) → Clean (Robert C. Martin, 2012). Cada uma adiciona opinões mais específicas que a anterior. Hexagonal é mais flexível (não opina sobre estrutura interna); Onion adiciona camadas concêntricas opinativas; Clean adiciona Dependency Rule explícita, Input/Output Ports, Interactors. Uncle Bob cita Cockburn e Palermo explicitamente",
+      "Clean substituiu as outras duas",
+      "Hexagonal é só para Java, Onion só para .NET"
+    ],
+    "resposta": 1,
+    "explicacao": "São VARIANTES EVOLUTIVAS da MESMA IDEIA — todas servem o mesmo objetivo: ISOLAR DOMÍNIO DE DETALHES TÉCNICOS. CRONOLOGIA: (1) 2005 — HEXAGONAL (Alistair Cockburn, blog post): introduz Ports & Adapters. Núcleo isolado, portas (interfaces) pra comunicar com fora, adapters (implementações) pra cada porta. Não opina sobre estrutura interna do núcleo — flexível e abstrato. Forma hexagonal é só visual (representa muitas portas), nada literal. Distingue Primary (driving, quem chama o sistema) de Secondary (driven, quem o sistema chama) — assimetria identificada depois; (2) 2008 — ONION (Jeffrey Palermo, série de blog posts em julho/2008): pega Ports & Adapters e ORGANIZA EM CAMADAS CONCÊNTRICAS opinativas. Centro=Domain Model, camada 2=Domain Services, camada 3=Application Services, camada externa=Infrastructure. Mais OPINATIVO sobre estrutura interna. Popular em .NET (Palermo era da comunidade C#); (3) 2012 — CLEAN (Robert C. Martin): consolida tudo, formaliza 4 círculos, introduz Dependency Rule explícita, conceitos como Interactor/Input Port/Output Port, popularização massiva. Uncle Bob CITA EXPLICITAMENTE Cockburn e Palermo no post original. RELAÇÃO: Hexagonal é o tronco; Onion é uma variante mais opinativa; Clean é a versão mais detalhada e canonizada. Quem implementa qualquer uma corretamente consegue (a) trocar banco sem mexer no domínio, (b) testar regra de negócio sem subir framework, (c) ter código que GRITA O QUE FAZ, não que tecnologia usa (Uncle Bob chama 'Screaming Architecture'). USE O NOME QUE SUA EQUIPE ENTENDER — o que importa é o resultado. Em entrevistas: cite a linhagem. Diferencial sobre quem só decorou Clean."
+  },
+  {
+    "id": "clean-09",
+    "enunciado": "Quando NÃO se deve usar Clean Architecture?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sempre se deve usar em qualquer projeto",
+      "(1) CRUDs simples sem regras de negócio (admin interno, cadastros básicos); (2) MVP/Prototipagem (foco em validar produto, refatora depois); (3) Microservice trivial (1 endpoint, 1 tabela) — over-engineering; (4) Equipe sem familiaridade aprendendo sob prazo apertado (Clean malfeito é PIOR que Spring Boot vanilla bem-feito); (5) Time pequeno (1-2 devs) em produto novo (simplicidade primeiro). Heurística: vale Clean em sistemas com REGRAS COMPLEXAS + VIDA LONGA + TIME MÉDIO/GRANDE",
+      "Quando o projeto usa Java",
+      "Quando a equipe é pequena"
+    ],
+    "resposta": 1,
+    "explicacao": "Reconhecer QUANDO NÃO USAR é parte da MATURIDADE arquitetural. Clean Architecture tem CUSTO ALTO de boilerplate (DTOs em cada camada, interfaces Input/Output Port, mappers de Domain pra JPA Entity). Esse custo se PAGA em sistemas com REGRAS COMPLEXAS + VIDA LONGA + TIME MÉDIO/GRANDE. NÃO SE PAGA em: (1) CRUD SIMPLES SEM REGRAS DE NEGÓCIO — admin interno com cadastros, integrações simples, dashboards. 2-3 camadas Spring (@RestController → @Service → @Repository) bastam, são MAIS RÁPIDAS e MAIS LEGÍVEIS pro caso; (2) MVP/PROTOTIPAGEM — foco em VALIDAR PRODUTO, encontrar product-market-fit. Clean Architecture impõe estrutura que retarda iteração rápida. Faça simples, refatore quando o produto for validado e a complexidade justificar; (3) MICROSERVICE TRIVIAL — 1 endpoint, 1 tabela, lógica de transformação simples. Estruturar com domain/application/adapters/infrastructure pra isso é absurdo; (4) EQUIPE SEM FAMILIARIDADE EM PRAZO APERTADO — Clean mal implementada é PIOR que Spring Boot vanilla bem implementado. Resultado típico: 4 camadas mas dependências misturadas, @Entity no domain, lógica em controller. Pior dos dois mundos; (5) TIME PEQUENO (1-2 devs) EM PRODUTO NOVO — simplicidade vence enquanto o produto não está validado. Arquitetura cresce com o time. ONDE BRILHA: sistemas bancários, fintech, ERP, e-commerce com regras complexas, plataformas multi-tenant, sistemas que sobrevivem trocas de banco/framework/UI. Vale o custo. REGRA HEURÍSTICA: se você consegue argumentar que vai trocar de Spring pra Quarkus, ou de PostgreSQL pra MongoDB, ou de REST pra GraphQL — provavelmente Clean vale. Se não, pense duas vezes."
+  },
+  {
+    "id": "clean-10",
+    "enunciado": "Verdadeiro ou falso: em Clean Architecture, o Use Case (Interactor) DEVE importar o JpaRepository concreto pra salvar dados no banco.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Esse é o ERRO MAIS COMUM em implementações que se dizem 'Clean' mas violam The Dependency Rule. O CORRETO: (1) Use Case define uma INTERFACE (Output Port) NO PRÓPRIO CÍRCULO DO USE CASE — exemplo: 'public interface ContaRepository { Optional<Conta> buscarPorNumero(String numero); void salvar(Conta conta); }'. Essa interface fica em 'application/ports/ContaRepository.java'; (2) Use Case DEPENDE da interface — '@Inject private final ContaRepository repository;'. NÃO sabe se é JPA, Mongo, in-memory; (3) ADAPTER EXTERNO IMPLEMENTA a interface — '@Repository public class JpaContaRepository implements ContaRepository { ... }'. Esse fica em 'adapters/out/persistence/JpaContaRepository.java'; (4) Spring injeta JpaContaRepository onde o Use Case pede ContaRepository (via DI por construtor). RESULTADO: (a) Use Case nunca importa Spring, JPA, Hibernate; (b) trocar JPA por MongoDB é mexer SÓ no adapter; (c) testar Use Case usa FakeContaRepository ou Mockito mock — sem subir banco, sem subir Spring; (d) Use Case roda em CLI, batch, mobile sem mudança. SE VOCÊ JÁ ESTÁ ESCREVENDO 'private JpaContaRepository repo' no Interactor, você VIOLOU The Dependency Rule. O fluxo de dados vai de dentro pra fora (Use Case chama Repository), mas a DEPENDÊNCIA DE CÓDIGO vai de fora pra dentro (JpaContaRepository importa ContaRepository, não o inverso). ESSE É O CORAÇÃO da Clean Architecture — sem isso, é só 'mais 4 packages'. Conceito formal: DEPENDENCY INVERSION PRINCIPLE (Lição 1 da trilha). É a 'inversão' que dá nome ao princípio."
+  }
+]

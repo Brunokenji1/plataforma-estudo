@@ -1,0 +1,576 @@
+---
+titulo: "Greedy: Quando Ser Ganancioso É a Estratégia Ótima"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "David A. Huffman (1952), 'A Method for the Construction of Minimum-Redundancy Codes', Proceedings of the IRE 40(9), pp. 1098-1101 — paper original do Huffman Coding"
+  - "Joseph B. Kruskal (1956), 'On the Shortest Spanning Subtree of a Graph and the Traveling Salesman Problem', Proceedings of the AMS 7(1)"
+  - "Robert C. Prim (1957), 'Shortest Connection Networks and Some Generalizations', Bell System Technical Journal 36(6)"
+  - "Otakar Borůvka (1926), 'O jistém problému minimálním', Práce moravské přírodovědecké společnosti 3 — primeiro paper sobre MST"
+  - "Vojtěch Jarník (1930) — algoritmo redescoberto por Prim em 1957"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 16 — Greedy Algorithms"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 4.3 — Minimum Spanning Trees (Princeton)"
+  - "MIT OCW 6.046 (Spring 2015), Lecture 11-12 — Erik Demaine"
+  - "Kleinberg & Tardos, Algorithm Design (Cornell, 2005), Capítulo 4 — Greedy Algorithms"
+---
+
+## O dia em que um aluno superou o professor
+
+Em 1951, **David A. Huffman**, então com 26 anos, era aluno de doutorado no MIT na cadeira de Teoria da Informação. O professor era **Robert M. Fano**, lenda da área, que tinha trabalhado com **Claude Shannon** pra desenvolver o que ficou conhecido como **Shannon-Fano coding** — um esquema de compressão de dados baseado em frequência de símbolos.
+
+No fim do semestre, Fano ofereceu uma escolha aos alunos: fazer a prova final, ou escrever um paper sobre um tema atribuído. O tema do paper: *"encontrar o método mais eficiente de codificação binária por frequência"*. Huffman, querendo evitar a prova, escolheu o paper.
+
+O que Fano **não contou** aos alunos: aquele era um **problema aberto** que ele e Shannon tinham trabalhado por anos sem conseguir resolver completamente. Shannon-Fano coding era a melhor solução conhecida, mas ninguém tinha provado que era ótima — porque **não era**.
+
+Huffman passou meses tentando provar otimalidade dos códigos existentes. Não conseguiu. Frustrado, alguns dias antes da prova final, ele **desistiu**: jogou as anotações no lixo, foi pra casa estudar pra prova final.
+
+Na manhã seguinte, **deitado na cama**, teve o insight. A solução era construir a árvore **de baixo pra cima**, sempre combinando os dois símbolos de menor frequência primeiro. Greedy puro. Em horas, Huffman provou rigorosamente que esse método produzia o código ótimo.
+
+O paper *"A Method for the Construction of Minimum-Redundancy Codes"* foi publicado em 1952 no Proceedings of the IRE. **O aluno tinha resolvido o problema que o professor não conseguiu.** O Shannon-Fano coding, criado por dois dos maiores nomes da história da computação, foi superado por um aluno que estava prestes a desistir.
+
+Huffman coding hoje está em **todo PNG, JPEG, MP3, ZIP, GZIP** — qualquer arquivo comprimido sem perda usa Huffman ou descendente dele. O paper tem mais de 7.500 citações.
+
+E é o exemplo perfeito de **algoritmo greedy**: uma escolha localmente ótima a cada passo, sem voltar atrás, produzindo o resultado globalmente ótimo. Esta lição é sobre essa família de algoritmos — quando ser ganancioso funciona, quando falha, e como ter certeza.
+
+---
+
+## O que é um algoritmo greedy
+
+Algoritmo **greedy** (guloso, ganancioso) tem uma filosofia simples:
+
+> A cada passo, faça a escolha que parece localmente ótima. Nunca volte atrás. Espere que essa sequência de decisões locais produza um resultado globalmente ótimo.
+
+A diferença com **Programação Dinâmica** é fundamental:
+
+- **DP** testa todas as decisões e escolhe a melhor combinação. Considera o futuro.
+- **Greedy** compromete-se com a melhor decisão imediata. Confia que vai dar certo.
+
+Quando greedy funciona, é geralmente **mais rápido** e **mais simples** que DP. Quando não funciona, falha silenciosamente — produz uma resposta, mas não a ótima.
+
+O grande perigo: greedy parece funcionar em muitos problemas onde **não funciona**. Coin Change com moedas arbitrárias (visto na lição passada) é o exemplo clássico. Greedy "pega sempre a maior moeda possível" parece razoável. Mas pra `coins=[1,3,4]`, `amount=6`, dá 3 moedas (4+1+1) em vez do ótimo 2 (3+3).
+
+Por isso **provar a corretude** de um greedy não é opcional. Vamos ver isso.
+
+---
+
+## Quando greedy funciona
+
+Existem duas propriedades que, quando presentes, indicam que greedy pode dar certo:
+
+### 1. Propriedade da escolha gulosa (greedy choice property)
+
+> Uma solução ótima global pode ser construída fazendo escolhas localmente ótimas.
+
+Em palavras: existe alguma forma de "escolher um item agora" tal que o problema restante depois dessa escolha ainda tenha solução ótima. A primeira decisão não te força a soluções subótimas no futuro.
+
+### 2. Subestrutura ótima (igual em DP)
+
+> A solução ótima do problema contém soluções ótimas dos subproblemas.
+
+Greedy + DP compartilham essa propriedade. A diferença está na **primeira**: em DP você precisa testar opções, em greedy você decide uma e segue em frente.
+
+### Exchange Argument: a técnica clássica de prova
+
+Como provar que um greedy é correto? A ferramenta principal é o **exchange argument** (argumento de troca). A estrutura típica:
+
+1. Assume uma solução ótima `S*` qualquer
+2. Compara com a solução `G` produzida pelo greedy
+3. Mostra que dá pra "trocar" elementos de `S*` por elementos de `G` **sem piorar** o resultado
+4. Conclui que `G` é também ótima
+
+Esse padrão aparece nas provas de Activity Selection, Huffman, MST, e quase todo greedy clássico. Não é trivial, mas é mecânico depois que você pega o jeito.
+
+---
+
+## Problema 1: Activity Selection
+
+Esse é o "hello world" dos greedy.
+
+**Problema**: você tem `n` atividades, cada uma com horário de **início** e **fim**. Só pode fazer uma atividade por vez (sem sobreposição). Quer maximizar o **número de atividades** que consegue fazer.
+
+Exemplo: atividades `[(1,4), (3,5), (0,6), (5,7), (3,9), (5,9), (6,10), (8,11), (8,12), (2,14), (12,16)]`. Resposta ótima: 4 atividades (uma escolha possível: (1,4), (5,7), (8,11), (12,16)).
+
+### A escolha gulosa certa
+
+Tem várias estratégias gulosas plausíveis:
+
+- Pegar a atividade mais **curta** primeiro
+- Pegar a atividade que **começa mais cedo**
+- Pegar a atividade que **termina mais cedo**
+
+Só a última funciona. **Termina mais cedo → começa mais cedo a próxima → cabe mais coisa depois**.
+
+Pegar a mais curta falha em casos como `[(1,5), (4,6), (5,9)]` — a mais curta é (4,6), mas escolhê-la impede tanto (1,5) quanto (5,9). O ótimo é pegar (1,5) e (5,9). Pegar a que começa mais cedo falha em casos onde uma atividade inicial é muito longa.
+
+### Algoritmo
+
+1. Ordene as atividades por **horário de término** crescente
+2. Pega a primeira (a que termina mais cedo)
+3. Pra cada próxima, se o início é maior ou igual ao fim da última escolhida, pega ela. Senão pula.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public int activitySelection(int[][] atividades) {
+    // atividades[i] = {inicio, fim}
+    Arrays.sort(atividades, (a, b) -> Integer.compare(a[1], b[1]));   // por fim crescente
+
+    int count = 1;
+    int ultimoFim = atividades[0][1];
+
+    for (int i = 1; i < atividades.length; i++) {
+        if (atividades[i][0] >= ultimoFim) {
+            count++;
+            ultimoFim = atividades[i][1];
+        }
+    }
+    return count;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+int activitySelection(std::vector<std::vector<int>>& atividades) {
+    std::sort(atividades.begin(), atividades.end(),
+              [](const auto& a, const auto& b) { return a[1] < b[1]; });
+
+    int count = 1;
+    int ultimoFim = atividades[0][1];
+
+    for (size_t i = 1; i < atividades.size(); i++) {
+        if (atividades[i][0] >= ultimoFim) {
+            count++;
+            ultimoFim = atividades[i][1];
+        }
+    }
+    return count;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n log n) dominada pela ordenação. O loop é O(n) linear.
+
+### Por que isso funciona (exchange argument)
+
+Suponha uma solução ótima `S* = {a1, a2, ...}` ordenada por horário de início. Seja `g` a primeira atividade escolhida pelo greedy (a que termina mais cedo de todas).
+
+Caso 1: `g == a1`. Aplica a mesma lógica ao subproblema (atividades que começam depois de g terminar).
+
+Caso 2: `g != a1`. Como `g` termina antes de qualquer outra atividade no conjunto inteiro, e `a1` é uma escolha válida, então **`g` também é válida** no lugar de `a1`. **Troca** `a1` por `g` em `S*`. A solução resultante é tão boa quanto `S*` (mesmo número de atividades) e usa a escolha gulosa.
+
+Conclusão: existe sempre uma solução ótima que **começa com a escolha gulosa**. Recursivamente, todas as escolhas gulosas são corretas.
+
+<Insight>
+O exchange argument é uma técnica universal. Você o vê em Huffman, MST, scheduling, e centenas de outros problemas. **Não é uma prova trivial**, mas o padrão é sempre o mesmo: "se a solução ótima for diferente da minha, posso trocar elementos sem piorar — então a minha é ótima também".
+</Insight>
+
+---
+
+## Problema 2: Fractional Knapsack (greedy funciona aqui)
+
+Na lição passada vimos **Knapsack 0/1** — você pega o item inteiro ou nada. Esse problema **não funciona com greedy** — exige DP.
+
+**Fractional Knapsack** muda uma regra: você pode pegar **frações** dos itens. Quer 0.5 kg do item de 1 kg? Tudo bem, você leva metade do peso e ganha metade do valor.
+
+Essa pequena mudança transforma um problema NP-difícil (na verdade pseudo-polinomial) num problema greedy trivial.
+
+### A escolha gulosa
+
+> Calcule a **densidade de valor** (valor/peso) de cada item. Pegue itens em ordem decrescente de densidade até a mochila encher.
+
+Quando o último item não cabe inteiro, pegue só a fração que cabe.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public double fractionalKnapsack(double[] pesos, double[] valores, double W) {
+    int n = pesos.length;
+    // Cria pares (densidade, índice)
+    Double[][] itens = new Double[n][3];
+    for (int i = 0; i < n; i++) {
+        itens[i][0] = valores[i] / pesos[i];      // densidade
+        itens[i][1] = pesos[i];
+        itens[i][2] = valores[i];
+    }
+    // Ordena por densidade decrescente
+    Arrays.sort(itens, (a, b) -> Double.compare(b[0], a[0]));
+
+    double valorTotal = 0;
+    double capacidadeRestante = W;
+    for (Double[] item : itens) {
+        double peso = item[1];
+        double valor = item[2];
+        if (peso <= capacidadeRestante) {
+            valorTotal += valor;
+            capacidadeRestante -= peso;
+        } else {
+            valorTotal += valor * (capacidadeRestante / peso);  // pega só a fração que cabe
+            break;
+        }
+    }
+    return valorTotal;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+double fractionalKnapsack(std::vector<double>& pesos, std::vector<double>& valores, double W) {
+    int n = pesos.size();
+    std::vector<std::tuple<double, double, double>> itens(n);
+    for (int i = 0; i < n; i++) {
+        itens[i] = {valores[i] / pesos[i], pesos[i], valores[i]};
+    }
+    std::sort(itens.begin(), itens.end(),
+              [](auto& a, auto& b) { return std::get<0>(a) > std::get<0>(b); });
+
+    double valorTotal = 0;
+    double capacidadeRestante = W;
+    for (auto& [densidade, peso, valor] : itens) {
+        if (peso <= capacidadeRestante) {
+            valorTotal += valor;
+            capacidadeRestante -= peso;
+        } else {
+            valorTotal += valor * (capacidadeRestante / peso);
+            break;
+        }
+    }
+    return valorTotal;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n log n) pela ordenação.
+
+### Por que greedy funciona aqui mas não no 0/1?
+
+Em Fractional, se sobra um espaço de 0.3 kg na mochila e o próximo item pesa 1 kg, você pega 0.3 kg dele. **Sempre completa a mochila** com o item mais denso disponível.
+
+Em 0/1, sobra 0.3 kg, mas você precisa pegar o item INTEIRO ou nada. Não pode pegar 30%. Aí o item denso pode não caber, e você precisa **considerar combinações** — domínio do DP.
+
+A lição: **a estrutura do problema determina se greedy funciona**. Mudar uma regra aparentemente pequena (pode pegar fração ou não) muda completamente o algoritmo correto.
+
+---
+
+## Problema 3: Huffman Coding
+
+Voltando à história da abertura. Como funciona o algoritmo do Huffman?
+
+**Problema**: você tem um conjunto de caracteres, cada um com uma **frequência** (ou probabilidade) de aparecer num texto. Quer atribuir códigos binários a cada caractere de forma que:
+
+1. Nenhum código seja **prefixo de outro** (decodificação não-ambígua — chamado **prefix code**)
+2. O comprimento total ponderado seja mínimo (caracteres frequentes ganham códigos curtos)
+
+Exemplo. Para um texto com frequências:
+```
+A: 5, B: 9, C: 12, D: 13, E: 16, F: 45
+```
+
+Codificação ingênua com 3 bits por símbolo: 6 símbolos × 3 bits × frequência total = 300 bits. Huffman: cerca de 224 bits. Economia de 25%.
+
+### O algoritmo
+
+1. Crie um nó-folha pra cada caractere com sua frequência
+2. Coloque todos numa **min-heap** ordenada por frequência
+3. Enquanto a heap tiver 2 ou mais nós:
+   - Tira os 2 nós de **menor frequência** (x e y)
+   - Cria um nó pai com frequência `x.freq + y.freq`, filho esquerdo `x`, direito `y`
+   - Insere o pai na heap
+4. O nó que sobra é a raiz da árvore Huffman
+5. O código de cada caractere é o caminho da raiz até sua folha (0 pra esquerda, 1 pra direita)
+
+A escolha gulosa: **sempre combine os dois menos frequentes**. Eles vão estar **no fundo da árvore** — onde códigos longos são aceitáveis porque eles aparecem pouco.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+class No {
+    char caractere;
+    int frequencia;
+    No esq, dir;
+    No(char c, int f) { caractere = c; frequencia = f; }
+    No(int f, No e, No d) { frequencia = f; esq = e; dir = d; }
+}
+
+public Map<Character, String> huffman(Map<Character, Integer> frequencias) {
+    PriorityQueue<No> heap = new PriorityQueue<>((a, b) -> Integer.compare(a.frequencia, b.frequencia));
+    for (Map.Entry<Character, Integer> e : frequencias.entrySet()) {
+        heap.offer(new No(e.getKey(), e.getValue()));
+    }
+
+    while (heap.size() > 1) {
+        No x = heap.poll();
+        No y = heap.poll();
+        heap.offer(new No(x.frequencia + y.frequencia, x, y));
+    }
+
+    Map<Character, String> codigos = new HashMap<>();
+    construirCodigos(heap.peek(), "", codigos);
+    return codigos;
+}
+
+private void construirCodigos(No no, String prefixo, Map<Character, String> codigos) {
+    if (no == null) return;
+    if (no.esq == null && no.dir == null) {            // folha
+        codigos.put(no.caractere, prefixo.isEmpty() ? "0" : prefixo);
+        return;
+    }
+    construirCodigos(no.esq, prefixo + "0", codigos);
+    construirCodigos(no.dir, prefixo + "1", codigos);
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <queue>
+#include <map>
+#include <string>
+#include <memory>
+
+struct No {
+    char caractere;
+    int frequencia;
+    std::shared_ptr<No> esq, dir;
+    No(char c, int f) : caractere(c), frequencia(f) {}
+    No(int f, std::shared_ptr<No> e, std::shared_ptr<No> d)
+        : caractere(0), frequencia(f), esq(e), dir(d) {}
+};
+
+struct Comp {
+    bool operator()(const std::shared_ptr<No>& a, const std::shared_ptr<No>& b) const {
+        return a->frequencia > b->frequencia;  // min-heap
+    }
+};
+
+void construirCodigos(std::shared_ptr<No> no, std::string prefixo, std::map<char, std::string>& codigos) {
+    if (!no) return;
+    if (!no->esq && !no->dir) {
+        codigos[no->caractere] = prefixo.empty() ? "0" : prefixo;
+        return;
+    }
+    construirCodigos(no->esq, prefixo + "0", codigos);
+    construirCodigos(no->dir, prefixo + "1", codigos);
+}
+
+std::map<char, std::string> huffman(const std::map<char, int>& frequencias) {
+    std::priority_queue<std::shared_ptr<No>, std::vector<std::shared_ptr<No>>, Comp> heap;
+    for (auto& [c, f] : frequencias) {
+        heap.push(std::make_shared<No>(c, f));
+    }
+
+    while (heap.size() > 1) {
+        auto x = heap.top(); heap.pop();
+        auto y = heap.top(); heap.pop();
+        heap.push(std::make_shared<No>(x->frequencia + y->frequencia, x, y));
+    }
+
+    std::map<char, std::string> codigos;
+    construirCodigos(heap.top(), "", codigos);
+    return codigos;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n log n) pra construir a heap e fazer as n-1 extrações.
+
+### Aplicações reais
+
+Huffman está em quase todo formato de compressão sem perda:
+
+- **DEFLATE** (usado em PNG, ZIP, GZIP, PNG, ZIP)
+- **JPEG** (compressão dos coeficientes DCT)
+- **MP3, AAC** (Huffman pra coeficientes quantizados)
+- **MPEG, H.264** (compressão de coeficientes)
+
+Versões modernas (LZ77 + Huffman, ANS, arithmetic coding) superam Huffman em casos específicos, mas o algoritmo do paper de 1952 ainda é o método **mais usado do mundo** pra compressão de prefix codes.
+
+---
+
+## Problema 4: Minimum Spanning Tree
+
+Dado um grafo conexo ponderado, encontre uma **árvore geradora** (subgrafo conexo sem ciclos contendo todos os vértices) com **soma de pesos mínima**.
+
+Aplicações: design de redes elétricas, telecomunicações (cabos de fibra entre cidades), distribuição de água, clusterização hierárquica em ML.
+
+### Uma história curiosa
+
+O primeiro algoritmo para MST foi inventado em **1926** por **Otakar Borůvka**, matemático tcheco, motivado pela **eletrificação rural da Morávia do Sul**. Precisava conectar várias vilas com a menor quantidade possível de cabo. O paper original *"O jistém problému minimálním"* (Sobre certo problema mínimo) ficou décadas relativamente desconhecido fora da Tchecoslováquia.
+
+Em **1930**, **Vojtěch Jarník** simplificou o algoritmo do Borůvka num formato muito mais clean.
+
+Em **1956**, **Joseph Kruskal** publicou o algoritmo que carrega seu nome.
+
+Em **1957**, **Robert Prim**, sem conhecer o trabalho do Jarník, **redescobriu** o algoritmo dele.
+
+Em **1959**, **Dijkstra** publicou o seu paper de caminhos mais curtos — que também redescobre o algoritmo de Jarník como caso particular.
+
+Esse é um dos casos mais famosos de **redescoberta independente** em CS. A maioria das pessoas hoje fala de "Prim's algorithm" sem saber que Jarník tinha publicado a mesma ideia 27 anos antes.
+
+### Kruskal's algorithm
+
+> Ordene as arestas por peso crescente. Pegue cada aresta em ordem, **se não formar ciclo** com as já pegas. Pare quando tiver V-1 arestas.
+
+A detecção de ciclo é feita com **Union-Find** (Disjoint Set Union) — uma estrutura que veremos numa lição futura, capaz de responder "esses dois vértices já estão conectados?" em tempo praticamente constante.
+
+```
+Pseudocódigo:
+1. Ordena arestas por peso ascendente
+2. UF = Union-Find inicializado (cada vértice é próprio componente)
+3. arestas_escolhidas = []
+4. Para cada aresta (u, v, peso) em ordem:
+     se UF.find(u) != UF.find(v):    // não formam ciclo
+         UF.union(u, v)
+         arestas_escolhidas.add(aresta)
+         se size(arestas_escolhidas) == V-1:
+             retorna arestas_escolhidas
+```
+
+**Complexidade**: O(E log E) pela ordenação. O Union-Find faz as V-1 uniões em quase O(V) amortizado.
+
+### Prim's algorithm
+
+> Começa em um vértice qualquer. Mantém uma "fronteira" de vértices já incluídos. A cada passo, pega a **aresta de menor peso** que conecta a fronteira ao resto. Adiciona ao MST.
+
+Essencialmente Dijkstra com uma diferença: em Dijkstra a heap ordena por **distância acumulada da origem**, em Prim ordena por **peso da aresta** que conecta um vértice novo à fronteira.
+
+**Complexidade**: O((V+E) log V) com min-heap. Mesma estrutura de Dijkstra.
+
+### Kruskal vs Prim
+
+- **Grafos esparsos** (E próximo de V): Kruskal vence — domina pelo sort de E itens
+- **Grafos densos** (E próximo de V²): Prim vence — não depende de ordenar tudo
+
+Na prática, ambos rodam suficientemente rápido pra a maioria dos casos. Kruskal é mais fácil de implementar quando você já tem Union-Find na mão. Prim é mais natural quando você já implementou Dijkstra.
+
+---
+
+## Problema 5: Job Scheduling com deadlines
+
+**Problema**: você tem `n` jobs. Cada job `i` tem um **lucro** `p[i]` e um **deadline** `d[i]`. Cada job demora 1 unidade de tempo. Em cada unidade de tempo só pode rodar 1 job. Quer maximizar o lucro fazendo o máximo de jobs **dentro do prazo**.
+
+### A estratégia gulosa
+
+> Ordene jobs por lucro decrescente. Pra cada job na ordem, tente alocá-lo no **slot de tempo mais tardio possível** que ainda esteja antes do deadline. Se nenhum slot disponível, descarta.
+
+Por que "mais tardio possível"? Pra deixar slots iniciais livres pra jobs com deadlines mais apertados que talvez ainda venham.
+
+```java
+class Job {
+    int id;
+    int deadline;
+    int lucro;
+}
+
+public int agendarJobs(Job[] jobs) {
+    Arrays.sort(jobs, (a, b) -> Integer.compare(b.lucro, a.lucro));   // lucro decrescente
+
+    int deadlineMaximo = 0;
+    for (Job j : jobs) deadlineMaximo = Math.max(deadlineMaximo, j.deadline);
+
+    boolean[] ocupado = new boolean[deadlineMaximo + 1];
+    int lucroTotal = 0;
+
+    for (Job j : jobs) {
+        for (int t = j.deadline; t >= 1; t--) {
+            if (!ocupado[t]) {
+                ocupado[t] = true;
+                lucroTotal += j.lucro;
+                break;
+            }
+        }
+    }
+    return lucroTotal;
+}
+```
+
+**Complexidade**: O(n × deadlineMaximo). Otimizável pra O(n log n) usando Union-Find pra "achar o slot livre mais tardio em O(α(n))".
+
+---
+
+## Quando greedy NÃO funciona
+
+Reconhecer que um problema **não é greedy** é tão importante quanto reconhecer quando é. Sinais de alerta:
+
+**1. Greedy óbvio dá resposta errada em pequenos casos.**
+
+Sempre teste o greedy proposto em casos pequenos antes de aceitar. Coin Change `[1, 3, 4]` com amount 6 já mostra que o greedy ingênuo falha — esse é o teste padrão.
+
+**2. O problema tem uma "tentação combinatória".**
+
+Knapsack 0/1, Traveling Salesman, Set Cover — problemas onde a decisão atual depende de combinações futuras que você não pode prever sem testar.
+
+**3. Trade-offs entre decisões.**
+
+Se "pegar o melhor agora" pode bloquear opções importantes depois, greedy provavelmente falha. DP ou branch-and-bound costumam ser necessários.
+
+**4. Você não consegue provar a otimalidade.**
+
+Se ninguém na sua equipe consegue formalizar um exchange argument ou justificar a corretude, **não confie no greedy**. Implementação que "funciona nos testes que tenho" pode falhar em produção com dados reais.
+
+<Aviso>
+Em ICPC e entrevistas, **muitos problemas têm greedy óbvio que está errado**. O algoritmo correto é DP ou outra técnica. Reconhecer essa armadilha é uma habilidade que se ganha com prática. Quando em dúvida, **prefira DP** — é mais conservador.
+</Aviso>
+
+---
+
+## Greedy vs DP: a comparação direta
+
+| Aspecto | Greedy | DP |
+|---|---|---|
+| Filosofia | Compromete-se com escolha local | Testa todas as escolhas, combina |
+| Memória | Geralmente O(1) ou O(n) | Pode chegar a O(n²) ou mais |
+| Velocidade | Mais rápido quando funciona | Mais lento, mas sempre correto se aplicável |
+| Prova de corretude | Exigida (exchange argument) | Geralmente trivial (recorrência) |
+| Risco de erro | Alto (parece funcionar e não funciona) | Baixo (se a recorrência está certa, funciona) |
+| Quando preferir | Problema com greedy-choice property provada | Problema com subproblemas sobrepostos |
+
+Regra prática: **se você consegue provar greedy, use greedy** (é mais elegante e mais rápido). **Senão, use DP**.
+
+---
+
+## Recap
+
+Algoritmo **greedy** faz a escolha localmente ótima a cada passo, sem voltar atrás. Quando funciona, é mais simples e mais rápido que DP. Quando não funciona, falha silenciosamente.
+
+Pra um problema admitir solução greedy, precisa ter duas propriedades: **greedy choice property** (escolhas locais ótimas levam ao ótimo global) e **subestrutura ótima** (a mesma de DP). O **exchange argument** é a técnica padrão pra provar corretude.
+
+Problemas clássicos resolvidos por greedy:
+
+- **Activity Selection**: ordena por horário de término crescente, pega não-conflitantes em ordem. O(n log n).
+- **Fractional Knapsack**: ordena por densidade valor/peso decrescente, pega itens (e fração do último). O(n log n). Note que 0/1 Knapsack **não admite greedy** — exige DP.
+- **Huffman Coding**: criado por David Huffman em 1952, com a história épica de aluno superando o professor (Robert Fano) no MIT. Combina os dois nós de menor frequência em loop. Está em todo PNG, ZIP, JPEG, MP3 do mundo. O(n log n).
+- **Minimum Spanning Tree**: história rica de redescobertas — Borůvka (1926, motivado por eletrificação rural na Morávia), Jarník (1930), Kruskal (1956), Prim (1957, redescobriu Jarník). Kruskal usa sort + Union-Find. Prim é Dijkstra com peso de aresta em vez de distância acumulada.
+- **Job Scheduling**: ordena por lucro decrescente, aloca no slot mais tardio livre.
+
+Greedy **falha** em problemas como Coin Change com moedas arbitrárias, 0/1 Knapsack, Traveling Salesman. Reconhecer quando greedy não funciona é tão importante quanto reconhecer quando funciona.
+
+Quando em dúvida entre greedy e DP, **prefira DP** — é mais conservador e produz resposta ótima desde que a recorrência esteja certa.
+
+Próxima lição: **Union-Find (Disjoint Set Union)** — a estrutura por trás do Kruskal, com operações em tempo praticamente constante graças a path compression e union by rank. Robert Tarjan provou em 1975 que a complexidade é O(α(n)), onde α é a inversa da função de Ackermann — uma função que cresce tão devagar que pode ser tratada como constante na prática.

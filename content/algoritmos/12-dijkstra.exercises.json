@@ -1,0 +1,122 @@
+[
+  {
+    "id": "dij-01",
+    "enunciado": "Em que ano e onde Edsger W. Dijkstra inventou o algoritmo de caminho mais curto?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "1968, no MIT, durante uma palestra",
+      "1956, em uma cafeteria em Amsterdã, em ~20 minutos enquanto tomava café com a noiva",
+      "1959, em uma conferência em Berlim",
+      "1965, na IBM, durante um projeto secreto"
+    ],
+    "resposta": 1,
+    "explicacao": "Dijkstra inventou o algoritmo em 1956, numa cafeteria em Amsterdã. Em entrevista (2001) com Philip L. Frana, ele relatou: 'I designed it in about twenty minutes... it was a 20-minute invention'. Estava com a noiva Maria, descansando depois de fazer compras na cidade. O Mathematisch Centrum onde trabalhava ia inaugurar o computador ARMAC e precisava de uma demonstração visual: caminho mais curto entre 64 cidades holandesas. Dijkstra pensou no problema enquanto bebia café, sem caneta, sem papel, sem computador. Publicou só 3 anos depois, em 1959, no paper 'A note on two problems in connexion with graphs' (Numerische Mathematik 1, pp. 269-271) — apenas 3 páginas."
+  },
+  {
+    "id": "dij-02",
+    "enunciado": "Qual a restrição mais importante do algoritmo de Dijkstra?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Só funciona em grafos não-direcionados",
+      "Só funciona com pesos não-negativos nas arestas",
+      "Só funciona em grafos conexos",
+      "Só funciona se o grafo for um DAG"
+    ],
+    "resposta": 1,
+    "explicacao": "Dijkstra só funciona com pesos NÃO-NEGATIVOS (zero ou positivos). A premissa greedy do algoritmo é: 'o vértice de menor distância tentativa já tem a distância FINAL'. Isso vale porque arestas não-negativas não podem encurtar caminhos posteriores. Com pesos negativos, a premissa quebra: chegar via um vértice 'mais distante' pode ficar mais barato se houver aresta negativa depois. Pra esses casos, use Bellman-Ford (O(V·E), aceita pesos negativos, detecta ciclos negativos) ou Floyd-Warshall (O(V³), all-pairs). Dijkstra funciona tanto em grafos direcionados quanto não-direcionados, e não precisa ser conexo (vértices inalcançáveis terminam com distância infinita)."
+  },
+  {
+    "id": "dij-03",
+    "enunciado": "Qual a complexidade do Dijkstra usando min-heap em um grafo com V vértices e E arestas?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["O(V + E)", "O((V + E) log V)", "O(V²)", "O(V · E)"],
+    "resposta": 1,
+    "explicacao": "O((V + E) log V) com min-heap (PriorityQueue em Java, priority_queue com greater em C++). Cada vértice é processado uma vez: V × O(log V) pra extrações. Cada aresta pode causar uma inserção na heap: E × O(log V). Total: O((V + E) log V). Pra grafos ESPARSOS (E muito menor que V²), isso vence a versão naive O(V²). Pra grafos DENSOS (E próximo de V²), a versão naive O(V²) pode até ser melhor por evitar overhead da heap. Com Fibonacci heap, a complexidade teórica cai pra O(E + V log V), mas constantes ocultas grandes tornam isso teoria — heap binário é o padrão em produção."
+  },
+  {
+    "id": "dij-04",
+    "enunciado": "O que significa RELAXAR uma aresta (u, v) com peso w em Dijkstra?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Remover a aresta do grafo",
+      "Verificar se chegar em v passando por u via essa aresta é mais curto que a distância atualmente conhecida até v, e atualizar se for",
+      "Reduzir o peso da aresta em 1",
+      "Marcar a aresta como visitada"
+    ],
+    "resposta": 1,
+    "explicacao": "Relaxar = checar se dist[v] > dist[u] + w. Se sim, atualizar dist[v] = dist[u] + w (e registrar u como predecessor de v pra reconstruir o caminho depois). Toda a essência do Dijkstra é RELAXAR ARESTAS NA ORDEM CERTA: sempre processar primeiro o vértice de menor distância tentativa, e relaxar suas arestas de saída. O termo 'relaxar' vem da analogia com física: aliviar uma tensão, deixar um sistema mais 'frouxo'. Aqui significa relaxar uma estimativa pessimista (distância maior) pra uma mais realista (menor)."
+  },
+  {
+    "id": "dij-05",
+    "enunciado": "Por que BFS NÃO funciona em grafos com pesos diferentes nas arestas?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Porque BFS é um algoritmo lento",
+      "Porque BFS visita por NÚMERO DE ARESTAS, mas com pesos você precisa visitar por SOMA DE PESOS — a primeira chegada a um vértice não é necessariamente a mais curta em peso total",
+      "Porque BFS precisa de pesos para funcionar",
+      "Porque BFS só funciona em grafos não-direcionados"
+    ],
+    "resposta": 1,
+    "explicacao": "BFS visita os vértices em ordem de NÚMERO DE ARESTAS (saltos) a partir da origem — funciona perfeitamente quando todas arestas têm peso igual. Mas com pesos diferentes, o caminho com menos arestas pode ter SOMA MAIOR que um caminho com mais arestas e pesos pequenos. Analogia: ondas se espalhando num lago com profundidades diferentes não chegam todas ao mesmo tempo nos mesmos pontos. A solução é trocar a fila simples por uma fila de prioridade (min-heap), processando sempre o vértice de menor soma acumulada. Essa troca é exatamente o que diferencia BFS de Dijkstra."
+  },
+  {
+    "id": "dij-06",
+    "enunciado": "Em qual cenário você prefere a versão NAIVE de Dijkstra (O(V²)) sobre a versão com heap (O((V+E) log V))?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando o grafo é muito esparso",
+      "Quando o grafo é DENSO (E próximo de V²)",
+      "Quando você precisa de pesos negativos",
+      "Quando o grafo tem mais de 1 milhão de vértices"
+    ],
+    "resposta": 1,
+    "explicacao": "Em grafos DENSOS (E próximo de V²), a versão naive O(V²) é competitiva ou melhor. Substituindo E por V² na versão com heap: O((V + V²) log V) = O(V² log V), pior que O(V²). O overhead da heap não compensa quando há tantas arestas que a busca linear pelo próximo vértice fica diluída. Em grafos esparsos (E muito menor que V²), o cenário típico em produção, a versão com heap vence claramente. Regra prática: grafos de até alguns milhares de vértices podem usar a versão naive sem prejuízo; acima disso, vá de heap."
+  },
+  {
+    "id": "dij-07",
+    "enunciado": "Na implementação de Dijkstra com min-heap, qual o propósito de checar 'if (d > dist[u]) continue;' depois de extrair um par da heap?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Detectar ciclos no grafo",
+      "Ignorar entradas obsoletas: pode haver múltiplas entradas para o mesmo vértice na heap, e queremos processar apenas a mais recente (com menor distância)",
+      "Verificar overflow numérico",
+      "Marcar o vértice como visitado"
+    ],
+    "resposta": 1,
+    "explicacao": "Ignorar entradas obsoletas. Como NÃO usamos decrease-key (operação não suportada eficientemente pela PriorityQueue padrão), inserimos uma NOVA entrada na heap toda vez que melhoramos a distância de um vértice. Resultado: o mesmo vértice pode aparecer várias vezes na heap, com distâncias diferentes. Quando extraímos, checamos se a distância tirada (d) ainda é a melhor conhecida (dist[u]). Se 'd > dist[u]', essa entrada é obsoleta — já achamos um caminho melhor depois de inseri-la. Ignoramos e seguimos. Esse truque é mais simples que implementar decrease-key e tem a mesma complexidade assintótica O((V+E) log V)."
+  },
+  {
+    "id": "dij-08",
+    "enunciado": "Qual algoritmo é uma EXTENSÃO de Dijkstra com heurística, usado em pathfinding de jogos e GPS?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Bellman-Ford",
+      "Floyd-Warshall",
+      "A* (A-estrela)",
+      "Prim's"
+    ],
+    "resposta": 2,
+    "explicacao": "A* (A-estrela), criado em 1968 por Hart, Nilsson e Raphael. Em vez de ordenar a heap por g(v) (distância conhecida até v), A* ordena por f(v) = g(v) + h(v), onde h(v) é uma HEURÍSTICA — estimativa da distância restante de v até o destino. Se a heurística é admissível (nunca superestima), A* encontra o caminho ótimo MAIS RÁPIDO que Dijkstra puro. Em mapas geográficos, a heurística natural é distância em linha reta (Euclidiana/Haversine). Em grades, distância Manhattan. A* concentra a busca na direção do alvo, examinando muito menos vértices que Dijkstra. É padrão em IA de jogos (todo NPC em jogo top-down moderno usa A*) e em sistemas de roteamento."
+  },
+  {
+    "id": "dij-09",
+    "enunciado": "Para reconstruir o CAMINHO MAIS CURTO (não só a distância), o que você precisa fazer durante o algoritmo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Rodar Dijkstra duas vezes",
+      "Manter um array 'anterior[]' que registra o predecessor de cada vértice quando sua distância é atualizada — depois, caminhe de volta do destino até a origem",
+      "Calcular o gradiente das distâncias",
+      "Não é possível reconstruir caminhos em Dijkstra"
+    ],
+    "resposta": 1,
+    "explicacao": "Manter array 'anterior[]' (ou 'parent[]', 'predecessor[]'). Toda vez que você relaxa uma aresta (u, v) e atualiza dist[v], registra: anterior[v] = u. No final, pra reconstruir o caminho até um destino d, comece em d e siga anterior[] de volta até a origem (anterior[d], anterior[anterior[d]], ...). Inverta a sequência e tem o caminho. Esse padrão é universal em algoritmos de travessia: vale pra BFS, DFS, A*, Bellman-Ford. Você guarda os PREDECESSORES durante a busca e reconstrói qualquer caminho em O(comprimento do caminho)."
+  },
+  {
+    "id": "dij-10",
+    "enunciado": "Verdadeiro ou falso: Dijkstra (e suas variantes) está rodando neste exato momento em GPS, em roteadores OSPF, em IAs de jogos e em sistemas de logística — provavelmente bilhões de vezes por dia no planeta.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Dijkstra é um dos algoritmos mais executados do mundo. Aplicações: GPS (Google Maps, Waze, Apple Maps) calcula rotas com variantes de Dijkstra (com otimizações como contraction hierarchies pra escalar a grafos de dezenas de milhões de nós); OSPF (Open Shortest Path First) é o protocolo dominante de roteamento dentro de redes corporativas e provedores de internet — cada roteador roda Dijkstra periodicamente; IA de jogos (NPCs encontrando caminhos em mapas) usa A* (extensão de Dijkstra) dezenas de vezes por segundo; logística (Amazon, iFood, Uber) modela roteamento de entregas como SSSP. Tudo isso pra um algoritmo inventado em 20 minutos numa cafeteria em 1956."
+  }
+]

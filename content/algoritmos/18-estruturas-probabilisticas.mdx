@@ -1,0 +1,487 @@
+---
+titulo: "Estruturas Probabilísticas: Quando Errar um Pouquinho Vale 1000x Menos Memória"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Burton Howard Bloom (1970), 'Space/Time Trade-offs in Hash Coding with Allowable Errors', Communications of the ACM 13(7), pp. 422-426"
+  - "Philippe Flajolet, G. Nigel Martin (1985), 'Probabilistic Counting Algorithms for Data Base Applications', Journal of Computer and System Sciences 31(2)"
+  - "Philippe Flajolet, Éric Fusy, Olivier Gandouet, Frédéric Meunier (2007), 'HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm', Analysis of Algorithms (AofA)"
+  - "Stefan Heule, Marc Nunkesser, Alexander Hall (2013), 'HyperLogLog in Practice: Algorithmic Engineering of a State of the Art Cardinality Estimation Algorithm', Google — HLL++"
+  - "Graham Cormode, S. Muthukrishnan (2003-2005), 'An Improved Data Stream Summary: The Count-Min Sketch and its Applications', Journal of Algorithms 55(1)"
+  - "MIT OCW 6.046J / 6.851 — Advanced Data Structures"
+  - "Stanford CS166 — Probabilistic Data Structures"
+  - "Cao Hu, 'Bloom Filters' on Google Cloud / All Things Distributed (Werner Vogels)"
+  - "Redis docs — PFADD, PFCOUNT, BF.ADD, BF.EXISTS"
+---
+
+## A pergunta que mudou tudo: "e se errar fosse OK?"
+
+Toda estrutura de dados que vimos até agora compartilha uma propriedade: **é exata**. Hash tables, BSTs, tries, heaps — quando você pergunta "esse elemento está aqui?", a resposta é definitivamente sim ou definitivamente não. Quando pergunta "quantos elementos distintos têm aqui?", o número é exato.
+
+Mas exatidão **custa caro**. Pra armazenar 100 milhões de URLs distintas de forma exata em um hash table, você precisa de pelo menos a soma dos comprimentos delas — facilmente 10 GB. Pra contar quantos visitantes distintos seu site tem por dia em escala de Google, precisaria de hash table com **bilhões de entradas** em RAM. Inviável.
+
+Em **1970**, um pesquisador chamado **Burton Howard Bloom** trabalhando na Computer Usage Company (em Newton Upper Falls, Massachusetts) publicou um paper que mudou a forma como pensamos sobre estruturas de dados. O título: **"Space/Time Trade-offs in Hash Coding with Allowable Errors"** (Communications of the ACM 13(7), pp. 422-426). A ideia central — chocante na época — era simples:
+
+> E se a estrutura puder errar um pouquinho? Quanto menos memória conseguimos usar?
+
+A resposta de Bloom: **muito, muito menos**. Trocando exatidão por uma pequena taxa de erro controlada, dá pra reduzir o uso de memória em **uma ordem de magnitude ou mais**. O paper tem hoje mais de **8.000 citações** e originou uma família inteira de estruturas — **Bloom Filter**, **Counting Bloom**, **Cuckoo Filter**, **HyperLogLog**, **Count-Min Sketch**, **MinHash**, **Quotient Filter**.
+
+Essas estruturas são chamadas de **probabilísticas** ou **sketches**. Estão em quase todo sistema distribuído moderno: **Cassandra, HBase, Redis, BigQuery, Bitcoin, Bigtable, Akamai CDN, Cloudflare**. Sempre que você ouve "escala web" — bilhões de operações por segundo, dados que não cabem em RAM — provavelmente tem um sketch fazendo o trabalho pesado.
+
+Esta lição cobre três estruturas probabilísticas fundamentais: **Bloom Filter** (membership), **HyperLogLog** (cardinalidade), e **Count-Min Sketch** (frequência). No fim você vai entender por que Google, Facebook, Amazon e qualquer sistema sério em escala usa esses sketches em produção.
+
+---
+
+## A taxonomia dos sketches
+
+Antes de mergulhar, um mapa. Cada sketch responde a uma **pergunta diferente**:
+
+| Sketch | Pergunta | Espaço típico | Tipo de erro |
+|---|---|---|---|
+| **Bloom Filter** | "Esse elemento está no set?" | ~10 bits por elemento | Falso positivo (nunca negativo) |
+| **HyperLogLog** | "Quantos elementos distintos?" | ~1.5 KB pra qualquer cardinalidade | ±2% de erro |
+| **Count-Min Sketch** | "Qual a frequência desse elemento?" | ~poucos KBs | Superestima (nunca subestima) |
+| **MinHash** | "Quão similares são dois sets?" | ~centenas de bytes | Erro de estimativa |
+
+Não dá pra usar um sketch pra responder a pergunta de outro. **Cada um tem garantias específicas e modos específicos de errar**. Saber qual usar é parte da habilidade.
+
+---
+
+## Bloom Filter: o "está no set?"
+
+A estrutura mais clássica. Resposta a uma pergunta simples:
+
+> **Esse elemento `x` está no conjunto S?**
+
+Hash table responde isso em O(1) com **exatidão**, mas precisa armazenar todos os elementos. Bloom Filter responde em O(k) (onde k é uma constante pequena) usando **apenas alguns bits por elemento**, com a ressalva:
+
+- Se Bloom diz **"não está"** → **definitivamente não está** (sem falso negativo)
+- Se Bloom diz **"está"** → **provavelmente está**, mas pode ser falso positivo
+
+Essa assimetria — falso positivo possível, falso negativo impossível — é o que torna Bloom útil. Em muitas aplicações, falso positivo só significa "vou fazer uma verificação a mais", enquanto falso negativo seria desastroso ("achei que não tinha, mas tinha, e perdi dado").
+
+### Como o Bloom Filter funciona
+
+A estrutura é absurdamente simples:
+
+1. **Um array de bits** de tamanho `m`, todos começando em 0
+2. **k funções de hash** diferentes, cada uma mapeia o elemento pra uma posição em `[0, m-1]`
+
+**Adicionar `x`**:
+- Calcula `h₁(x), h₂(x), ..., hₖ(x)` (k posições no array)
+- Liga (coloca em 1) os bits nessas k posições
+
+**Consultar `x`**:
+- Calcula as mesmas k posições
+- Se **todos os k bits** estão ligados, retorna "provavelmente está"
+- Se **qualquer um** dos k bits está zerado, retorna "definitivamente não está"
+
+Visualizando com `m = 10` e `k = 3`, depois de adicionar `"cat"` e `"dog"`:
+
+```
+índice:  0  1  2  3  4  5  6  7  8  9
+bits:    0  1  0  1  0  1  1  0  1  0
+                                       
+adiciona "cat" → h1=1, h2=5, h3=8  → liga bits 1, 5, 8
+adiciona "dog" → h1=3, h2=6, h3=8  → liga bits 3, 6, 8 (8 já tava)
+
+consulta "cat" → 1, 5, 8 → todos ligados → "provavelmente está" ✓
+consulta "bird" → h1=2, h2=7, h3=4 → bit 2 zerado → "definitivamente não" ✓
+```
+
+E o falso positivo:
+```
+consulta "fish" → h1=3, h2=6, h3=1 → todos ligados → "provavelmente está" ✗ (errado!)
+```
+
+`"fish"` nunca foi adicionado, mas suas posições de hash colidiram com bits ligados por `"cat"` e `"dog"`. **Falso positivo**.
+
+### Taxa de falso positivo
+
+A fórmula clássica (no paper original de Bloom):
+
+```
+p ≈ (1 - e^(-kn/m))^k
+```
+
+Onde `n` é o número de elementos inseridos, `m` o tamanho do bitarray, `k` o número de hashes.
+
+Pra **k ótimo**: `k = (m/n) × ln(2)`. Resulta em:
+
+```
+p ≈ 0.6185^(m/n)
+```
+
+Pra **1% de falso positivo**, precisa de **~9.6 bits por elemento**. Pra 0.1%, ~14.4 bits. Pra 0.01%, ~19.2 bits.
+
+Compara com hash table: pra n strings de 100 caracteres cada, hash table precisa de pelo menos 100n bytes = 800n bits. **Bloom Filter usa 10n bits — 80× menos memória.**
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.BitSet;
+
+public class BloomFilter {
+    private final BitSet bits;
+    private final int m;          // tamanho do array de bits
+    private final int k;          // número de funções de hash
+
+    public BloomFilter(int n, double falsePositiveRate) {
+        // m ótimo para n elementos e taxa de falso positivo desejada
+        this.m = (int) Math.ceil(-n * Math.log(falsePositiveRate) / Math.pow(Math.log(2), 2));
+        this.k = Math.max(1, (int) Math.round((double) m / n * Math.log(2)));
+        this.bits = new BitSet(m);
+    }
+
+    public void add(String item) {
+        for (int i = 0; i < k; i++) {
+            int hash = (item.hashCode() ^ Integer.rotateLeft(item.hashCode(), i + 1));
+            int idx = Math.floorMod(hash, m);
+            bits.set(idx);
+        }
+    }
+
+    public boolean mightContain(String item) {
+        for (int i = 0; i < k; i++) {
+            int hash = (item.hashCode() ^ Integer.rotateLeft(item.hashCode(), i + 1));
+            int idx = Math.floorMod(hash, m);
+            if (!bits.get(idx)) return false;     // bit zerado → definitivamente não está
+        }
+        return true;                              // todos ligados → provavelmente está
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+#include <functional>
+#include <cmath>
+
+class BloomFilter {
+private:
+    std::vector<bool> bits;
+    int m, k;
+
+    int hash_i(const std::string& s, int seed) const {
+        std::hash<std::string> h;
+        size_t base = h(s);
+        return (int)((base ^ (base >> seed)) % m);
+    }
+
+public:
+    BloomFilter(int n, double falsePositiveRate) {
+        m = (int)std::ceil(-n * std::log(falsePositiveRate) / std::pow(std::log(2), 2));
+        k = std::max(1, (int)std::round((double)m / n * std::log(2)));
+        bits.assign(m, false);
+    }
+
+    void add(const std::string& item) {
+        for (int i = 0; i < k; i++) {
+            bits[hash_i(item, i + 1)] = true;
+        }
+    }
+
+    bool mightContain(const std::string& item) const {
+        for (int i = 0; i < k; i++) {
+            if (!bits[hash_i(item, i + 1)]) return false;
+        }
+        return true;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**:
+- Add: O(k) — constante pequena
+- Query: O(k) — constante pequena
+- Espaço: O(m) — bits, não bytes
+
+<ComplexidadeBox melhor="O(k)" media="O(k)" pior="O(k)" />
+
+### Limitações importantes
+
+**1. Não suporta remoção.** Se você zerar os bits de um elemento removido, pode zerar bits que outros elementos também usam — gerando falsos negativos. Existem variantes (**Counting Bloom Filter**) que usam contadores em vez de bits e suportam remoção, mas com 4-8x mais memória.
+
+**2. Saturação.** Conforme você adiciona mais elementos, mais bits ficam ligados. Em algum ponto, **quase todos os bits estão em 1**, e a taxa de falso positivo dispara. Dimensione corretamente.
+
+**3. Não permite iterar.** Bloom Filter não armazena os elementos — só os hashes. Não tem como "listar os elementos que foram inseridos". Se você precisa disso, não use Bloom.
+
+### Onde Bloom está em produção
+
+A lista é gigante. Werner Vogels, CTO da Amazon, escreveu um post inteiro chamado *"Back-to-Basics Weekend Reading - Bloom Filters"* enaltecendo o quanto essa estrutura é usada:
+
+- **Apache Cassandra**: cada SSTable tem um Bloom Filter associado. Antes de procurar uma chave em disco (operação cara), o sistema consulta o Bloom. Se Bloom diz "não está", evita o seek. Se Bloom diz "pode estar", confirma indo no disco.
+- **HBase**, **LevelDB**, **RocksDB**: mesma ideia — evitar disk seeks.
+- **PostgreSQL**: extensão `bloom` index type pra colunas com muitas condições WHERE.
+- **Bitcoin Core**: nodes light usam Bloom Filters pra dizer quais transações eles querem receber **sem revelar exatamente quais endereços possuem** — privacidade via falso positivo.
+- **Google Chrome (Safe Browsing)**: lista de URLs maliciosos é gigante. Em vez de baixar a lista inteira, Chrome baixa um Bloom Filter dela. Pra cada URL que você visita, consulta o Bloom local; se diz "pode ser maliciosa", **aí sim** faz a chamada de rede pra confirmar.
+- **CDN cache (Akamai, Cloudflare)**: "este conteúdo está no cache?" — Bloom evita lookups inúteis.
+- **Spell checkers** antigos (anos 80-90).
+
+**Redis** tem um módulo `RedisBloom` que adiciona Bloom Filters como tipo de dado nativo (`BF.ADD`, `BF.EXISTS`).
+
+---
+
+## HyperLogLog: contando milhões com 1.5 KB
+
+A segunda pergunta clássica: **quantos elementos distintos** existem num stream?
+
+Aplicação típica: "quantos usuários únicos visitaram nosso site hoje?". Naive: armazena cada user ID que aparece em um HashSet, retorna o `size()`. Pra 100 milhões de usuários únicos com IDs de 16 bytes, isso são **1.6 GB** de RAM. Multiplicado por todos os dashboards, todas as métricas, todos os tenants — inviável.
+
+**HyperLogLog** (HLL) responde a pergunta com **erro de ~2%** usando **apenas 1.5 KB** — independente de a cardinalidade ser 100 ou 100 bilhões. Sim, você leu certo. Mil quinhentos **bytes**, não kilobytes.
+
+### A história
+
+A linhagem do HLL é uma das mais longas em pesquisa de algoritmos:
+
+- **1984**: **Philippe Flajolet** e **G. Nigel Martin** publicam *"Probabilistic Counting Algorithms for Data Base Applications"* — primeiro paper sobre o problema. Apresentam o **Flajolet-Martin Algorithm**.
+- **2003**: **Marianne Durand** e **Flajolet** propõem o **LogLog** — melhoria do FM, com menos memória por registrador.
+- **2007**: **Flajolet, Éric Fusy, Olivier Gandouet, Frédéric Meunier** publicam *"HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm"*. Usa **média harmônica** em vez de geométrica — reduz o erro pra 1.04/√m.
+- **2013**: **Stefan Heule** e equipe do Google publicam *"HyperLogLog in Practice"* — versão **HLL++** com hash de 64 bits, sparse representation, correções de viés.
+
+Philippe Flajolet (1948-2011) é uma figura central nessa história. Co-autor do livro *"Analytic Combinatorics"* (Cambridge, 2009), ele dedicou décadas ao problema de **counting distinct elements** sob restrições de memória.
+
+### A intuição: a "magia" dos zeros à esquerda
+
+A ideia central é estatística e contra-intuitiva. Considere essa propriedade dos hashes:
+
+> Se você hasheia n strings aleatórias, o **maior número de zeros à esquerda** que você verá nos hashes binários é **aproximadamente log₂(n)**.
+
+Por quê? Cada bit tem 50% de chance de ser 0. Probabilidade de hash começar com `k` zeros é 1/2^k. Se você sortear n hashes aleatórios, a chance de **pelo menos um** começar com k zeros é alta quando n é da ordem de 2^k.
+
+Operacionalmente: se o **maior** prefixo de zeros visto foi `Z`, estimamos cardinalidade ≈ `2^Z`.
+
+```
+hash("alice")  → 0001 0110 1100... (3 zeros à esquerda)
+hash("bob")    → 0100 1010 1001... (1 zero)
+hash("carol")  → 0000 0001 1011... (7 zeros)
+hash("dave")   → 1010 1100 0011... (0 zeros)
+...
+```
+
+Se o máximo de zeros foi 7, estimamos **~128 elementos distintos**. Note: passou `"alice"` mil vezes? Não afeta — o hash é determinístico, sempre dá os mesmos zeros. Estamos contando **distintos**, não totais.
+
+### O refinamento: harmonic mean sobre buckets
+
+Estimativa baseada em **um único máximo** tem variância enorme. HLL refina:
+
+1. Mantém **m buckets** (registers), cada um com seu próprio "maior número de zeros visto"
+2. Pra cada novo elemento, usa os primeiros bits do hash pra **escolher o bucket**
+3. Usa os bits restantes pra calcular zeros à esquerda
+4. Atualiza o bucket com o **máximo** entre valor atual e novo
+
+Pra estimar cardinalidade final, usa **média harmônica** dos buckets (harmonica é robusta a outliers — usa `1/x` em vez de `x`, "puxa" valores extremos pra perto da média). O paper de 2007 mostra que com **m = 2^14 = 16384 buckets**, erro fica em **~0.81%** com apenas **~12 KB de memória**.
+
+Em prática, Redis usa **HLL com 12 KB** e atinge erro **~0.81%** pra cardinalidades até bilhões.
+
+### Implementação simplificada
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class HyperLogLog {
+    private final int p;             // bits para escolher o bucket (ex: 14)
+    private final int m;             // número de buckets = 2^p
+    private final byte[] buckets;    // cada bucket guarda o max de zeros visto
+
+    public HyperLogLog(int precision) {
+        this.p = precision;          // 14 dá m=16384 buckets, ~0.81% erro
+        this.m = 1 << p;
+        this.buckets = new byte[m];
+    }
+
+    public void add(String item) {
+        long hash = hash64(item);
+        int bucketIdx = (int) (hash >>> (64 - p));         // primeiros p bits
+        long w = (hash << p) | (1L << (p - 1));            // resto + padding
+        int leadingZeros = Long.numberOfLeadingZeros(w) + 1;
+        if (leadingZeros > buckets[bucketIdx]) {
+            buckets[bucketIdx] = (byte) leadingZeros;
+        }
+    }
+
+    public long cardinality() {
+        double sum = 0;
+        for (byte b : buckets) sum += 1.0 / (1L << b);
+        double alpha = 0.7213 / (1 + 1.079 / m);
+        double estimate = alpha * m * m / sum;
+        // ... correções para small/large range omitidas
+        return Math.round(estimate);
+    }
+
+    private long hash64(String s) {
+        // hash 64-bit simples (em produção: MurmurHash3 ou xxHash)
+        long h = 0;
+        for (char c : s.toCharArray()) {
+            h = h * 31 + c;
+            h ^= h >>> 33;
+            h *= 0xff51afd7ed558ccdL;
+        }
+        return h;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <cmath>
+
+class HyperLogLog {
+private:
+    int p, m;
+    std::vector<uint8_t> buckets;
+
+    uint64_t hash64(const std::string& s) const {
+        uint64_t h = 0;
+        for (char c : s) {
+            h = h * 31 + (uint8_t)c;
+            h ^= h >> 33;
+            h *= 0xff51afd7ed558ccdULL;
+        }
+        return h;
+    }
+
+public:
+    HyperLogLog(int precision) : p(precision), m(1 << precision), buckets(1 << precision, 0) {}
+
+    void add(const std::string& item) {
+        uint64_t hash = hash64(item);
+        int bucketIdx = (int)(hash >> (64 - p));
+        uint64_t w = (hash << p) | (1ULL << (p - 1));
+        int leadingZeros = __builtin_clzll(w) + 1;
+        if ((uint8_t)leadingZeros > buckets[bucketIdx]) {
+            buckets[bucketIdx] = leadingZeros;
+        }
+    }
+
+    uint64_t cardinality() const {
+        double sum = 0;
+        for (auto b : buckets) sum += 1.0 / (1ULL << b);
+        double alpha = 0.7213 / (1.0 + 1.079 / m);
+        double estimate = alpha * m * m / sum;
+        return (uint64_t)std::round(estimate);
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+### Onde HLL está em produção
+
+- **Google BigQuery**: função `APPROX_COUNT_DISTINCT()` usa HLL++. Roda em segundos sobre tabelas com bilhões de linhas onde `COUNT(DISTINCT)` exato demoraria horas.
+- **Redis**: comandos `PFADD`, `PFCOUNT` — implementa HLL com 12 KB e erro ~0.81%.
+- **Amazon Redshift**, **Apache Druid**, **Facebook Presto**, **ClickHouse**: todos têm operadores nativos de HLL.
+- **Reddit**: contagem de "unique views" por post.
+- **Network monitoring**: contagem de unique IPs em janelas de tempo (detecção de DDoS, comportamento anômalo).
+- **Akamai**: estatísticas de tráfego em escala planetária.
+
+A operação **MERGE** entre HLLs é gloriosa: dadas duas HLLs (de dois shards diferentes, dois dias diferentes, etc), o merge é literalmente **`max` bucket por bucket**. Permite agregação distribuída trivial. É o motivo do HLL ser tão dominante em sistemas distribuídos.
+
+---
+
+## Count-Min Sketch: frequências sob orçamento
+
+Terceira pergunta clássica: **quantas vezes o elemento `x` apareceu?**
+
+Aplicação típica: "quais são os 100 termos mais buscados no Google hoje?", "quais IPs mais geraram tráfego nas últimas 24h?". Hash table mantendo um contador por elemento funciona, mas custa O(n) memória — onde n pode ser milhões.
+
+**Count-Min Sketch**, proposto por **Graham Cormode** e **S. Muthukrishnan** em **2003** (e formalizado no paper *"An Improved Data Stream Summary"* publicado em 2005 no Journal of Algorithms 55(1)), resolve isso com **poucos KBs**, com erro controlado.
+
+### Como o Count-Min Sketch funciona
+
+A estrutura:
+
+1. Matriz `count[d][w]` com `d` linhas (tipicamente 4-10) e `w` colunas (tipicamente milhares)
+2. `d` funções de hash independentes, cada uma mapeia elementos pra colunas em `[0, w-1]`
+
+**Incrementar `x`** (visto +1 vez):
+- Pra cada linha `i`, calcula `hᵢ(x)` e incrementa `count[i][hᵢ(x)]`
+
+**Consultar frequência de `x`**:
+- Pra cada linha `i`, calcula `hᵢ(x)`
+- **Retorna o MÍNIMO** entre `count[i][hᵢ(x)]` para todas as linhas
+
+A garantia: o resultado **nunca subestima** a frequência real (cada hash conta no mínimo as vezes que o elemento apareceu). Pode **superestimar** por causa de colisões com outros elementos. **Pegar o mínimo** entre as várias estimativas reduz o impacto das colisões.
+
+```
+                col 0   col 1   col 2   col 3   col 4
+     linha 0:    5       12      3       8       0     ← h0
+     linha 1:    7       4       9       2       11    ← h1
+     linha 2:    1       8       6       15      3     ← h2
+     linha 3:    11      2       7       4       9     ← h3
+
+consulta x:
+  h0(x) = 1 → count[0][1] = 12
+  h1(x) = 3 → count[1][3] = 2
+  h2(x) = 4 → count[2][4] = 3
+  h3(x) = 0 → count[3][0] = 11
+
+resposta: min(12, 2, 3, 11) = 2
+```
+
+**Garantia**: com `w = ⌈e/ε⌉` colunas e `d = ⌈ln(1/δ)⌉` linhas, o erro de superestimação é no máximo `ε × ||a||₁` com probabilidade `1 - δ`, onde `||a||₁` é a soma de todas as frequências (total de elementos processados).
+
+### Aplicações em produção
+
+- **Network monitoring**: detectar **heavy hitters** (IPs com muito tráfego) — Cisco usa em hardware
+- **Real-time analytics**: top-K queries em streams (Facebook Scribe, Twitter Heron)
+- **Cache eviction**: identificar quais chaves são "frias" pra eliminar
+- **NLP / análise de texto**: contagem de n-gramas em corpus gigantes
+- **DDoS detection**: identificar fontes com requisições anômalas
+
+---
+
+## A filosofia das estruturas probabilísticas
+
+Recap conceitual antes de fechar.
+
+**Cada sketch faz um trade-off**:
+- **Precisão** ← → **Memória**
+- Sketches são pequenos porque admitem **erro controlado**
+
+**Cada sketch tem um modo específico de errar**:
+- Bloom: falso positivo (diz "está" quando não está), nunca falso negativo
+- HLL: erro de ±~2% na estimativa
+- Count-Min: superestima frequência, nunca subestima
+
+**Sketches são "componíveis"**:
+- Bloom: OR bit-a-bit pra unir dois filtros
+- HLL: max bucket-a-bucket pra unir
+- Count-Min: soma posição-a-posição pra unir
+
+Essa **componibilidade** é o que torna sketches dominantes em **sistemas distribuídos**. Cada shard mantém seu próprio sketch, e merge no final é trivial. Compara com agregação exata, que requer juntar todos os dados num lugar — frequentemente impossível em escala web.
+
+---
+
+## Recap
+
+**Burton Howard Bloom (1970)** introduziu a ideia revolucionária de **trocar exatidão por memória** no paper *"Space/Time Trade-offs in Hash Coding with Allowable Errors"*. Originou toda uma família de estruturas probabilísticas usadas em sistemas distribuídos modernos.
+
+**Bloom Filter** responde "está no set?". Usa **array de bits + k funções de hash**. Pode dar **falso positivo, nunca falso negativo**. ~10 bits por elemento pra 1% de erro. Em produção: **Cassandra, HBase, RocksDB, Bitcoin, Chrome Safe Browsing, Redis**.
+
+**HyperLogLog** (Flajolet et al, 2007) responde "quantos distintos?". Usa **trick estatístico de contar zeros à esquerda em hashes**, com **harmonic mean sobre buckets**. ~1.5 KB pra cardinalidades até bilhões com erro ~0.81%. Em produção: **Google BigQuery (APPROX_COUNT_DISTINCT), Redis (PFADD/PFCOUNT), Redshift, Druid, Presto, ClickHouse**. História: linhagem de 30+ anos começando com Flajolet-Martin (1984), passando por LogLog (2003), HLL (2007), HLL++ Google (2013).
+
+**Count-Min Sketch** (Cormode-Muthukrishnan 2003) responde "qual a frequência de x?". Usa **matriz d × w + d hashes + mínimo dos d valores**. **Superestima, nunca subestima**. Em produção: **network monitoring (heavy hitters), real-time analytics top-K, DDoS detection, NLP/text analytics**.
+
+**Filosofia central**: sketches trocam precisão por memória, cada um com modo específico de errar, e são **componíveis** — fundamental pra sistemas distribuídos onde merge entre shards é necessário.
+
+Onde isso aparece: praticamente todo sistema em escala "web". **Google BigQuery, Cassandra, Redis, Bitcoin, Bigtable, Akamai CDN, Cloudflare, Facebook Scribe, Twitter Heron** — sempre que tem dado demais pra caber em memória, sketches estão lá.
+
+Próxima direção sugerida: **Fluxo em Redes** (Ford-Fulkerson, Edmonds-Karp, max-flow / min-cut) — outra área clássica de algoritmos com aplicações em matching bipartido, segmentação de imagem, logística. Ou pode mudar de trilha — bancos de dados, sistemas operacionais, redes, arquitetura de software. Manda qual direção.

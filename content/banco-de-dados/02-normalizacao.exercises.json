@@ -1,0 +1,127 @@
+[
+  {
+    "id": "norm-01",
+    "enunciado": "Quais são os TRÊS tipos clássicos de anomalia que a normalização resolve?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Anomalia de leitura, escrita e busca",
+      "Anomalia de INSERÇÃO (não consegue cadastrar X sem ter Y junto), de ATUALIZAÇÃO (precisa atualizar dados em N lugares e algum vai escapar), e de REMOÇÃO (deletar uma coisa apaga outra que você queria manter). Essas são as três 'patologias' clássicas que tabelas desnormalizadas sofrem",
+      "Anomalia de tipo, formato e tamanho",
+      "Anomalia de hardware, software e rede"
+    ],
+    "resposta": 1,
+    "explicacao": "As três anomalias clássicas: (1) ANOMALIA DE INSERÇÃO — você não consegue cadastrar uma entidade sozinha. Ex: tabela única Pedido-Cliente; pra cadastrar cliente novo sem pedido, precisa inserir linha com pedido_id NULL/falso. (2) ANOMALIA DE ATUALIZAÇÃO — dado se repete em várias linhas; ao atualizar, algum lugar escapa e fica inconsistente. Ex: cliente 'Bruno Kenji' aparece em 5 linhas; mudou o email, esqueceu de atualizar em uma → inconsistência. (3) ANOMALIA DE REMOÇÃO — deletar uma coisa apaga outra. Ex: deletar o último pedido de um cliente deleta o cliente também, perdendo o dado. Solução: NORMALIZAÇÃO — quebrar a tabela única em várias tabelas menores, cada uma com uma responsabilidade. Codd propôs as três primeiras formas normais nos papers de 1970-1971."
+  },
+  {
+    "id": "norm-02",
+    "enunciado": "Quem inventou a normalização e quais papers definiram as três primeiras formas normais?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Peter Chen, no paper ER de 1976",
+      "Edgar F. Codd. 1NF: paper original 'A Relational Model of Data for Large Shared Data Banks' (CACM 13(6), 1970). 2NF e 3NF: paper 'Further Normalization of the Data Base Relational Model' (IBM Research Report RJ909, apresentado no Courant Computer Science Symposia 6 em NYC, maio de 1971, publicado em 1972 como livro)",
+      "Larry Ellison, com o Oracle em 1979",
+      "Donald Knuth, em 1973"
+    ],
+    "resposta": 1,
+    "explicacao": "Edgar F. Codd inventou e formalizou normalização em dois papers: (1) 'A Relational Model of Data for Large Shared Data Banks' (Communications of the ACM 13(6), junho 1970) — introduz implicitamente 1NF como 'valores atômicos'; na época era só 'normalização', sem número; (2) 'Further Normalization of the Data Base Relational Model' (IBM Research Report RJ909, agosto 1971) — apresentado no Courant Computer Science Symposia 6 em Nova York em maio de 1971; republicado em 1972 no livro 'Data Base Systems' editado por Randall J. Rustin. Esse segundo paper formaliza 2NF e 3NF e introduz o pipeline UNF → 1NF → 2NF → 3NF. É quando 1NF foi NOMEADA — antes era só 'normalização'. BCNF foi formalizada por Codd e Raymond Boyce em 1974 no IFIP Congress; 4NF e 5NF por Ronald Fagin (IBM) entre 1977-1979."
+  },
+  {
+    "id": "norm-03",
+    "enunciado": "O que é uma DEPENDÊNCIA FUNCIONAL (FD)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Quando uma função SQL depende de outra",
+      "Notação X → Y significa: para cada valor único de X, existe EXATAMENTE UM valor de Y correspondente. Ex: cpf → nome (cada CPF identifica unicamente uma pessoa). É uma GARANTIA ESTRUTURAL — toda vez que dois registros têm o mesmo X, terão o mesmo Y. Sempre. Não é correlação estatística. Identificar as FDs do domínio é o passo MAIS IMPORTANTE da modelagem",
+      "Dependência entre dois bancos de dados",
+      "Quando uma tabela tem foreign key apontando para outra"
+    ],
+    "resposta": 1,
+    "explicacao": "Dependência funcional (FD), notação X → Y, significa: para cada valor único de X, existe EXATAMENTE UM valor de Y correspondente. Lê-se 'X determina Y' ou 'Y depende funcionalmente de X'. Exemplos: cpf → nome (cada CPF identifica uma pessoa específica); cep → cidade (cada CEP pertence a uma cidade); pedido_id → cliente_id (cada pedido pertence a um cliente). NÃO É CORRELAÇÃO — é GARANTIA ESTRUTURAL do modelo. Toda vez que dois registros têm o mesmo X, terão o mesmo Y. Sempre. FDs são definidas pelo domínio do negócio, não pelos dados específicos atuais. Identificar as FDs corretas é o passo mais importante da modelagem porque AS FORMAS NORMAIS SÃO DEFINIDAS EM TERMOS DELAS. Três variantes problemáticas: (1) dependência parcial (parte de chave composta determina atributo) — viola 2NF; (2) dependência transitiva (X→Y→Z onde Y não é chave) — viola 3NF; (3) determinante que não é superkey — viola BCNF."
+  },
+  {
+    "id": "norm-04",
+    "enunciado": "A primeira forma normal (1NF) exige valores ATÔMICOS em cada célula. Considerando isso, qual a melhor avaliação do suporte a JSON/arrays em PostgreSQL e MySQL modernos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "PostgreSQL e MySQL violam 1NF, então não deveriam ser usados",
+      "Tecnicamente, JSON e arrays VIOLAM 1NF — são valores não-atômicos. Mas são tolerados na prática como conveniência (caches, configs, dados semi-estruturados). REGRA PRÁTICA: se o conteúdo dentro do JSON/array vai ser CONSULTADO/ORDENADO/INDEXADO, normalize (crie tabela). Se é OPACO (apenas lido como bloco), JSON pode ser apropriado",
+      "JSON é sempre uma boa ideia, normalização é obsoleta",
+      "Arrays em PostgreSQL não violam 1NF porque são tipados"
+    ],
+    "resposta": 1,
+    "explicacao": "Sim, JSON e arrays tecnicamente violam 1NF (valores não-atômicos). Mas SGBDs modernos toleram isso por conveniência prática. REGRA: avalie o USO. Se você vai CONSULTAR, ORDENAR, INDEXAR ou FILTRAR pelo conteúdo interno → NORMALIZE, crie tabela. Se é DADO OPACO (apenas lido/escrito como bloco) → JSON pode ser apropriado. EXEMPLOS BONS pra JSON: usuario.preferencias_ui = {tema: 'dark', lang: 'pt-BR'}; produto.metadata_seo = {keywords: [...], description: '...'}; transacao.dados_externos_api = {provider: 'stripe', raw_response: {...}}. EXEMPLOS RUINS (deveriam ser tabela): usuario.pedidos = [101, 102, 103] (impossível fazer JOIN, integridade referencial); produto.tags = ['eletronico', 'novidade'] (filtrar produtos por tag vira string parse); aluno.disciplinas = [...] (relacionamento N:M óbvio). PostgreSQL tem JSONB com indexing GIN — performance boa, mas perde garantias relacionais (integridade referencial dentro do JSON, validação de schema). Use com critério."
+  },
+  {
+    "id": "norm-05",
+    "enunciado": "Quando a Segunda Forma Normal (2NF) é RELEVANTE de fato?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sempre é relevante, em toda tabela",
+      "Só é relevante quando a PK é COMPOSTA (múltiplas colunas). Se a PK é simples (uma coluna só), a tabela está automaticamente em 2NF porque não existe 'parte da chave' a partir da qual algo possa depender. 2NF proíbe DEPENDÊNCIA PARCIAL — atributos dependendo só de parte da chave composta",
+      "Só é relevante em PostgreSQL",
+      "Nunca é relevante, foi superada pela 3NF"
+    ],
+    "resposta": 1,
+    "explicacao": "2NF só faz diferença quando PK é COMPOSTA (formada por múltiplas colunas). Razão: 2NF proíbe DEPENDÊNCIA PARCIAL, que é quando parte de uma chave composta determina um atributo. Se PK é simples (1 coluna), não existe 'parte da chave' — então automaticamente está em 2NF. EXEMPLO de violação: tabela Matricula com PK = (aluno_id, disciplina_id) e atributos {nota, nome_disciplina, carga_horaria}. nota depende da chave INTEIRA (cada par aluno-disciplina tem uma nota). MAS nome_disciplina depende SÓ de disciplina_id (metade da chave) — dependência parcial. carga_horaria também. Consequência: 'Algoritmos I' se repete em 3 linhas; mudar carga horária = update em N linhas. SOLUÇÃO: separar disciplina em tabela própria. Em sistemas reais com PKs surrogate (auto-increment, UUID), 2NF é quase sempre trivialmente satisfeita — você só precisa pensar em 2NF se está usando PKs compostas naturais (ex: (id_pedido, id_produto) como PK de ItemPedido)."
+  },
+  {
+    "id": "norm-06",
+    "enunciado": "A Terceira Forma Normal (3NF) proíbe o quê?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Chaves estrangeiras entre tabelas",
+      "DEPENDÊNCIA TRANSITIVA: X→Y→Z onde Y NÃO É CHAVE. Em outras palavras, atributos não-chave dependendo de OUTROS atributos não-chave. Ex: funcionario_id → departamento_id → departamento_nome — departamento_nome depende transitivamente de funcionario_id via departamento_id (que não é chave). Solução: extrair Departamento em tabela própria",
+      "Tabelas com mais de 10 colunas",
+      "Uso de NULL em colunas"
+    ],
+    "resposta": 1,
+    "explicacao": "3NF proíbe DEPENDÊNCIA TRANSITIVA: X → Y → Z onde Y não é chave. Equivalente: todo atributo não-chave deve depender DIRETAMENTE da PK, e somente dela. EXEMPLO violação: tabela Funcionario com PK funcionario_id e colunas {nome, departamento_id, departamento_nome, departamento_localizacao}. PK é simples → 2NF satisfeita. MAS: funcionario_id → departamento_id ✓; departamento_id → departamento_nome ✓; logo funcionario_id → departamento_id → departamento_nome = TRANSITIVA. departamento_nome é determinado por departamento_id, que NÃO É PK. Viola 3NF. Consequência prática: 'TI, Cruzeiro' se repete em todas as linhas de funcionários de TI; se TI muda de cidade, update em N linhas; se cadastra depto novo sem funcionário, não dá. SOLUÇÃO: criar tabela Departamento(departamento_id PK, nome, localizacao) e em Funcionario só guardar FK departamento_id. JOIN pra consultar nome — rápido com índice. Esta é a forma normal mais 'útil' na prática — 3NF resolve a maioria das redundâncias problemáticas."
+  },
+  {
+    "id": "norm-07",
+    "enunciado": "Qual a mnemônica clássica para as três primeiras formas normais, atribuída a William Kent (1983)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "'Atomic, unique, indexed'",
+      "'Every non-key attribute must provide a fact about the key, the WHOLE key, and NOTHING BUT the key — so help me Codd.' Mapeamento: 'the key' = 1NF (atributos são fatos sobre a linha identificada pela PK); 'the WHOLE key' = 2NF (não parte dela); 'NOTHING BUT the key' = 3NF (não outros atributos não-chave). 'So help me Codd' é piada — paródia do juramento jurídico americano 'so help me God'",
+      "'Normalize, optimize, index'",
+      "'First do, second think, third refactor'"
+    ],
+    "resposta": 1,
+    "explicacao": "'Every non-key attribute must provide a fact about the key, the whole key, and nothing but the key — so help me Codd.' Atribuída a William Kent no paper 'A Simple Guide to Five Normal Forms in Relational Database Theory' (Communications of the ACM 26(2), fevereiro 1983, pp. 120-125) — uma das referências didáticas mais citadas sobre formas normais. Mapeamento: 'the key' (fact about the key) → 1NF — atributos são fatos sobre o registro identificado pela PK, e cada célula é atômica; 'the WHOLE key' → 2NF — atributos dependem da chave INTEIRA, não de parte dela; 'NOTHING BUT the key' → 3NF — atributos dependem DIRETAMENTE da PK, não transitivamente via outros não-chave. 'So help me Codd' é piada — paródia do juramento jurídico americano 'so help me God', tradição em humor de database. A frase é tão eficiente que é usada literalmente em livros-texto modernos (Elmasri-Navathe, Date, Silberschatz)."
+  },
+  {
+    "id": "norm-08",
+    "enunciado": "Quem inventou a BCNF e qual sua TRAGÉDIA HISTÓRICA?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, e nada de trágico aconteceu",
+      "Raymond F. Boyce e Edgar F. Codd, formalizada no paper 'Recent Investigations in Relational Data Base Systems' (IFIP Congress, Estocolmo, 1974). TRAGÉDIA: Boyce MORREU EM 1974 ANTES DO PAPER SAIR, aos 26 anos, de aneurisma cerebral. Era co-criador do SQL junto com Donald Chamberlin. CURIOSIDADE: Ian Heath descreveu o que viraria BCNF 3 anos antes (1971), então Chris Date defende publicamente que deveria chamar-se 'Heath normal form'",
+      "Tim Berners-Lee, em 1989",
+      "Larry Ellison, na fundação da Oracle"
+    ],
+    "resposta": 1,
+    "explicacao": "Raymond F. Boyce e Edgar F. Codd formalizaram BCNF (Boyce-Codd Normal Form) no paper 'Recent Investigations in Relational Data Base Systems' apresentado no IFIP Congress em Estocolmo, agosto 1974, pp. 1017-1021. TRAGÉDIA: BOYCE MORREU EM 1974, AOS 26 ANOS, ANTES DO PAPER SAIR PUBLICADO. Causa: aneurisma cerebral. Era co-criador do SQL (Structured Query Language) junto com Donald Chamberlin no projeto System R da IBM — eles publicaram o paper original 'SEQUEL: A Structured English Query Language' em 1974. BCNF leva o nome dele como homenagem póstuma. CURIOSIDADE HISTÓRICA: Ian Heath publicou em 1971 o paper 'Unacceptable File Operations in a Relational Database' (Proc. ACM SIGFIDET Workshop, San Diego, novembro 1971) descrevendo a mesma propriedade que viraria BCNF — TRÊS ANOS ANTES de Boyce-Codd. Chris Date (colaborador de Codd na IBM) defende publicamente em seu livro que deveria se chamar 'Heath normal form'. Não pegou. Boyce também é homenageado em um dos prêmios da SIGMOD."
+  },
+  {
+    "id": "norm-09",
+    "enunciado": "Qual a diferença sutil entre 3NF e BCNF?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "BCNF é só uma versão renomeada de 3NF",
+      "BCNF é mais rigorosa: exige que TODO determinante (lado esquerdo de uma FD não-trivial) seja SUPERKEY. 3NF permite exceção: aceita A→B com A não-superkey desde que B seja atributo primo (parte de chave candidata). BCNF não aceita essa exceção. CASO CLÁSSICO: tabela (aluno, materia, professor) onde professor → materia. Está em 3NF (professor é parte da chave candidata (aluno, professor)) mas viola BCNF (professor determina materia sem ser superkey)",
+      "BCNF é só para PostgreSQL, 3NF para MySQL",
+      "3NF é mais rigorosa que BCNF"
+    ],
+    "resposta": 1,
+    "explicacao": "BCNF é versão MAIS RIGOROSA de 3NF — toda tabela em BCNF está em 3NF, mas o oposto não vale. Diferença formal: 3NF aceita uma exceção que BCNF rejeita. REGRA BCNF: todo determinante (lado esquerdo de FD não-trivial) deve ser superkey (chave candidata ou superconjunto). REGRA 3NF: aceita A→B onde A não é superkey, DESDE QUE B seja atributo primo (parte de alguma chave candidata). EXEMPLO CLÁSSICO onde 3NF passa mas BCNF falha: tabela Aulas(aluno, materia, professor) com FDs: (aluno, materia) → professor; professor → materia (cada professor leciona uma matéria). Chaves candidatas: (aluno, materia) E (aluno, professor). 3NF: 'professor' é atributo primo (parte de chave candidata), então a FD professor→materia é tolerada. BCNF: professor não é superkey, viola. Consequência prática: 'Mendel leciona Algoritmos' se repete em N linhas (uma por aluno do Mendel). Mendel muda de matéria? Update em N linhas. TRADE-OFF: BCNF nem sempre permite decomposição preservando dependências (3NF sim). Em produção: a maioria mira 3NF; BCNF é alvo de 'fundamentalistas' ou casos específicos com chaves sobrepostas."
+  },
+  {
+    "id": "norm-10",
+    "enunciado": "Verdadeiro ou falso: A normalização é sempre obrigatória. DESNORMALIZAR (manter dados redundantes deliberadamente) é sempre um erro de modelagem.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Em alguns cenários, DESNORMALIZAR DELIBERADAMENTE é a escolha correta — desde que feito com INTENÇÃO EXPLÍCITA e documentado. Casos legítimos: (1) OLAP / DATA WAREHOUSE — schemas estrela (star schema) propositalmente desnormalizam dimensões pra acelerar queries analíticas. Trade-off: compromete consistência (não tem updates online), ganha performance brutal em queries; (2) CACHE DE CAMPO CALCULADO — armazenar total_pedido em Pedido em vez de recalcular do ItemPedido toda vez. Viola 3NF mas pode valer com triggers ou materialização; (3) REPORTING / DASHBOARDS EM TEMPO REAL — views materializadas, tabelas resumidas pré-calculadas; (4) DADOS IMUTÁVEIS — lookup tables grandes que nunca atualizam (zip codes, países). REGRA GERAL: normalize até 3NF/BCNF por padrão. Desnormalize APENAS quando: (a) tem benchmark de performance mostrando o problema; (b) entende e aceita o risco de inconsistência; (c) documenta o motivo. DESNORMALIZAÇÃO PREMATURA é como otimização prematura — gera dívida técnica brutal. Bug clássico: 'guardei total no Pedido pra performance' → 6 meses depois, total não bate com soma dos itens porque alguém esqueceu de atualizar."
+  }
+]

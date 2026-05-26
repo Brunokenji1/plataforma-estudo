@@ -1,0 +1,559 @@
+---
+titulo: "String Matching: Como o grep Acha um Padrão em 1 GB de Texto em Milissegundos"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Donald E. Knuth, James H. Morris Jr., Vaughan R. Pratt (1977), 'Fast Pattern Matching in Strings', SIAM Journal on Computing 6(2), pp. 323-350"
+  - "Robert S. Boyer, J Strother Moore (1977), 'A Fast String Searching Algorithm', Communications of the ACM 20(10), pp. 762-772"
+  - "Richard M. Karp, Michael O. Rabin (1987), 'Efficient randomized pattern-matching algorithms', IBM Journal of Research and Development 31(2), pp. 249-260"
+  - "Michael O. Rabin, Richard M. Karp (1981, technical report Harvard) — versão original anterior"
+  - "Maxime Crochemore, Christophe Hancart, Thierry Lecroq (2007), 'Algorithms on Strings', Cambridge University Press"
+  - "Dan Gusfield (1997), 'Algorithms on Strings, Trees, and Sequences: Computer Science and Computational Biology', Cambridge University Press"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 32 — String Matching"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 5.3 — Substring Search (Princeton)"
+  - "MIT OCW 6.006 (Spring 2020), Lecture 19 — String Matching, Erik Demaine, Jason Ku"
+---
+
+## O ano mágico de 1977
+
+1977 foi um ano absurdo pra algoritmos de strings. Em **um único ano**, três grupos de pesquisadores diferentes publicaram **três algoritmos rivais** que resolveram, em tempo linear, o problema mais fundamental em texto: **dado um padrão P e um texto T, encontre todas as ocorrências de P em T**.
+
+Os três algoritmos:
+
+- **KMP** (Knuth-Morris-Pratt), publicado por **Donald Knuth**, **James Morris Jr.** e **Vaughan Pratt** no SIAM Journal on Computing — paper *"Fast Pattern Matching in Strings"*
+- **Boyer-Moore**, publicado por **Robert Boyer** e **J Strother Moore** no Communications of the ACM — paper *"A Fast String Searching Algorithm"*
+- **Rabin-Karp**, formulado por **Richard Karp** e **Michael Rabin** em 1981 mas com ideias circulando antes — abordagem com **hashing**
+
+Cada um ataca o problema de uma forma radicalmente diferente. **KMP** preprocessa o **padrão** pra evitar refazer comparações. **Boyer-Moore** compara o padrão **da direita pra esquerda** e usa heurísticas pra dar saltos grandes. **Rabin-Karp** usa **hashing rolante** pra comparar janelas em tempo médio constante.
+
+Os três rodam hoje em todo lugar onde texto é processado: `grep`, `vim`, browser "Ctrl+F", banco de dados, análise de DNA, detecção de plágio, sistemas de busca, antivírus. **Boyer-Moore é o motor do grep há quase 50 anos.** Esse trio define o que sabemos sobre busca em strings.
+
+Esta lição cobre cada um deles — a intuição, o algoritmo, e onde ele aparece em produção. Vai ser denso, mas no fim você vai entender por que `Ctrl+F` no Chrome responde em milissegundos mesmo em páginas com megabytes de texto.
+
+---
+
+## A solução ingênua que todo mundo escreve
+
+Antes de mergulhar nos três algoritmos espertos, vale calibrar o que estamos tentando bater.
+
+A solução **brute force** que qualquer programador escreve em 30 segundos:
+
+```java
+public List<Integer> buscaNaive(String texto, String padrao) {
+    List<Integer> ocorrencias = new ArrayList<>();
+    int n = texto.length();
+    int m = padrao.length();
+
+    for (int i = 0; i <= n - m; i++) {           // tenta cada posição inicial
+        int j = 0;
+        while (j < m && texto.charAt(i + j) == padrao.charAt(j)) j++;
+        if (j == m) ocorrencias.add(i);          // match completo
+    }
+    return ocorrencias;
+}
+```
+
+**Complexidade**: O(n × m) no pior caso. Pra texto `"aaaaaaaaaaaaa"` e padrão `"aaab"`, em cada uma das n posições compara quase m caracteres antes de falhar.
+
+Pra padrões pequenos em textos normais, brute force é até razoável — não é tão ruim quanto parece porque a maioria das comparações falha cedo. Mas pra padrões longos ou textos com muita repetição, fica lento. KMP, BM e RK resolvem isso de jeitos diferentes.
+
+---
+
+## KMP: aprender com o próprio padrão
+
+A ideia mais sutil dos três. **Knuth-Morris-Pratt** parte de uma observação simples:
+
+> Quando ocorre um mismatch depois de já termos casado vários caracteres, **o próprio padrão contém informação suficiente** pra decidir pra onde pular sem revisitar caracteres já comparados.
+
+Considere: padrão `P = "ABABAC"`. Você está procurando em `T = "ABABABABAC"`. Compara:
+
+```
+T:  A B A B A B A B A C
+P:  A B A B A C
+            ^ mismatch! (A != A, espera, vamos refazer)
+```
+
+Espera, vou refazer com um exemplo mais limpo. Padrão `P = "ABABCABAB"`, mismatch acontece na posição 5 do padrão (índice 0-based, o `C`):
+
+```
+T:  A B A B A B C A B A B C A B A B
+P:  A B A B C A B A B
+            ^ mismatch (texto A != padrão C)
+```
+
+Brute force: volta no texto pra próxima posição, recomeça do zero:
+
+```
+T:  A B A B A B C ...
+P:    A B A B C A B A B
+```
+
+Olha o desperdício: já sabíamos que os caracteres 0-3 do padrão (`ABAB`) casaram com o texto. **A informação útil**: o padrão começa com `ABAB`, e os caracteres que casamos formam um prefixo do padrão. Não precisa comparar do zero.
+
+### A função de falha (failure function)
+
+KMP preprocessa o padrão pra computar uma tabela `failure[i]` que responde:
+
+> Pra cada índice `i`, qual o **maior prefixo próprio** de `P[0..i]` que também é **sufixo** de `P[0..i]`?
+
+Pra padrão `P = "ABABCABAB"`:
+
+```
+i:        0   1   2   3   4   5   6   7   8
+P[i]:     A   B   A   B   C   A   B   A   B
+failure:  0   0   1   2   0   1   2   3   4
+```
+
+Como ler: `failure[3] = 2` significa que `P[0..3] = "ABAB"` tem prefixo `"AB"` que também é sufixo. Após o mismatch, em vez de voltar pro início do padrão, **podemos pular pra posição 2** porque os 2 primeiros caracteres já estão casados.
+
+### Algoritmo completo
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class KMP {
+
+    // Constrói a tabela de falha em O(m)
+    public static int[] construirFailure(String padrao) {
+        int m = padrao.length();
+        int[] failure = new int[m];
+        int k = 0;                                    // tamanho do prefixo casado anterior
+        for (int i = 1; i < m; i++) {
+            while (k > 0 && padrao.charAt(k) != padrao.charAt(i)) {
+                k = failure[k - 1];
+            }
+            if (padrao.charAt(k) == padrao.charAt(i)) k++;
+            failure[i] = k;
+        }
+        return failure;
+    }
+
+    // Busca todas as ocorrências em O(n + m)
+    public static List<Integer> buscar(String texto, String padrao) {
+        List<Integer> ocorrencias = new ArrayList<>();
+        int n = texto.length();
+        int m = padrao.length();
+        if (m == 0) return ocorrencias;
+
+        int[] failure = construirFailure(padrao);
+        int j = 0;                                    // próximo char do padrão a comparar
+        for (int i = 0; i < n; i++) {
+            while (j > 0 && texto.charAt(i) != padrao.charAt(j)) {
+                j = failure[j - 1];                    // pula usando a failure function
+            }
+            if (texto.charAt(i) == padrao.charAt(j)) j++;
+            if (j == m) {
+                ocorrencias.add(i - m + 1);
+                j = failure[j - 1];                    // continua buscando próximas ocorrências
+            }
+        }
+        return ocorrencias;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+
+std::vector<int> construirFailure(const std::string& padrao) {
+    int m = padrao.size();
+    std::vector<int> failure(m, 0);
+    int k = 0;
+    for (int i = 1; i < m; i++) {
+        while (k > 0 && padrao[k] != padrao[i]) {
+            k = failure[k - 1];
+        }
+        if (padrao[k] == padrao[i]) k++;
+        failure[i] = k;
+    }
+    return failure;
+}
+
+std::vector<int> buscarKMP(const std::string& texto, const std::string& padrao) {
+    std::vector<int> ocorrencias;
+    int n = texto.size();
+    int m = padrao.size();
+    if (m == 0) return ocorrencias;
+
+    std::vector<int> failure = construirFailure(padrao);
+    int j = 0;
+    for (int i = 0; i < n; i++) {
+        while (j > 0 && texto[i] != padrao[j]) {
+            j = failure[j - 1];
+        }
+        if (texto[i] == padrao[j]) j++;
+        if (j == m) {
+            ocorrencias.push_back(i - m + 1);
+            j = failure[j - 1];
+        }
+    }
+    return ocorrencias;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n + m). Preprocessamento O(m), busca O(n). **Linear no total de caracteres envolvidos** — não importa o quanto o texto se repete.
+
+<ComplexidadeBox melhor="O(n+m)" media="O(n+m)" pior="O(n+m)" />
+
+### A história do paper
+
+O paper *"Fast Pattern Matching in Strings"* (Knuth, Morris, Pratt, SIAM J. Comp. 6(2), 1977) tem uma curiosidade. Knuth chegou ao algoritmo por uma **rota não-óbvia**: estudando o teorema do **Stephen Cook (1972)** sobre autômatos de pilha de duas vias. Ele queria mostrar que qualquer linguagem reconhecível por esse tipo de máquina pode ser reconhecida em tempo linear em uma máquina de acesso aleatório — uma derivação puramente teórica.
+
+Pratt já tinha derivado independentemente uma versão do algoritmo, e Morris tinha um precursor (chamado **Morris-Pratt**, a versão sem a otimização final do Knuth). Eles juntaram as três versões em um paper conjunto. **KMP** ficou.
+
+CLRS (livro de referência) na verdade explica o algoritmo **Morris-Pratt** simplificado, deixando a otimização final do Knuth como exercício — a explicação completa de KMP "puro" é genuinamente difícil de seguir. Não é só você.
+
+<Insight>
+**Donald Knuth ganhou o Turing Award em 1974**, dois anos depois de derivar KMP, em parte pelo trabalho de fundação da análise de algoritmos. O paper de 1977 é considerado um dos exemplos mais elegantes de **derivação algorítmica** — você consegue chegar ao KMP **construtivamente** a partir de princípios mais básicos.
+</Insight>
+
+---
+
+## Boyer-Moore: o motor do grep
+
+Enquanto KMP avança pelo padrão da esquerda pra direita, **Boyer-Moore (BM)** faz algo radical: **compara o padrão de trás pra frente**.
+
+A ideia: alinha o padrão sobre o texto, compara da última letra pra primeira. Quando ocorre mismatch, usa **duas heurísticas** pra pular o máximo possível de caracteres no texto. Resultado: em casos típicos, BM **pula caracteres do texto que nem chega a olhar**. Para padrões longos em alfabetos grandes, é o algoritmo mais rápido conhecido.
+
+```
+Texto:  E X E M P L O   D E   T E X T O   B O M
+Padrão:           A B C
+                    ^ compara última primeiro (C com M)
+```
+
+Mismatch! `C` não casa com `M`. Agora BM pergunta: "o que fazer?"
+
+### Heurística 1: Bad Character
+
+O caractere `M` do texto não está no padrão `ABC`. Não tem como `M` casar com nada do padrão. **Pula o padrão inteiro pra depois desse `M`** — saltando 3 caracteres de uma vez (no exemplo simplificado).
+
+Em geral: se o caractere `c` do texto que causou mismatch aparece no padrão na posição `k` (a última ocorrência antes do ponto de mismatch), desloca o padrão pra alinhar essa posição com o `c`. Se não aparece, pula o padrão totalmente.
+
+### Heurística 2: Good Suffix
+
+Considere: padrão `ABCDABCD`, texto `...XABCDABCD...`. Compara da direita:
+
+```
+Texto:   X A B C D A B C D
+Padrão:    A B C D X B C D     (padrão hipotético com mismatch)
+                   ^ mismatch
+```
+
+Mas o sufixo `BCD` já casou. **Esse `BCD` aparece em outro lugar do padrão?** Se aparece, alinha esse "outro BCD". Se não aparece, mas um **prefixo** do padrão é sufixo do `BCD` casado, alinha esse prefixo. Senão, pula o padrão inteiro.
+
+### Combinando as duas
+
+A cada mismatch, calcula o salto pelas duas heurísticas e **pega o maior dos dois**. Pré-computa tabelas pra fazer cada salto em O(1).
+
+```
+Pseudocódigo (simplificado, sem o código de pré-processamento):
+
+i = 0   // posição no texto
+enquanto i <= n - m:
+    j = m - 1   // comparar do fim
+    enquanto j >= 0 e texto[i+j] == padrão[j]:
+        j--
+    se j < 0:
+        match encontrado em i
+        i += próximo_salto_apos_match
+    senão:
+        salto_bad_char = ...
+        salto_good_suffix = ...
+        i += max(salto_bad_char, salto_good_suffix)
+```
+
+A implementação completa de Boyer-Moore com as duas heurísticas é uma das tarefas mais cabeçudas em algoritmos de undergrad — calcular a tabela do **good suffix** corretamente exige cuidado. Quase ninguém escreve do zero em produção; usa-se variantes simplificadas.
+
+### A versão simplificada: Boyer-Moore-Horspool
+
+Em **1980**, **Nigel Horspool** publicou uma simplificação que usa **apenas a heurística bad character** (descarta good suffix). É quase tão rápido quanto BM em prática, mas **muito mais simples** de implementar. É a versão mais comumente usada em produção.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class BoyerMooreHorspool {
+
+    // Constrói tabela "skip" (bad character) em O(m + sigma)
+    private static int[] construirSkip(String padrao, int alfabetoSize) {
+        int m = padrao.length();
+        int[] skip = new int[alfabetoSize];
+        for (int i = 0; i < alfabetoSize; i++) skip[i] = m;
+        for (int i = 0; i < m - 1; i++) {              // não inclui o último
+            skip[padrao.charAt(i)] = m - 1 - i;
+        }
+        return skip;
+    }
+
+    public static int buscar(String texto, String padrao) {
+        int n = texto.length();
+        int m = padrao.length();
+        if (m == 0) return 0;
+        int[] skip = construirSkip(padrao, 256);       // assume ASCII
+
+        int i = 0;
+        while (i <= n - m) {
+            int j = m - 1;
+            // compara da direita pra esquerda
+            while (j >= 0 && padrao.charAt(j) == texto.charAt(i + j)) j--;
+            if (j < 0) return i;                        // match!
+            i += skip[texto.charAt(i + m - 1)];         // pula baseado no último caractere
+        }
+        return -1;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <string>
+#include <vector>
+
+int buscarBMH(const std::string& texto, const std::string& padrao) {
+    int n = texto.size();
+    int m = padrao.size();
+    if (m == 0) return 0;
+
+    // skip table: bad character heuristic simplificada
+    std::vector<int> skip(256, m);
+    for (int i = 0; i < m - 1; i++) {
+        skip[(unsigned char)padrao[i]] = m - 1 - i;
+    }
+
+    int i = 0;
+    while (i <= n - m) {
+        int j = m - 1;
+        while (j >= 0 && padrao[j] == texto[i + j]) j--;
+        if (j < 0) return i;
+        i += skip[(unsigned char)texto[i + m - 1]];
+    }
+    return -1;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n × m) no pior caso teórico, mas **O(n/m) em média** — sub-linear no texto! Em padrões longos com alfabeto grande, BM é literalmente o algoritmo mais rápido conhecido.
+
+### Boyer-Moore em produção
+
+- **GNU grep**, **BSD grep**: Boyer-Moore com otimizações pesadas. É por isso que `grep "string-longa" arquivo-grande.log` retorna em milissegundos.
+- **vim**, **emacs**: pesquisa em texto
+- **Browser search** (Ctrl+F): variantes do Boyer-Moore
+- **Antivírus**: detecção de assinatura individual (pra múltiplas, usa Aho-Corasick)
+
+<Aviso>
+Padrões muito curtos (1-3 caracteres) ou alfabetos pequenos (DNA = 4 caracteres) **podem fazer BM perder pra KMP ou até pra brute force** — as heurísticas dependem de pular muito, o que requer alfabeto grande pra ter chance. Pra DNA, KMP costuma ser preferido.
+</Aviso>
+
+---
+
+## Rabin-Karp: hashing como busca
+
+Os dois algoritmos anteriores comparam caracteres. **Rabin-Karp** (Karp e Rabin, IBM Research, 1981) inverteu o jogo: e se em vez de comparar **caracteres**, comparássemos **hashes**?
+
+A ideia:
+
+1. Calcule o hash do padrão `P`
+2. Calcule o hash da **primeira janela** de tamanho `|P|` no texto
+3. Se os hashes são iguais, **possivelmente** é match — confirme caractere por caractere
+4. Se hashes diferentes, pula pra próxima janela
+
+O passo crítico: calcular o hash da **próxima janela** em **O(1)** (não O(m)). Pra isso, usa-se um **rolling hash** — uma função de hash que pode ser atualizada incrementalmente removendo o caractere mais à esquerda e adicionando o novo à direita.
+
+### Rolling hash polinomial
+
+Pra string `s = s[0] s[1] ... s[m-1]` com base `b` e módulo primo `M`:
+
+```
+hash(s) = (s[0] * b^(m-1) + s[1] * b^(m-2) + ... + s[m-1]) mod M
+```
+
+Pra avançar a janela de `s[i..i+m-1]` pra `s[i+1..i+m]`:
+
+```
+novo_hash = ((hash_atual - s[i] * b^(m-1)) * b + s[i+m]) mod M
+```
+
+A operação custa O(1). Total pra processar o texto: O(n). Adicionando o preprocessamento do padrão: **O(n + m)**.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class RabinKarp {
+    private static final int BASE = 256;             // tamanho do alfabeto
+    private static final int MOD = 1_000_000_007;    // primo grande
+
+    public static List<Integer> buscar(String texto, String padrao) {
+        List<Integer> ocorrencias = new ArrayList<>();
+        int n = texto.length();
+        int m = padrao.length();
+        if (m == 0 || m > n) return ocorrencias;
+
+        // pré-calcula BASE^(m-1) mod MOD
+        long h = 1;
+        for (int i = 0; i < m - 1; i++) h = (h * BASE) % MOD;
+
+        // hash do padrão e da primeira janela
+        long hashPadrao = 0, hashJanela = 0;
+        for (int i = 0; i < m; i++) {
+            hashPadrao = (hashPadrao * BASE + padrao.charAt(i)) % MOD;
+            hashJanela = (hashJanela * BASE + texto.charAt(i)) % MOD;
+        }
+
+        for (int i = 0; i <= n - m; i++) {
+            if (hashPadrao == hashJanela) {
+                // confirmar caractere por caractere (pode ser falso positivo)
+                if (texto.substring(i, i + m).equals(padrao)) {
+                    ocorrencias.add(i);
+                }
+            }
+            if (i < n - m) {                          // atualiza hash pra próxima janela
+                hashJanela = (hashJanela - texto.charAt(i) * h % MOD + MOD * MOD) % MOD;
+                hashJanela = (hashJanela * BASE + texto.charAt(i + m)) % MOD;
+            }
+        }
+        return ocorrencias;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <string>
+
+std::vector<int> buscarRK(const std::string& texto, const std::string& padrao) {
+    std::vector<int> ocorrencias;
+    const long long BASE = 256;
+    const long long MOD = 1000000007LL;
+    int n = texto.size();
+    int m = padrao.size();
+    if (m == 0 || m > n) return ocorrencias;
+
+    long long h = 1;
+    for (int i = 0; i < m - 1; i++) h = (h * BASE) % MOD;
+
+    long long hashPadrao = 0, hashJanela = 0;
+    for (int i = 0; i < m; i++) {
+        hashPadrao = (hashPadrao * BASE + padrao[i]) % MOD;
+        hashJanela = (hashJanela * BASE + texto[i]) % MOD;
+    }
+
+    for (int i = 0; i <= n - m; i++) {
+        if (hashPadrao == hashJanela) {
+            if (texto.substr(i, m) == padrao) {
+                ocorrencias.push_back(i);
+            }
+        }
+        if (i < n - m) {
+            hashJanela = (hashJanela - texto[i] * h % MOD + MOD * MOD) % MOD;
+            hashJanela = (hashJanela * BASE + texto[i + m]) % MOD;
+        }
+    }
+    return ocorrencias;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(n + m) **em média**. O(n × m) no pior caso (todas as janelas têm o mesmo hash — colisão sistemática), mas isso é absurdamente raro com hash bem escolhido.
+
+### A grande vantagem do Rabin-Karp
+
+KMP e Boyer-Moore só funcionam pra **um padrão por vez**. Rabin-Karp **se generaliza naturalmente** pra **múltiplos padrões**:
+
+> Calcule hashes de **todos os k padrões**. Coloque num set. Pra cada janela do texto, calcule o hash em O(1) e verifique se está no set.
+
+Custo: O(n + k×m). Pra k padrões pequenos, ainda linear. Aho-Corasick é mais eficiente em pior caso, mas Rabin-Karp tem implementação **simples** e funciona bem em prática.
+
+### Aplicações de RK
+
+- **Detecção de plágio**: hash de cada substring do tamanho fixado de cada documento, busca matches entre bases. Sistemas como Turnitin usam variantes.
+- **Match de múltiplas substrings em DNA** (alternativa a Aho-Corasick)
+- **Filesystem deduplication** (rolling hash em chunks de arquivo, como `rsync`)
+- **Karp-Rabin fingerprinting** em sistemas distribuídos pra verificar integridade rapidamente
+
+---
+
+## Comparando os três algoritmos
+
+Não existe um "melhor" — cada um brilha em condições diferentes.
+
+| Aspecto | Brute Force | KMP | Boyer-Moore | Rabin-Karp |
+|---|---|---|---|---|
+| Pior caso | O(nm) | O(n+m) | O(nm) | O(nm) |
+| Caso médio | O(nm) | O(n+m) | **O(n/m)** | O(n+m) |
+| Memória | O(1) | O(m) | O(m + alfabeto) | O(1) |
+| Direção compara | Esq→Dir | Esq→Dir | **Dir→Esq** | Hash janela |
+| Múltiplos padrões | Não nativo | Não nativo | Não nativo | **Sim nativo** |
+| Implementação | Trivial | Média | **Complexa** | Média |
+| Pode dar falso pos | Não | Não | Não | **Sim** (raro) |
+| Alfabeto pequeno | OK | **Melhor** | Pior | OK |
+| Padrão longo | Lento | OK | **Melhor** | OK |
+
+**Onde usar cada um**:
+
+- **Brute force**: padrões muito curtos (1-2 caracteres), prototipagem, quando código simples é mais importante que velocidade
+- **KMP**: padrões longos em alfabetos pequenos (DNA, sequências binárias), quando garantia de pior caso linear é importante
+- **Boyer-Moore (ou Horspool)**: padrões longos em alfabetos grandes (texto natural em UTF-8/ASCII), busca padrão única — **escolha default** pra `grep`-like
+- **Rabin-Karp**: múltiplos padrões simultâneos, deduplicação, fingerprinting, problemas em ICPC que envolvem hashing de substrings
+
+---
+
+## A escolha do mundo real
+
+Pra tirar dúvida: em **produção**, na biblioteca padrão de Java, **o que `String.indexOf` usa?**
+
+Resposta surpreendente: **brute force**. Java desde o JDK 1.0 implementa busca de string com algoritmo ingênuo. Por quê? Porque a **constante oculta** dos algoritmos espertos é grande o suficiente que pra strings curtas (caso comum em código de aplicação), brute force vence. Padrão típico em logs ou JSON tem 5-20 caracteres — domínio do brute force.
+
+`grep` e `vim` usam Boyer-Moore porque processam textos muito maiores, onde o overhead vale a pena. Postgres usa heurísticas similares ao Boyer-Moore pra queries `LIKE` longas.
+
+Em **Python**, o `str.find` usa o algoritmo **Two-Way** de Crochemore-Perrin (1991) — uma variante mais sofisticada que combina ideias de KMP e Boyer-Moore com garantia linear de pior caso e bom desempenho em prática. Implementado em CPython desde 2006.
+
+Em **C** (`strstr`), implementações variam — glibc usa Two-Way, MSVC tipicamente brute force otimizado. **Ninguém usa KMP "puro" em libs padrão** — é considerado mais didático que prático em código real.
+
+<Aviso>
+A lição mais ampla: **algoritmos "ótimos" assintoticamente nem sempre vencem na prática**. KMP é "linear garantido", mas a constante e o cache locality podem perder pra brute force em strings curtas. Engenheiros de bibliotecas testam com benchmarks reais — não com Big O em papel.
+</Aviso>
+
+---
+
+## Recap
+
+**1977 foi o ano mágico** de algoritmos de string matching: **KMP** (Knuth-Morris-Pratt, SIAM J. Comp. 6(2)) e **Boyer-Moore** (Communications of the ACM 20(10)) foram publicados no mesmo ano. **Rabin-Karp** veio depois (1981).
+
+**KMP** preprocessa o padrão computando uma **failure function** que diz, pra cada posição, qual o maior prefixo próprio que também é sufixo. Quando ocorre mismatch, usa essa informação pra evitar recomparar caracteres. **O(n + m) garantido**.
+
+**Boyer-Moore** compara o padrão **da direita pra esquerda**. Usa duas heurísticas (**bad character** e **good suffix**) pra dar saltos grandes. Em casos típicos, **pula caracteres do texto sem nem olhar**. Sub-linear em média. É o motor do `grep`. **Boyer-Moore-Horspool** é uma simplificação que usa só bad character — mais fácil de implementar e quase tão rápida.
+
+**Rabin-Karp** usa **rolling hash** pra comparar janelas em tempo médio constante. **Generaliza naturalmente pra múltiplos padrões** (coloca todos os hashes num set). Aplicações: deduplicação, fingerprinting (`rsync`), detecção de plágio.
+
+**Em produção, a escolha depende do contexto**:
+
+- **Java `String.indexOf`** usa brute force — vence em strings curtas
+- **`grep` e `vim`** usam Boyer-Moore — texto grande, padrão longo
+- **Python `str.find`** usa **Two-Way** (Crochemore-Perrin 1991) — linear garantido + bom em prática
+- **Aho-Corasick** (lição anterior) pra múltiplos padrões simultâneos com pior caso garantido
+
+**Constantes ocultas importam**. Algoritmos "ótimos" no papel nem sempre vencem benchmarks reais. Engenheiros de biblioteca testam empiricamente.
+
+Com esta lição, fechamos o **bloco de strings** (Tries + Aho-Corasick + KMP/BM/RK) e voltamos ao panorama da trilha de algoritmos. As próximas direções podem ir pra **estruturas probabilísticas** (Bloom filters, HyperLogLog — usadas em larga escala em redes e bancos de dados), **DP avançada** (DP em árvore, em bitmask), **fluxo em redes** (max flow / min cut), ou **geometria computacional**. Avisa qual direção quer ir.

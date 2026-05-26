@@ -1,0 +1,595 @@
+---
+titulo: "Resilience Patterns"
+descricao: "Timeouts, Circuit Breaker, Bulkhead, Retry com exponential backoff e jitter, Fail Fast, Steady State. Como construir sistemas que sobrevivem à realidade de redes flakey, dependências instáveis e cargas inesperadas."
+---
+
+As sete lições anteriores cobriram como **organizar** o código (princípios, Clean, DDD, Hexagonal) e como **escolher o estilo arquitetural** do sistema (monolito, modular monolith, microservices). Esta lição cobre o que acontece quando o sistema entra em produção e o mundo real começa a quebrar tudo.
+
+Resilience Patterns são técnicas pra construir sistemas que **não morrem fácil**. Não eliminam falhas — eliminar falha em sistema distribuído é impossível. Mas **contêm o estrago** quando uma parte falha, evitando que o problema se espalhe.
+
+A referência canônica é Michael Nygard, *Release It! Design and Deploy Production-Ready Software*. Primeira edição publicada pela Pragmatic Bookshelf em março de 2007 (ISBN 978-0-9787392-1-8). Segunda edição em janeiro de 2018, expandida com cobertura de DevOps, microservices e cloud-native. O capítulo 5 da primeira edição cataloga os **Stability Patterns** que viraram vocabulário padrão da indústria: Use Timeouts, Circuit Breaker, Bulkheads, Steady State, Fail Fast, Handshaking, Test Harness, Decoupling Middleware.
+
+<Insight>
+Antes de Nygard, esses padrões existiam como folclore tribal. Engenheiros experientes faziam timeouts, alguns implementavam algo parecido com Circuit Breaker, mas não havia vocabulário comum. O *Release It!* (2007) deu nomes que viraram universais — você consegue dizer "preciso de um Circuit Breaker aqui" e todo mundo entende, mesmo que nunca tenham lido o livro. Esse poder de vocabulário é a contribuição central do Nygard.
+</Insight>
+
+## Por que sistemas distribuídos quebram
+
+Antes dos padrões em si, vale entender o que estamos resolvendo. Numa aplicação **monolítica**, quase todas as chamadas são chamadas de método — nanossegundos, sem rede, sem timeout, sem falha de comunicação. Quando você adiciona qualquer comunicação remota (banco em outro servidor, serviço externo via REST, fila de mensagens), três coisas mudam fundamentalmente:
+
+1. **Latência variável e imprevisível**. Chamada de método é 10-100 nanossegundos. Chamada HTTP local é 1-10 milissegundos. Chamada HTTP remota é 10-500 milissegundos. Chamada HTTP cross-region é 50-1000 milissegundos. E isso quando funciona.
+
+2. **Falhas parciais**. O serviço pode estar parcialmente fora: alguns endpoints respondem, outros não. Pode estar lento (não falha técnica, mas lento o suficiente pra derrubar tudo). Pode estar "doente" — respondendo OK mas com dados inconsistentes.
+
+3. **Falha cascateada**. Se o serviço A depende de B e B está lento, A vai acumular requests pendentes. Threads de A ficam bloqueadas esperando B. Eventualmente A fica sem threads, e os clients de A também ficam pendurados. A doença de B virou doença de toda a chain. Isso é **cascade failure** — o tipo de incidente que tira sistemas grandes do ar.
+
+Nygard tem um conceito central: **as falhas não são exceções, são parte do design**. Se você não pensar em falha desde o início, o sistema vai falhar de formas que você não previu. Os Stability Patterns são as ferramentas básicas pra essa contenção.
+
+## Pattern #1: Timeouts (use timeouts em tudo)
+
+O padrão mais simples e o mais negligenciado. Nygard escreve no cap 5.1 que toda chamada que cruza um limite de processo precisa ter timeout. Sempre. Sem exceção.
+
+O problema típico em código Java:
+
+```java
+// ANTIPATTERN: sem timeout
+public class ClienteCotacao {
+    public Cotacao buscar(String codigoMoeda) {
+        // RestTemplate sem timeout configurado:
+        // se o servidor remoto pendurar, esta thread fica pendurada também,
+        // pra sempre, até o processo morrer
+        return restTemplate.getForObject(
+            "https://api.cotacao.example/v1/cotacao/" + codigoMoeda,
+            Cotacao.class
+        );
+    }
+}
+```
+
+O default do Java/Spring/RestTemplate historicamente era **sem timeout** — espera indefinidamente. Em produção, isso é desastre: uma dependência lenta pendura todas as threads do servidor.
+
+A solução é configurar dois timeouts distintos:
+
+- **Connect timeout**: quanto tempo esperar pra estabelecer a conexão TCP. Geralmente 1-5 segundos.
+- **Read timeout**: quanto tempo esperar pela resposta depois da conexão estabelecida. Depende da operação — 2 segundos pra cotação é razoável; 30 segundos pra processamento de PDF pode ser necessário.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Spring Boot 3 + Java 17+
+@Configuration
+public class HttpConfig {
+
+    @Bean
+    public RestClient restClient() {
+        return RestClient.builder()
+            .requestFactory(clientHttpRequestFactory())
+            .build();
+    }
+
+    private ClientHttpRequestFactory clientHttpRequestFactory() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);  // 3s pra estabelecer conexão
+        factory.setReadTimeout(5000);     // 5s pra resposta
+        return factory;
+    }
+}
+
+@Service
+public class ClienteCotacao {
+    private final RestClient restClient;
+
+    public ClienteCotacao(RestClient restClient) {
+        this.restClient = restClient;
+    }
+
+    public Cotacao buscar(String codigoMoeda) {
+        try {
+            return restClient.get()
+                .uri("https://api.cotacao.example/v1/cotacao/{moeda}", codigoMoeda)
+                .retrieve()
+                .body(Cotacao.class);
+        } catch (ResourceAccessException e) {
+            // timeout disparou — falha rápida com exceção específica
+            throw new CotacaoIndisponivel(codigoMoeda, e);
+        }
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+#include <chrono>
+#include <stdexcept>
+
+namespace carbon::adapter::driven::http {
+
+class ClienteCotacao {
+    HttpClient& cliente_;
+
+public:
+    explicit ClienteCotacao(HttpClient& c) : cliente_(c) {}
+
+    Cotacao buscar(const std::string& codigoMoeda) {
+        HttpRequest req;
+        req.url = "https://api.cotacao.example/v1/cotacao/" + codigoMoeda;
+        req.connectTimeout = std::chrono::seconds(3);
+        req.readTimeout = std::chrono::seconds(5);
+
+        try {
+            auto resp = cliente_.send(req);
+            if (resp.status != 200) {
+                throw CotacaoIndisponivel(codigoMoeda, resp.status);
+            }
+            return Cotacao::deserialize(resp.body);
+        } catch (const std::chrono::system_error& e) {
+            throw CotacaoIndisponivel(codigoMoeda, e.what());
+        }
+    }
+};
+
+} // namespace carbon::adapter::driven::http
+```
+
+</Code>
+
+</CodeSwap>
+
+A regra de Nygard: **se você não consegue justificar um timeout específico, use 5 segundos como default**. É melhor errar com timeout curto demais (fácil de aumentar depois) do que com timeout longo demais (esconde problemas até virarem catástrofe).
+
+## Pattern #2: Circuit Breaker
+
+O padrão mais famoso do *Release It!* — cap 5.2 da primeira edição. Nygard usa a analogia do disjuntor elétrico residencial: se você liga muitos aparelhos numa tomada, o disjuntor estoura e desliga o circuito, **evitando que a fiação derreta e a casa pegue fogo**. Você troca a queima do disjuntor (barata, fácil de resetar) pela queima da casa inteira (catastrófica).
+
+Em software, o Circuit Breaker fica **na frente** de uma chamada a dependência externa. Quando essa dependência começa a falhar muito, o breaker "abre" e passa a rejeitar chamadas **imediatamente** sem nem tentar — protegendo tanto sua aplicação (não acumula threads pendentes) quanto a dependência (que ganha tempo pra se recuperar).
+
+### Os três estados
+
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-cb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
+    </marker>
+  </defs>
+
+  <circle cx="120" cy="120" r="60" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="2.5" />
+  <text x="120" y="110" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="16" fontWeight="700">CLOSED</text>
+  <text x="120" y="130" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">(normal)</text>
+  <text x="120" y="148" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">passa tudo</text>
+
+  <circle cx="360" cy="120" r="60" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="2.5" />
+  <text x="360" y="110" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="16" fontWeight="700">OPEN</text>
+  <text x="360" y="130" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">(rejeitando)</text>
+  <text x="360" y="148" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">fail fast</text>
+
+  <circle cx="600" cy="120" r="60" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="2.5" />
+  <text x="600" y="105" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">HALF-OPEN</text>
+  <text x="600" y="125" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">(testando)</text>
+  <text x="600" y="143" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">deixa N passar</text>
+
+  <path d="M 180 105 Q 240 75 300 105" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-cb)" />
+  <text x="240" y="68" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">N falhas seguidas</text>
+
+  <path d="M 420 105 Q 480 75 540 105" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-cb)" />
+  <text x="480" y="68" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">timeout expirou</text>
+
+  <path d="M 540 145 Q 480 175 420 145" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-cb)" />
+  <text x="480" y="195" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">falha de novo</text>
+
+  <path d="M 560 90 Q 360 -10 160 90" stroke="currentColor" strokeWidth="1.8" fill="none" markerEnd="url(#seta-cb)" strokeOpacity="0.85" />
+  <text x="360" y="30" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">sucessos voltam normal</text>
+
+  <rect x="60" y="245" width="600" height="90" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <text x="80" y="270" fontFamily="ui-monospace, monospace" fontSize="11" fillOpacity="0.85" fontWeight="600">Fluxo normal:</text>
+  <text x="80" y="290" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.75">1. CLOSED: chamadas passam, monitora falhas</text>
+  <text x="80" y="306" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.75">2. Threshold atingido → vira OPEN. Rejeita TUDO sem tentar (fail fast)</text>
+  <text x="80" y="322" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.75">3. Após timeout → vira HALF-OPEN. Deixa poucas requests passarem pra testar</text>
+</svg>
+
+**CLOSED** (fechado, em analogia ao circuito elétrico — "normal" significa "passa corrente"): estado normal. Chamadas passam pra dependência. O breaker monitora a taxa de falha. Quando ela ultrapassa um threshold configurado (ex: 50% de falhas nas últimas 20 chamadas, ou 5 falhas seguidas), o breaker **abre**.
+
+**OPEN** (aberto, "não passa corrente"): rejeita todas as chamadas **imediatamente** sem chamar a dependência. Você retorna uma exceção, um valor default ou um cache. O breaker espera um tempo configurado (ex: 30 segundos) antes de testar de novo.
+
+**HALF-OPEN** (semi-aberto): depois do timeout, o breaker permite algumas poucas chamadas passarem pra "testar" se a dependência se recuperou. Se essas chamadas têm sucesso, volta pra CLOSED. Se falham, volta pra OPEN e o timeout reinicia.
+
+### Implementação com Resilience4j
+
+A biblioteca canônica em Java moderno é o **Resilience4j**. Vale entender a história: a Netflix abriu o **Hystrix** em 2012 (junto com Eureka, Zuul e outras peças do stack microservices da Netflix). Hystrix virou padrão de fato pra Circuit Breaker em Java por anos. Em novembro de 2018, a Netflix anunciou que o Hystrix entraria em **maintenance mode** (sem novo desenvolvimento). Em dezembro de 2018, o Spring Cloud Hystrix foi deprecated. Em SpringOne 2019, anunciaram a remoção do Hystrix Dashboard do Spring Cloud 3.1, oficializando a morte do projeto.
+
+O sucessor canônico é o **Resilience4j**, criado em 2017, desenhado pra Java 8+ e programação funcional. Diferenças importantes em relação ao Hystrix:
+- **Modular**: você importa só o módulo que precisa (`circuitbreaker`, `retry`, `bulkhead`, `ratelimiter`, `timelimiter`, `cache`)
+- **Leve**: dependência única no Vavr; Hystrix dependia de Archaius, Guava, Apache Commons
+- **API funcional**: usa `Supplier`, `Function`, `Predicate` — encaixa naturalmente com lambdas e streams
+- **Integração nativa com Spring Boot e Micrometer** pra observabilidade
+
+```java
+// build.gradle (Spring Boot 3)
+implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.+'
+implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+// application.yml
+resilience4j.circuitbreaker:
+  instances:
+    cotacaoExterna:
+      failureRateThreshold: 50           # abre se >50% das chamadas falham
+      slidingWindowSize: 20              # janela de 20 chamadas
+      minimumNumberOfCalls: 10           # precisa de pelo menos 10 chamadas antes de avaliar
+      waitDurationInOpenState: 30s       # espera 30s no estado OPEN
+      permittedNumberOfCallsInHalfOpenState: 3  # permite 3 chamadas em HALF-OPEN
+      automaticTransitionFromOpenToHalfOpenStateEnabled: true
+
+// Uso via annotation
+@Service
+public class ServicoCotacao {
+
+    private final ClienteCotacao cliente;
+
+    public ServicoCotacao(ClienteCotacao cliente) {
+        this.cliente = cliente;
+    }
+
+    @CircuitBreaker(name = "cotacaoExterna", fallbackMethod = "cotacaoFallback")
+    public Cotacao buscar(String moeda) {
+        return cliente.buscar(moeda);
+    }
+
+    // Fallback: chamado quando o breaker está OPEN OU quando a chamada falha
+    private Cotacao cotacaoFallback(String moeda, Exception e) {
+        log.warn("Breaker aberto para cotação {}: {}", moeda, e.getMessage());
+        return Cotacao.cacheado(moeda);  // ou valor default conhecido
+    }
+}
+```
+
+A configuração above implica: o breaker observa as últimas 20 chamadas; se mais de 50% dessas 20 chamadas falharam (e tiveram pelo menos 10 chamadas reais), abre. Fica 30 segundos em OPEN. Depois deixa 3 chamadas passarem em HALF-OPEN. Se as 3 forem bem, volta a CLOSED. Se alguma falhar, volta a OPEN.
+
+### Quando usar (e quando não)
+
+Circuit Breaker é apropriado pra **dependências externas** que podem falhar de forma contínua (não transitória): outro microservice, API de terceiro, banco de dados em região remota. Não use:
+
+- Em chamadas internas dentro do mesmo processo (chamada de método não falha sozinha)
+- Em operações idempotentes simples e rápidas onde retry simples resolve melhor
+- Quando a falha é genuinamente transitória (rede momentaneamente fora) — pra isso, Retry é mais apropriado
+
+## Pattern #3: Bulkhead
+
+Catalogado no cap 5.3 do *Release It!*. A analogia é naval: o casco de um navio é dividido em **compartimentos estanques** (bulkheads — "anteparos"). Se um compartimento for perfurado e inundar, os outros continuam intactos. O navio pode boiar mesmo com um compartimento alagado. Sem bulkheads, qualquer furo afunda o navio inteiro.
+
+Em software, Bulkhead significa **isolar recursos** pra que falha numa parte não consuma os recursos das outras partes. Tipos comuns:
+
+**Thread pool bulkhead**: pools de threads separados pra dependências diferentes. Se a chamada à API de cotações fica pendurada, ela enche o pool de cotação — mas o pool de pagamentos continua livre.
+
+```java
+// Sem bulkhead: todas as chamadas usam o mesmo pool de threads do servidor.
+// Se uma dependência fica lenta, o pool inteiro do servidor enche e o sistema trava.
+
+// Com bulkhead: pools separados, isolamento explícito
+resilience4j.bulkhead:
+  instances:
+    cotacao:
+      maxConcurrentCalls: 10        # no máximo 10 chamadas simultâneas ao serviço de cotação
+      maxWaitDuration: 500ms
+    pagamento:
+      maxConcurrentCalls: 20
+      maxWaitDuration: 1s
+    relatorio:
+      maxConcurrentCalls: 5
+      maxWaitDuration: 2s
+
+@Service
+public class ServicoIntegracao {
+
+    @Bulkhead(name = "cotacao", type = Bulkhead.Type.SEMAPHORE)
+    public Cotacao buscarCotacao(String moeda) { /* ... */ }
+
+    @Bulkhead(name = "pagamento", type = Bulkhead.Type.SEMAPHORE)
+    public Pagamento processarPagamento(Pagamento p) { /* ... */ }
+
+    @Bulkhead(name = "relatorio", type = Bulkhead.Type.THREADPOOL)
+    public CompletableFuture<Relatorio> gerarRelatorio(String tipo) { /* ... */ }
+}
+```
+
+O Resilience4j tem dois tipos:
+- **SEMAPHORE**: semáforo que limita chamadas concorrentes. Roda na mesma thread do chamador.
+- **THREADPOOL**: pool de threads separado. A chamada é submetida ao pool, retorna `CompletableFuture`. Mais isolamento, mais overhead.
+
+**Connection pool separado por dependência** também é uma forma de bulkhead. Se você tem conexões HTTP separadas pra cada API externa (cada uma com seu pool próprio), uma API lenta não consome conexões das outras.
+
+**Process bulkhead**: separar processos/containers diferentes pra workloads diferentes. Microservices em si já são uma forma de bulkhead — falha num serviço não derruba os outros (se o resto da arquitetura estiver bem desenhada).
+
+A grande vantagem de Bulkhead, segundo Nygard: o sistema **degrada parcialmente** em vez de **falhar totalmente**. Cotação fora? Você ainda processa pagamentos. Relatórios lentos? Você ainda atende clientes em tempo real. Cada compartimento que cai é uma perda controlada, não a perda do navio.
+
+## Pattern #4: Retry (com exponential backoff e jitter)
+
+Retry é o padrão mais óbvio — se uma chamada falha, tente de novo. Mas implementar Retry **errado** é uma das formas mais clássicas de derrubar produção. Vou cobrir três armadilhas e a forma certa de fazer.
+
+### Armadilha 1: retry imediato
+
+```java
+// ANTIPATTERN — retry imediato
+public Cotacao buscar(String moeda) {
+    for (int i = 0; i < 5; i++) {
+        try {
+            return cliente.buscar(moeda);
+        } catch (Exception e) {
+            // retenta imediatamente — sem espera
+        }
+    }
+    throw new CotacaoIndisponivel(moeda);
+}
+```
+
+Se o serviço de cotação está sobrecarregado, retentar imediatamente piora a sobrecarga. Você triplica/quintuplica o volume de requests exatamente quando o serviço está com problema.
+
+### Armadilha 2: backoff fixo
+
+```java
+// MELHOR, mas ainda problemático — backoff fixo
+public Cotacao buscar(String moeda) {
+    for (int i = 0; i < 5; i++) {
+        try {
+            return cliente.buscar(moeda);
+        } catch (Exception e) {
+            Thread.sleep(1000);  // espera 1s e tenta de novo
+        }
+    }
+    throw new CotacaoIndisponivel(moeda);
+}
+```
+
+Backoff fixo evita o problema imediato, mas tem outro: o **thundering herd**. Se 1000 clients estão chamando o serviço e ele cai, todos vão esperar exatamente 1 segundo e bombardear o serviço de novo ao mesmo tempo. O serviço cai de novo. Todos esperam 1 segundo de novo. E assim por diante.
+
+### Solução: exponential backoff com jitter
+
+A referência canônica é o post de **Marc Brooker** (VP and Distinguished Engineer no AWS), "Exponential Backoff And Jitter", publicado no AWS Architecture Blog em **4 de março de 2015** (aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter). É documento de referência: as próprias diretrizes de well-architected da AWS citam esse post como autoridade. Brooker expandiu depois no Amazon Builders' Library com o artigo "Timeouts, retries, and backoff with jitter".
+
+A ideia tem duas partes:
+
+**Exponential backoff**: o tempo de espera entre retries **dobra** a cada tentativa. 1s, 2s, 4s, 8s, 16s... Isso dá ao serviço tempo crescente pra se recuperar.
+
+**Jitter** (ruído aleatório): adiciona aleatoriedade no tempo de espera. Em vez de esperar exatamente `2^n` segundos, espera `random(0, 2^n)`. Isso **dessincroniza** os clients — eles param de retentar ao mesmo tempo.
+
+```java
+// COM exponential backoff + full jitter (recomendado)
+public Cotacao buscarComRetry(String moeda) {
+    Random random = new Random();
+    int maxRetries = 5;
+    long baseDelayMs = 100;
+    long maxDelayMs = 30000;  // cap em 30s
+
+    for (int tentativa = 0; tentativa < maxRetries; tentativa++) {
+        try {
+            return cliente.buscar(moeda);
+        } catch (Exception e) {
+            if (tentativa == maxRetries - 1) throw e;
+
+            // Cap exponential growth + full jitter (Marc Brooker, AWS 2015)
+            long cap = Math.min(maxDelayMs, baseDelayMs * (long) Math.pow(2, tentativa));
+            long sleepMs = (long) (random.nextDouble() * cap);
+
+            try {
+                Thread.sleep(sleepMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrompido durante retry", ie);
+            }
+        }
+    }
+    throw new CotacaoIndisponivel(moeda);
+}
+```
+
+Em Resilience4j, isso é declarativo:
+
+```java
+// application.yml
+resilience4j.retry:
+  instances:
+    cotacaoExterna:
+      maxAttempts: 5
+      waitDuration: 100ms
+      enableExponentialBackoff: true
+      exponentialBackoffMultiplier: 2.0
+      enableRandomizedWait: true
+      randomizedWaitFactor: 0.5
+      retryExceptions:
+        - org.springframework.web.client.ResourceAccessException
+        - java.net.SocketTimeoutException
+      ignoreExceptions:
+        - com.carbon.cotacao.MoedaInvalida  # 400 não faz sentido retentar
+
+@Service
+public class ServicoCotacao {
+
+    @Retry(name = "cotacaoExterna")
+    @CircuitBreaker(name = "cotacaoExterna", fallbackMethod = "cotacaoFallback")
+    public Cotacao buscar(String moeda) {
+        return cliente.buscar(moeda);
+    }
+}
+```
+
+### Cuidados importantes com Retry
+
+- **Retente apenas operações idempotentes**. Buscar dados (GET): idempotente, pode retentar. Criar pedido (POST não-idempotente): se você retentar, pode criar 2 pedidos. Use idempotency keys ou só retente operações idempotentes por design.
+- **Não retentar em 4xx**. Se o servidor retornou 400 (bad request), 401 (não autenticado), 404 (não encontrado), retentar não vai mudar nada. Retente em 5xx (erro do servidor) e em timeouts/network errors.
+- **Combine com Circuit Breaker**. Se o serviço está caído há horas, retentar não adianta — o Circuit Breaker resolve isso melhor. A ordem natural é Retry **dentro** do Circuit Breaker: retry pra falhas transitórias, breaker pra falhas contínuas.
+- **Defina um teto máximo**. 5 tentativas costuma ser razoável. Mais que isso pra operação síncrona prejudica a experiência do usuário.
+
+## Pattern #5: Fail Fast
+
+Cap 5.5 do *Release It!*. A ideia é o oposto da intuição: **se você sabe que vai falhar, falhe imediatamente** em vez de tentar. Não desperdice recursos numa operação fadada.
+
+Casos típicos:
+
+**Validação antes da operação cara**: se uma transferência exige saldo suficiente, valide saldo **antes** de chamar a API de antifraude (que pode demorar 500ms). Não faça antifraude pra depois descobrir que não tinha saldo.
+
+```java
+public TransferenciaResultado transferir(Transferencia t) {
+    // Fail fast: validações baratas primeiro
+    if (t.valor().compareTo(BigDecimal.ZERO) <= 0) {
+        throw new ValorInvalido(t.valor());
+    }
+    if (!contaRepo.existe(t.contaOrigem())) {
+        throw new ContaNaoEncontrada(t.contaOrigem());
+    }
+    if (!contaRepo.temSaldo(t.contaOrigem(), t.valor())) {
+        throw new SaldoInsuficiente(t.contaOrigem(), t.valor());
+    }
+
+    // Só agora chama operações caras
+    var resultadoAntifraude = antifraudeClient.avaliar(t);
+    if (resultadoAntifraude.bloqueada()) {
+        throw new TransferenciaBloqueada(resultadoAntifraude.motivo());
+    }
+
+    return executar(t);
+}
+```
+
+**Health check do Circuit Breaker no início da chamada**: se o breaker está OPEN, falha antes de tentar chamar a dependência. Resilience4j faz isso automaticamente.
+
+**Rejeição de carga em sobrecarga conhecida**: se a fila de processamento já está em 95% de capacidade, rejeite novas requests com `503 Service Unavailable` em vez de aceitá-las e demorar muito pra processar. O cliente prefere falha rápida (com retry com backoff) do que timeout demorado.
+
+Fail Fast e timeout são pares naturais: timeout limita o tempo máximo que você espera, Fail Fast evita esperas que você sabe que serão inúteis.
+
+## Pattern #6: Steady State (housekeeping permanente)
+
+Cap 5.4 do *Release It!*. O sistema precisa funcionar **indefinidamente** sem intervenção humana. Tudo que cresce sem limite eventualmente trava o sistema.
+
+**Casos comuns**:
+
+- **Logs**: sem rotação, enchem o disco. Em produção, sempre configure rotação (`logback-spring.xml`, `log4j2.xml`, ou ferramentas de sistema como `logrotate`).
+- **Sessões em memória**: sem expiração, crescem indefinidamente. Sempre defina TTL.
+- **Caches**: sem política de eviction (LRU, LFU, TTL), enchem RAM. Use Caffeine, EhCache, Redis com `maxmemory-policy`.
+- **Tabelas de auditoria/eventos**: crescem pra sempre. Defina política de arquivamento (mover dados velhos pra storage frio depois de N meses).
+- **Dados in-memory dos agregados**: no Carbon Credit, os `Map<>` que vocês usam crescem com cada compensação. Eventualmente vão estourar a JVM. Em produção, isso precisa ir pra banco.
+
+A regra mental: pergunte "isso cresce com o tempo? Se sim, qual a política de redução?". Se você não tem resposta, vai virar incidente.
+
+## Combinando os patterns: a ordem correta
+
+Os Stability Patterns não são alternativas — eles **se complementam**. Numa chamada a dependência externa em produção, a stack típica é (de fora pra dentro):
+
+```
+[ Bulkhead ] ─→ [ Circuit Breaker ] ─→ [ Retry ] ─→ [ Timeout ] ─→ chamada real
+```
+
+Por que essa ordem importa:
+
+1. **Bulkhead** é o mais externo — limita quantas chamadas concorrentes você faz a essa dependência. Protege seu próprio sistema de exaurir recursos.
+2. **Circuit Breaker** vem depois — se a dependência está conhecidamente caída, falha rápido sem nem tentar retry. Não adianta retentar 5 vezes se o serviço está fora há 1 hora.
+3. **Retry** está dentro do breaker — só atua quando o breaker está CLOSED, pra cobrir falhas genuinamente transitórias.
+4. **Timeout** é o mais interno — cada tentativa individual tem seu próprio timeout.
+
+Em Resilience4j com Spring Boot, isso vira:
+
+```java
+@Service
+public class ServicoCotacao {
+
+    @Bulkhead(name = "cotacaoExterna", type = Bulkhead.Type.SEMAPHORE)
+    @CircuitBreaker(name = "cotacaoExterna", fallbackMethod = "fallback")
+    @Retry(name = "cotacaoExterna")
+    @TimeLimiter(name = "cotacaoExterna")
+    public CompletableFuture<Cotacao> buscar(String moeda) {
+        return CompletableFuture.supplyAsync(() -> cliente.buscar(moeda));
+    }
+
+    private CompletableFuture<Cotacao> fallback(String moeda, Throwable t) {
+        return CompletableFuture.completedFuture(Cotacao.cacheado(moeda));
+    }
+}
+```
+
+A ordem das annotations importa na execução. Resilience4j aplica nesta ordem (de fora pra dentro): `Bulkhead → CircuitBreaker → RateLimiter → TimeLimiter → Retry`.
+
+## Aplicação no Carbon Credit
+
+O Carbon Credit Compensation Platform — projeto in-memory, monolito modular — não tem dependências externas neste momento. Então **a aplicação direta de Circuit Breaker, Bulkhead e Retry é mínima**.
+
+Mas há três aplicações dos patterns que valem agora, mesmo in-memory:
+
+**1. Timeouts em operações potencialmente longas**:
+
+Mesmo in-memory, operações que iteram coleções grandes ou fazem cálculos pesados podem demorar. Defina timeouts conceituais — operações que demoram mais do que X devem ser rejeitadas ou movidas pra background.
+
+```java
+@Service
+public class ServicoBuscaCreditos {
+
+    public List<Credito> buscarDisponiveis(FiltroBusca filtro) {
+        var inicio = System.currentTimeMillis();
+        var resultados = repositorio.buscar(filtro);
+        var duracao = System.currentTimeMillis() - inicio;
+
+        if (duracao > 500) {
+            log.warn("Busca demorou {}ms — considere otimizar", duracao);
+            metricas.tempoBusca(duracao);
+        }
+        return resultados;
+    }
+}
+```
+
+**2. Fail Fast nas validações de domínio**:
+
+Vocês já têm isso parcialmente. Os agregados das lições 4 e 5 fazem validações no início dos métodos (ex: `if (status != RASCUNHO) throw ...`). Isso É Fail Fast. Vale formalizar como pattern explícito.
+
+**3. Steady State pros dados in-memory**:
+
+O `Map<CompensacaoId, CompensacaoEmissao>` cresce indefinidamente. Pra o projeto Fatec não é problema (tem prazo), mas reconheçam que em produção essa estrutura precisaria de:
+- Persistência em banco (decisão já tomada de deferir)
+- Política de arquivamento de compensações antigas
+- Limite de memória configurável
+
+**Quando aplicar Circuit Breaker/Retry/Bulkhead de verdade**: quando o projeto evoluir pra ter integração externa (ex: API de cotação pra converter toneladas em valor monetário, integração com sistema externo de auditoria, ou microservices separados). Aí os patterns desta lição se aplicam diretamente, com Resilience4j como ferramenta.
+
+<Aviso>
+Cuidado com over-engineering. Aplicar Circuit Breaker numa chamada de método interna (no mesmo processo) é overhead sem benefício — chamadas internas não falham por rede. O viés do mercado é aplicar esses padrões em tudo "pra ficar mais seguro". A regra do Nygard: aplique nas fronteiras de processo, em qualquer comunicação remota. Não dentro do mesmo classpath.
+</Aviso>
+
+## O que falta cobrir (e onde aprofundar)
+
+Esta lição cobriu os patterns fundamentais. Patterns mais avançados que o *Release It!* cobre e que valem estudo em momento adequado:
+
+- **Handshaking** (cap 5.6): protocolos onde cliente e servidor negociam capacidade antes da chamada (raro hoje fora de protocolos baixo nível)
+- **Test Harness** (cap 5.7): infraestrutura pra testar comportamento sob falha (chaos engineering — Chaos Monkey da Netflix)
+- **Decoupling Middleware** (cap 5.8): usar mensageria pra desacoplar componentes (já abordado na Lição 6 de Event-Driven)
+
+Outros tópicos relacionados pra estudo:
+
+- **Rate Limiting**: limitar quantas requests por segundo um cliente pode fazer. Padrão em APIs públicas. Resilience4j tem módulo `ratelimiter`.
+- **Backpressure**: quando o produtor é mais rápido que o consumidor, comunicar essa situação pra que o produtor desacelere. Reactor (Spring WebFlux), Akka Streams, RxJava têm primitivas pra isso.
+- **Chaos Engineering**: introduzir falhas controladas em produção pra validar resiliência. Pioneirado pela Netflix com o Chaos Monkey (open source 2012). Livro de referência: Nora Jones e Casey Rosenthal, *Chaos Engineering: System Resiliency in Practice*, O'Reilly, 2020.
+
+Pra Java/Spring especificamente, vale conhecer também:
+- **Spring Retry** (`@Retryable`): biblioteca mais antiga, ainda mantida, usada em muitos projetos Spring legacy
+- **Spring Cloud Circuit Breaker**: abstração que pode rodar com Resilience4j, Sentinel ou outros providers
+
+## Próximos passos
+
+Esta foi a Lição 8 da trilha de Arquitetura. As próximas que apontei como expansão natural:
+
+1. **L9 — C4 Model + ADR**: documentação arquitetural moderna pelo Simon Brown — útil pra apresentar sistemas em entrevistas e reviews
+2. **L10 — Modular Monolith aprofundado com Spring Modulith**: framework Spring que automatiza as regras de modularização da Lição 7
+
+A Lição 8 fecha o tripé "sistema teórico bem desenhado" (lições 1-7) + "sistema que sobrevive ao mundo real" (esta lição). As duas próximas, se vocês quiserem, complementam com **comunicação do design** (C4 + ADR) e **enforcement automatizado em Java** (Spring Modulith).
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Nygard, Michael T. *Release It! Design and Deploy Production-Ready Software*. Pragmatic Bookshelf, primeira edição março de 2007, ISBN 978-0-9787392-1-8. Segunda edição janeiro de 2018. Capítulo 5 (Stability Patterns) define Timeouts, Circuit Breaker, Bulkheads, Steady State, Fail Fast, Handshaking, Test Harness, Decoupling Middleware como vocabulário canônico.
+- Brooker, Marc. "Exponential Backoff And Jitter". AWS Architecture Blog, 4 de março de 2015. aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/. Referência canônica para retry com jitter; citado pelo próprio AWS Well-Architected Framework como autoridade.
+- Brooker, Marc. "Timeouts, retries, and backoff with jitter". Amazon Builders' Library. Expansão do post acima com perspectiva interna de como a Amazon constrói clientes resilientes.
+- Resilience4j. Documentação oficial em resilience4j.readme.io. Biblioteca canônica em Java para Circuit Breaker, Retry, Bulkhead, Rate Limiter, Time Limiter, Cache. Criada em 2017 como sucessora do Netflix Hystrix.
+- Netflix Hystrix: anúncio de maintenance mode em novembro de 2018, marcando fim do desenvolvimento ativo. Spring Cloud Hystrix deprecated em dezembro de 2018.
+- Newman, Sam. *Building Microservices: Designing Fine-Grained Systems*. O'Reilly, segunda edição agosto de 2021, ISBN 978-1-492-03402-5. Capítulos sobre resiliência e contratos entre serviços.
+- Jones, Nora; Rosenthal, Casey. *Chaos Engineering: System Resiliency in Practice*. O'Reilly Media, abril de 2020. Referência para Chaos Engineering como complemento aos Stability Patterns.

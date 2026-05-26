@@ -1,0 +1,497 @@
+---
+titulo: "Validação, Verificação e Gestão de Requisitos"
+descricao: "Como garantir que o requisito escrito está certo (validação), que o sistema atende ao requisito (verificação) e como gerenciar mudanças ao longo do ciclo de vida — rastreabilidade bidirecional, change management e métricas de qualidade."
+---
+
+Você descobriu, organizou, priorizou e especificou os requisitos (L1-L5). Pronto pra implementar?
+
+Ainda não. Faltam três coisas críticas:
+
+1. **Validação** — o requisito escrito está CERTO? Captura mesmo o que o stakeholder precisa?
+2. **Verificação** — o sistema construído atende ao requisito? Faz o que estava especificado?
+3. **Gestão** — como manter os requisitos coerentes ao longo do tempo, conforme tudo muda?
+
+Sem essas três atividades, especificar requisitos vira teatro: o documento existe, mas o sistema entregue não atende ao que o cliente realmente precisava, ou atende mas ninguém consegue provar, ou atendia até o cliente pedir uma "pequena mudança" que ninguém rastreou e quebrou tudo.
+
+<Insight>
+Validação e verificação NÃO são a mesma coisa. **Barry Boehm** formulou a distinção mais usada em 1984 ("Verifying and validating software requirements and design specifications", IEEE Software vol. 1, nº 1, pp. 75-88): *Verification: are we building the product right? Validation: are we building the right product?* Verification compara o sistema com a especificação; validation compara a especificação com a necessidade real. Você pode construir perfeitamente o produto errado.
+</Insight>
+
+## Validação vs Verificação
+
+Vale tatuar essa diferença na cabeça, porque a confusão é constante:
+
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Validação vs Verificação (Boehm, 1984)</text>
+
+  <rect x="40" y="60" width="310" height="160" rx="8" fill="#5bc0de" fillOpacity="0.10" stroke="#5bc0de" strokeWidth="2" />
+  <text x="195" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="16" fontWeight="700">VALIDAÇÃO</text>
+  <text x="195" y="112" textAnchor="middle" fill="#5bc0de" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">"Are we building the RIGHT product?"</text>
+  <text x="195" y="135" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">O requisito está CERTO?</text>
+  <text x="195" y="150" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Captura o que o stakeholder precisa?</text>
+  <text x="195" y="172" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Compara: especificação ↔ necessidade real</text>
+  <text x="195" y="190" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Atores: STAKEHOLDERS, usuários, cliente</text>
+  <text x="195" y="208" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Quando: ANTES de construir (cedo)</text>
+
+  <rect x="370" y="60" width="310" height="160" rx="8" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="2" />
+  <text x="525" y="90" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="16" fontWeight="700">VERIFICAÇÃO</text>
+  <text x="525" y="112" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="700">"Are we building the product RIGHT?"</text>
+  <text x="525" y="135" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">O sistema atende ao requisito?</text>
+  <text x="525" y="150" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Faz o que foi especificado?</text>
+  <text x="525" y="172" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Compara: sistema ↔ especificação</text>
+  <text x="525" y="190" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Atores: QA, dev, automação de testes</text>
+  <text x="525" y="208" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Quando: DURANTE e DEPOIS de construir</text>
+
+  <line x1="40" y1="245" x2="680" y2="245" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+  <text x="360" y="270" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="12" fontWeight="700">Exemplo: sistema de biblioteca, requisito de empréstimo</text>
+
+  <rect x="40" y="285" width="310" height="115" rx="6" fill="#5bc0de" fillOpacity="0.05" stroke="#5bc0de" strokeWidth="1" />
+  <text x="195" y="305" textAnchor="middle" fill="#5bc0de" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Validação (com bibliotecária-chefe):</text>
+  <text x="195" y="325" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"O prazo de 14 dias está correto?"</text>
+  <text x="195" y="340" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Resposta possível: "Na verdade, livros</text>
+  <text x="195" y="355" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">infantis são 7 dias, técnicos 21 dias"</text>
+  <text x="195" y="375" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Achado: requisito incompleto.</text>
+  <text x="195" y="390" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Corrige ANTES de codificar.</text>
+
+  <rect x="370" y="285" width="310" height="115" rx="6" fill="#f0ad4e" fillOpacity="0.05" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="525" y="305" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Verificação (teste automatizado):</text>
+  <text x="525" y="325" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">"O sistema calcula prazo correto?"</text>
+  <text x="525" y="340" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Cenário Gherkin: empréstimo livro adulto</text>
+  <text x="525" y="355" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">→ data devolução = data atual + 14d</text>
+  <text x="525" y="375" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Resultado: passa ou falha contra spec.</text>
+  <text x="525" y="390" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Roda em cada build (CI).</text>
+</svg>
+
+Detalhe importante que muita gente perde: **validação acontece também na especificação**, antes de codificar. Você valida o requisito ESCRITO comparando com a necessidade real. Isso evita o pior pesadelo de projeto — entregar perfeitamente o produto errado.
+
+### Norma RTCA DO-178B (aeroespacial, citação concreta)
+
+Pra dar um exemplo concreto de quão importante essa distinção é: a norma RTCA **DO-178B** (Software Considerations in Airborne Systems and Equipment Certification) — publicada em dezembro de 1992 e usada na certificação de software embarcado em aeronaves — define processos separados de validação (dos requisitos) e verificação (do produto contra os requisitos), com rastreabilidade bidirecional obrigatória entre requisitos de sistema, requisitos de alto e baixo nível, casos de teste e código. Mesmo princípio do Boehm, aplicado em contexto onde vidas dependem da distinção. A norma foi substituída pela DO-178C em 2012, que mantém os mesmos princípios.
+
+## Técnicas de validação de requisitos
+
+Validação é uma atividade ANTES da codificação (idealmente). Várias técnicas, escolhidas conforme tempo, custo e formalidade:
+
+### 1. Revisões formais (Requirements Reviews / Inspections)
+
+Reunião estruturada onde **stakeholders, analistas, devs e QA leem o documento** procurando problemas. Variantes:
+
+- **Walkthrough**: autor apresenta o documento; participantes fazem perguntas. Informal, rápido, mas pega menos defeitos.
+- **Inspeção formal** (Fagan Inspection, criada por **Michael Fagan** na IBM em 1976, descrita no paper *"Design and code inspections to reduce errors in program development"*, IBM Systems Journal vol 15 nº 3): processo estruturado com papéis definidos (autor, moderador, leitor, registrador), checklist de defeitos, métricas de cobertura. Pega muito mais defeitos, mas custa mais tempo.
+- **Peer review assíncrono**: revisores leem e comentam em ferramenta (Confluence, Google Docs, Notion) — sem reunião síncrona. Cabe bem em equipe distribuída.
+
+**Checklist típico de revisão**:
+- Cada requisito atende às 9 características da 29148:2018 (necessary, unambiguous, etc.)?
+- Há conflitos entre requisitos?
+- Há requisitos duplicados?
+- NFRs estão cobertos (performance, segurança, usabilidade)?
+- Cada requisito tem fit criterion / critério de aceitação testável?
+- Vocabulário usa o Ubiquitous Language do domínio (L3)?
+- Restrições legais/regulatórias estão explícitas?
+
+### 2. Prototipagem
+
+Construir um protótipo (mockup, wireframe, MVP) e mostrar pro stakeholder antes de implementar pra valer. Tipos:
+
+- **Lo-fi (low fidelity)**: wireframes em papel, Figma básico. Custo baixo, valida fluxo e estrutura.
+- **Hi-fi (high fidelity)**: clickable prototype no Figma/Adobe XD com interações reais. Custo médio, valida experiência.
+- **Throwaway prototype**: código real mas descartável, só pra validar. Custo alto, valida viabilidade técnica.
+- **MVP (Minimum Viable Product)**: implementação mínima usada por usuários reais. Custo alto, valida valor e adoção.
+
+Prototipagem pega problemas que nenhuma revisão de documento pega: usuário olha pra tela e diz "ah não, eu queria ver os livros emprestados por data, não por título". Você só descobre isso vendo.
+
+### 3. Cenários e exemplos concretos
+
+Pegar cada requisito e perguntar **"me dá um exemplo"** ao stakeholder. Se ele consegue narrar um caso concreto e o requisito cobre, OK. Se não consegue narrar, o requisito é abstrato demais. Se narra um caso que o requisito NÃO cobre, falta algo.
+
+Exemplo na biblioteca:
+- Requisito: "Sistema deve calcular multa por atraso"
+- Pergunta: "Me dá um exemplo de cálculo de multa"
+- Resposta: "Multa é R$ 0,50 por dia de atraso, exceto pra leitores idosos (60+) que têm isenção"
+- Conclusão: requisito original IGNORAVA a regra de isenção. Corrigido.
+
+Essa técnica é a base do **Specification by Example** (Gojko Adzic, 2011), que conecta diretamente com BDD/Gherkin da L5.
+
+### 4. Acceptance Test-Driven Development (ATDD)
+
+Cliente, dev e QA escrevem JUNTOS os critérios de aceitação (idealmente em Gherkin) ANTES de implementar. A própria conversa de escrever o teste valida o requisito — se ninguém consegue formular o teste, o requisito não está claro.
+
+ATDD foi popularizado por **Lisa Crispin** e **Janet Gregory** no livro *Agile Testing: A Practical Guide for Testers and Agile Teams* (Addison-Wesley, 2008). É parte do "Three Amigos" — prática comum em XP/Scrum onde Product Owner, dev e QA discutem cada story antes do sprint começar.
+
+## Técnicas de verificação de requisitos
+
+Verificação acontece DURANTE e DEPOIS da implementação. Pergunta: o sistema construído atende ao requisito escrito?
+
+### V-Model (modelo V)
+
+Modelo clássico que mapeia atividades de verificação a cada nível de requisitos:
+
+<svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Modelo V — Verificação em cada nível</text>
+
+  <rect x="40" y="60" width="180" height="50" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="130" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Requisitos de stakeholder</text>
+  <text x="130" y="98" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(StRS — necessidades)</text>
+
+  <rect x="125" y="125" width="180" height="50" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="215" y="145" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Requisitos de sistema</text>
+  <text x="215" y="163" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(SyRS — comportamento)</text>
+
+  <rect x="210" y="190" width="180" height="50" rx="6" fill="currentColor" fillOpacity="0.05" stroke="currentColor" strokeWidth="1.5" />
+  <text x="300" y="210" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Design arquitetural</text>
+  <text x="300" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(módulos, interfaces)</text>
+
+  <rect x="295" y="255" width="180" height="50" rx="6" fill="#7cae50" fillOpacity="0.15" stroke="#7cae50" strokeWidth="2" />
+  <text x="385" y="275" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Implementação (código)</text>
+  <text x="385" y="293" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Java, Spring Boot, etc.</text>
+
+  <rect x="380" y="190" width="180" height="50" rx="6" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1.5" />
+  <text x="470" y="210" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Testes unitários</text>
+  <text x="470" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(JUnit, métodos isolados)</text>
+
+  <rect x="465" y="125" width="180" height="50" rx="6" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1.5" />
+  <text x="555" y="145" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Testes de integração</text>
+  <text x="555" y="163" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(módulos juntos, API)</text>
+
+  <rect x="500" y="60" width="180" height="50" rx="6" fill="#f0ad4e" fillOpacity="0.10" stroke="#f0ad4e" strokeWidth="1.5" />
+  <text x="590" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Testes de aceitação</text>
+  <text x="590" y="98" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(Gherkin, UAT)</text>
+
+  <line x1="130" y1="110" x2="215" y2="125" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="215" y1="175" x2="300" y2="190" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="300" y1="240" x2="385" y2="255" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="385" y1="280" x2="470" y2="240" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="470" y1="190" x2="555" y2="175" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+  <line x1="555" y1="125" x2="590" y2="110" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" />
+
+  <line x1="220" y1="85" x2="500" y2="85" stroke="#5bc0de" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="6,4" />
+  <line x1="305" y1="150" x2="465" y2="150" stroke="#5bc0de" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="6,4" />
+
+  <text x="360" y="335" textAnchor="middle" fill="#5bc0de" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Linhas pontilhadas: cada nível de requisito é verificado por nível correspondente de teste</text>
+  <text x="360" y="355" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">StRS ↔ aceitação | SyRS ↔ integração | Design ↔ unitário</text>
+  <text x="360" y="375" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Princípio: cada requisito tem pelo menos um teste; cada teste rastreia até um requisito</text>
+</svg>
+
+O modelo V não obriga sequência rígida (waterfall) — em ágil, o V "se repete" a cada sprint, cobrindo as stories daquele sprint. O princípio que sobrevive é: **cada nível de requisito tem um nível correspondente de verificação**.
+
+### Tipos de teste e o que verificam
+
+| Tipo de teste | Verifica | Quando |
+|---|---|---|
+| **Unitário** | Lógica de um método/função isolado | Em cada commit (CI) |
+| **Integração** | Interação entre módulos / API | Em cada build |
+| **Sistema** | Sistema completo funcionando | Antes de cada release |
+| **Aceitação (UAT)** | Critérios de aceitação das stories | Antes de release / em refinement |
+| **Performance** | NFRs de tempo/throughput | Periodicamente / antes de release |
+| **Segurança** | NFRs de segurança (penetration) | Periodicamente / em compliance |
+| **Regressão** | Funcionalidades existentes ainda funcionam | A cada mudança significativa |
+
+Cada teste serve a um **nível de requisito**. Teste unitário cobre regras de negócio internas; teste de aceitação cobre user story / caso de uso.
+
+## Rastreabilidade (Traceability)
+
+Rastreabilidade é o vínculo entre **origem do requisito**, **especificação**, **código**, **testes** e **documentação**. Sem ela, mudanças geram caos: muda o requisito X, mas ninguém sabe que isso afeta o código Y, o teste Z, o manual W.
+
+A norma **ISO/IEC/IEEE 29148:2018** formaliza a rastreabilidade como característica obrigatória de bom requisito (a #8 da L5 — Traceable).
+
+### Tipos de rastreabilidade
+
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Rastreabilidade: forward, backward e bidirectional</text>
+
+  <rect x="40" y="60" width="120" height="50" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="100" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Stakeholder</text>
+  <text x="100" y="97" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(necessidade)</text>
+
+  <rect x="200" y="60" width="120" height="50" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="260" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Requisito</text>
+  <text x="260" y="97" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(RF-07 ou US-03)</text>
+
+  <rect x="360" y="60" width="120" height="50" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="420" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Design / Código</text>
+  <text x="420" y="97" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(módulo, classe)</text>
+
+  <rect x="520" y="60" width="120" height="50" rx="6" fill="currentColor" fillOpacity="0.06" stroke="currentColor" strokeWidth="1.5" />
+  <text x="580" y="80" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Teste</text>
+  <text x="580" y="97" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">(TC-12, cenário)</text>
+
+  <line x1="160" y1="85" x2="200" y2="85" stroke="#28a745" strokeWidth="2" markerEnd="url(#arrow-fwd)" />
+  <line x1="320" y1="85" x2="360" y2="85" stroke="#28a745" strokeWidth="2" markerEnd="url(#arrow-fwd)" />
+  <line x1="480" y1="85" x2="520" y2="85" stroke="#28a745" strokeWidth="2" markerEnd="url(#arrow-fwd)" />
+
+  <defs>
+    <marker id="arrow-fwd" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#28a745" />
+    </marker>
+    <marker id="arrow-bwd" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#dc3545" />
+    </marker>
+  </defs>
+
+  <line x1="520" y1="125" x2="480" y2="125" stroke="#dc3545" strokeWidth="2" markerEnd="url(#arrow-bwd)" />
+  <line x1="360" y1="125" x2="320" y2="125" stroke="#dc3545" strokeWidth="2" markerEnd="url(#arrow-bwd)" />
+  <line x1="200" y1="125" x2="160" y2="125" stroke="#dc3545" strokeWidth="2" markerEnd="url(#arrow-bwd)" />
+
+  <text x="360" y="160" textAnchor="middle" fill="#28a745" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Forward (verde, acima): stakeholder → requisito → design → teste</text>
+  <text x="360" y="178" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">"Cada necessidade vira código testado" — pega requisitos esquecidos</text>
+
+  <text x="360" y="210" textAnchor="middle" fill="#dc3545" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">Backward (vermelho, abaixo): teste → design → requisito → stakeholder</text>
+  <text x="360" y="228" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">"Cada código existe pra atender necessidade real" — pega scope creep</text>
+
+  <rect x="40" y="255" width="640" height="55" rx="6" fill="currentColor" fillOpacity="0.04" stroke="currentColor" strokeWidth="1" />
+  <text x="360" y="275" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="11" fontWeight="700">Bidirectional = forward + backward</text>
+  <text x="360" y="293" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Forward pega: requisitos sem teste (cobertura incompleta)</text>
+  <text x="360" y="305" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Backward pega: código/teste sem requisito (scope creep, código órfão)</text>
+</svg>
+
+**Forward traceability** (do requisito pra frente): garante que cada requisito tem implementação e teste. Pega requisitos esquecidos.
+
+**Backward traceability** (do teste/código pra trás): garante que cada implementação tem requisito aprovado. Pega scope creep — código que ninguém pediu.
+
+**Bidirectional** combina os dois. É o padrão ouro pra sistemas críticos, exigido em normas como FDA (medical devices), DO-178B (aeroespacial), ISO 26262 (automotivo).
+
+### Matriz de Rastreabilidade (RTM — Requirements Traceability Matrix)
+
+Documento (planilha, ferramenta) que mapeia explicitamente esses vínculos. Formato comum:
+
+| ID Req | Descrição | Stakeholder | Story / UC | Código | Teste | Status |
+|---|---|---|---|---|---|---|
+| RF-07 | Registrar empréstimo com 14 dias | Bibliotecária | US-07.1, US-07.3 | LoanService | TC-12, TC-13 | Aprovado |
+| RF-08 | Renovar empréstimo | Leitor | US-08 | LoanService | TC-14 | Em dev |
+| RNF-03 | Busca em menos de 2s com 50k registros | TI municipal | US-tech-01 | SearchService | PT-03 | Pendente |
+| RF-15 | Tema escuro | Leitores jovens | US-15 | Theme | TC-22 | Backlog |
+
+**Em projetos simples**: planilha Excel/Google Sheets serve. **Em projetos grandes**: ferramentas dedicadas (Jama, DOORS, Polarion, ReqView) ou plugins do Jira (Modern Requirements4DevOps, R4J). **Em ágil simples**: links no Jira/Linear entre épicos → stories → tests no Cucumber.
+
+### Por que vale o esforço
+
+Em projetos com mais de 50 requisitos, rastreabilidade NÃO é luxo:
+
+- **Análise de impacto**: cliente pede mudar regra X. Sem RTM, equipe gasta dias procurando o que muda. Com RTM, 5 minutos.
+- **Cobertura de teste**: forward traceability mostra quais requisitos NÃO têm teste. Sem isso, time descobre buracos em produção.
+- **Auditoria**: auditor pergunta "mostre que feature X foi pedida pelo cliente e aprovada". Sem RTM, ninguém sabe responder.
+- **Refatoração segura**: dev quer remover código antigo. Backward traceability mostra qual requisito ele atende. Se não atende nenhum, pode remover.
+
+Em set/2025, a FDA citou empresa de dispositivos médicos por **rastreabilidade inadequada** entre requisitos de produto e controles de gerenciamento de risco — multa real, baseada em ausência de RTM.
+
+## Custo de mudança e quando pegar erros
+
+**Barry Boehm**, no livro *Software Engineering Economics* (Prentice Hall, 1981) e em artigos posteriores, mostrou empiricamente que o custo de corrigir um erro **cresce exponencialmente** com a fase em que é descoberto:
+
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <text x="360" y="25" textAnchor="middle" fill="#fff" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="14" fontWeight="700">Custo relativo de corrigir um defeito (Boehm, 1981) — escala logarítmica</text>
+
+  <line x1="80" y1="290" x2="80" y2="60" stroke="currentColor" strokeWidth="1.5" />
+  <line x1="80" y1="290" x2="680" y2="290" stroke="currentColor" strokeWidth="1.5" />
+
+  <text x="40" y="75" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">100x</text>
+  <line x1="76" y1="70" x2="84" y2="70" stroke="currentColor" strokeWidth="1" />
+  <text x="40" y="130" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">10x</text>
+  <line x1="76" y1="125" x2="84" y2="125" stroke="currentColor" strokeWidth="1" />
+  <text x="40" y="220" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">1x</text>
+  <line x1="76" y1="215" x2="84" y2="215" stroke="currentColor" strokeWidth="1" />
+
+  <line x1="80" y1="70" x2="680" y2="70" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="3,3" />
+  <line x1="80" y1="125" x2="680" y2="125" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="3,3" />
+  <line x1="80" y1="215" x2="680" y2="215" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="3,3" />
+
+  <rect x="105" y="215" width="70" height="75" fill="#28a745" fillOpacity="0.6" stroke="#28a745" strokeWidth="1" />
+  <text x="140" y="245" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Requisitos</text>
+  <text x="140" y="310" textAnchor="middle" fill="#28a745" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~1x</text>
+
+  <rect x="195" y="190" width="70" height="100" fill="#28a745" fillOpacity="0.6" stroke="#28a745" strokeWidth="1" />
+  <text x="230" y="220" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Design</text>
+  <text x="230" y="310" textAnchor="middle" fill="#28a745" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~2-3x</text>
+
+  <rect x="285" y="155" width="70" height="135" fill="#f0ad4e" fillOpacity="0.6" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="320" y="180" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Código</text>
+  <text x="320" y="310" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~5-10x</text>
+
+  <rect x="375" y="125" width="70" height="165" fill="#f0ad4e" fillOpacity="0.6" stroke="#f0ad4e" strokeWidth="1" />
+  <text x="410" y="155" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Teste</text>
+  <text x="410" y="310" textAnchor="middle" fill="#f0ad4e" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~10-20x</text>
+
+  <rect x="465" y="95" width="70" height="195" fill="#dc3545" fillOpacity="0.6" stroke="#dc3545" strokeWidth="1" />
+  <text x="500" y="125" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Aceitação</text>
+  <text x="500" y="310" textAnchor="middle" fill="#dc3545" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~30-50x</text>
+
+  <rect x="555" y="70" width="70" height="220" fill="#dc3545" fillOpacity="0.6" stroke="#dc3545" strokeWidth="1" />
+  <text x="590" y="100" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.85">Produção</text>
+  <text x="590" y="310" textAnchor="middle" fill="#dc3545" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700">~50-100x</text>
+
+  <text x="360" y="340" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Gráfico ILUSTRATIVO em escala logarítmica. Valores precisos variam com tamanho do projeto e contexto.</text>
+  <text x="360" y="354" textAnchor="middle" fill="#fff" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.85">Curva original em Boehm 1981 (Software Engineering Economics), dados de projetos TRW/IBM dos anos 70-80.</text>
+</svg>
+
+A leitura prática:
+
+- Erro pego na **revisão de requisitos** custa R$ 100
+- Mesmo erro pego na **codificação** custa R$ 1.000
+- Mesmo erro pego em **produção** pode custar R$ 10.000 ou mais
+
+A magnitude exata varia (projeto pequeno tem curva mais suave, projeto grande é mais íngreme). **Mas a direção é robusta**: encontrar erros cedo é dramaticamente mais barato.
+
+Por isso validação e revisões formais valem o tempo investido. Uma reunião de 2 horas que pega 5 problemas de requisitos economiza dias de retrabalho meses depois.
+
+### Caveat importante sobre a curva
+
+Estudos posteriores mostraram que a curva foi medida em ambientes burocráticos (governo dos EUA e contratados nos anos 70) com ferramentas primitivas. Em equipes modernas com **CI/CD, feedback contínuo e deploys frequentes**, a curva é MENOS íngreme. Mas mesmo nesses contextos, requisitos errados ainda são caros — só que aparecem mais cedo (em horas/dias em vez de meses). **A vantagem do ágil não é eliminar o custo de mudança, é encurtar o ciclo de feedback pra descobrir cedo.**
+
+## Gestão de mudanças (Change Management)
+
+Requisitos mudam. Sempre. Cliente entende melhor o que precisa; mercado muda; regulamentação nova; tecnologia evolui. A questão não é "como evitar mudança" mas "como **gerenciar** mudança sem perder controle".
+
+### Processo formal (em projetos grandes / contratos)
+
+1. **Change Request (CR)** registrada formalmente — quem pediu, motivo, requisito afetado, impacto esperado
+2. **Análise de impacto** — usar RTM pra identificar tudo que muda (código, testes, documentação, outros requisitos)
+3. **Estimativa de custo** — quanto custa em horas, prazo, dinheiro
+4. **CCB (Change Control Board)** decide — aprova, rejeita, adia ou pede mais análise
+5. **Implementação** — se aprovada, vai pro backlog
+6. **Atualização da documentação** — SRS, RTM, contratos, etc.
+7. **Comunicação** — stakeholders notificados
+
+### Processo ágil
+
+Mudança é tratada como REORDENAÇÃO DO BACKLOG, não exceção. Mas isso NÃO significa zero processo:
+
+- PO avalia a mudança contra valor de negócio
+- Time estima esforço
+- PO reorganiza prioridades
+- Stories afetadas são revistas (talvez canceladas, divididas, fundidas)
+- Sprint atual NÃO é interrompido (em Scrum estrito) — mudança entra no próximo
+- Stakeholders são informados em sprint review
+
+A diferença NÃO é "sem processo" vs "processo formal". É **rigor do processo** e **granularidade da decisão** (uma feature grande vs ajustes finos).
+
+### Versionamento de requisitos
+
+Em sistemas regulados e contratos formais, cada versão do SRS é numerada (v1.0, v1.1, etc.) com **histórico de mudanças** explícito. Norma 29148:2018 recomenda versionamento controlado.
+
+Em backlogs ágeis, o backlog em si é versionado (snapshot por sprint, baseline por release). Ferramentas como Jira mantêm histórico completo de cada story.
+
+## Métricas de qualidade dos requisitos
+
+Como medir se os requisitos estão "bons"? Algumas métricas usadas em equipes maduras:
+
+### Métricas de processo (durante elicitação/especificação)
+
+- **Volatilidade de requisitos** = mudanças por sprint / total de requisitos. Alta volatilidade indica entendimento incompleto.
+- **Defeitos encontrados por revisão** = quantos problemas a revisão pegou. Métrica saudável: 5-15 problemas por revisão estruturada (muito menos = revisão superficial; muito mais = especificação ruim).
+- **Tempo de fechamento de CR** = quanto tempo da abertura à decisão. Maior que 2 semanas indica gargalo.
+
+### Métricas de cobertura
+
+- **Cobertura forward** = requisitos com pelo menos um teste / total de requisitos. Meta típica: 100% pra requisitos funcionais críticos.
+- **Cobertura backward** = código com requisito associado / total de código. Meta: alta — código órfão é sinal de scope creep.
+- **Cobertura de NFR** = NFRs testados / NFRs especificados. Frequentemente baixa — equipes esquecem de testar performance, segurança.
+
+### Métricas de defeitos
+
+- **Defeitos por origem** = quantos defeitos em produção vieram de erro de requisitos vs design vs código. Estudos resumidos em Wiegers & Beatty (*Software Requirements*, 3ª ed, 2013) reportam que aproximadamente 40% dos defeitos em produção têm origem em requisitos.
+- **Custo de retrabalho** = horas gastas refazendo features por mudança ou erro de requisitos. Acima de 30% do esforço total indica problema sério.
+- **Taxa de aceitação na UAT** = stories aceitas no primeiro teste / total. Abaixo de 80% indica AC mal escritos ou validação insuficiente.
+
+## Erros comuns na V&V e gestão
+
+**1. Pular validação porque "tá no documento".** Documento escrito ≠ validado. Se cliente não disse "sim, é isso" sobre cada requisito importante, não foi validado.
+
+**2. Confundir verificação com validação.** Equipe testa que o sistema atende à especificação (verificação) e assume que isso valida o sistema. Não valida. Sistema pode atender à especificação ERRADA.
+
+**3. Rastreabilidade só no início do projeto.** RTM é criada, ninguém atualiza. Após 3 meses, está obsoleta. Pior que não ter — gera falsa confiança.
+
+**4. Tratar mudança como exceção, não regra.** Equipes que projetam "sem prever mudança" sofrem quando ela inevitavelmente chega. Mudança é normal — processo de gestão também.
+
+**5. Métricas que ninguém usa.** Equipe coleta dezenas de métricas, mas ninguém olha pra elas pra tomar decisão. Pior que não medir. Escolha 3-5 métricas que **mudam comportamento**.
+
+**6. Validação só com um stakeholder.** Cliente principal aprova; outros stakeholders descobrem em produção que não foram consultados. Validação precisa cobrir TODOS os stakeholders relevantes (lembre da matriz de stakeholders na L2).
+
+**7. UAT como teatro.** Cliente "valida" clicando em telas sem entender o que está testando. UAT precisa cobrir os cenários reais de uso, com dados reais, em condições realistas.
+
+**8. Backward traceability ignorada.** Time foca em forward (ver se tudo é testado) e esquece backward (ver se tudo que existe tem motivo). Resultado: código que ninguém precisa, aumentando manutenção.
+
+## Aplicação no sistema de biblioteca
+
+Pra biblioteca municipal sob contrato com prefeitura, V&V e gestão estruturadas:
+
+### Validação inicial
+
+- **Revisão formal** do SRS com bibliotecária-chefe, atendentes (2-3), representante TI da prefeitura. Reunião de 4 horas usando checklist 29148. Resultado típico: 10-15 problemas identificados, corrigidos antes de codificar.
+- **Protótipo Figma** das telas principais (cadastro, busca, empréstimo) validado com 5 atendentes em sessão de 2 horas. Achados: fluxo de busca diferente do esperado, terminologia "leitor" vs "usuário" inconsistente, falta tela de relatórios diários.
+- **ATDD nos sprints**: PO da prefeitura, dev e QA escrevem Gherkin juntos antes de cada sprint começar.
+
+### Verificação durante implementação
+
+- **Testes unitários** (JUnit) em cada classe de regra de negócio (LoanService, FineCalculator, etc.). Meta: cobertura ≥ 70%.
+- **Testes de integração** (Spring Boot Test) cobrindo API REST + persistência. Rodam em CI a cada push.
+- **Testes de aceitação** (Cucumber-JVM com cenários Gherkin) cobrindo cada user story. Rodam antes de release.
+- **Testes de performance** (Gatling) validando NFR: busca em menos de 2s com 50k registros. Rodam semanalmente.
+
+### Rastreabilidade na biblioteca
+
+- RTM em Excel atualizada por analista a cada sprint. Cada requisito do SRS aponta pras stories que o detalham, código (classe/módulo), testes que o cobrem.
+- Em ferramenta de gestão: Jira com plugin Modern Requirements4DevOps mantendo ligações automaticamente.
+- Antes de release, relatório de cobertura: % de requisitos com teste passando.
+
+### Gestão de mudanças na biblioteca
+
+- Contrato com prefeitura prevê **CR formal** pra mudanças de escopo (acima de 2 horas de trabalho). CR pequenas (UI tweaks) entram direto no backlog.
+- **CCB** mensal com representante da prefeitura, gerente do projeto e tech lead. Decide aprovações e prioridades.
+- SRS versionado a cada release (v1.0 contrato inicial; v1.1, v1.2, etc., refletindo mudanças aprovadas).
+
+## Aplicação no Carbon Credit Compensation Platform
+
+Pro projeto Fatec, V&V mais leve, mas presente:
+
+### Validação
+
+- **Revisão informal** do documento curto pelos 4 membros da equipe (Bruno, Murilo, Fabiano, Pedro). Cada um lê e comenta. Resultados consolidados em reunião de 1 hora.
+- **Validação contra Lei 15.042/2024**: revisar se requisitos cobrem CBE, CRVE, aposentadoria e operadores acima de 25 mil tCO2e. Sem stakeholder externo real — equipe valida contra texto da lei.
+
+### Verificação
+
+- **JUnit** em cada agregado DDD (Operador, Inventário, Crédito) com regras de negócio invariantes.
+- **Cucumber-JVM** com cenários Gherkin pros casos críticos (aposentadoria definitiva, validação de duplicidade).
+- **Cobertura de teste** mínima de 60% pros agregados centrais.
+
+### Rastreabilidade no Carbon Credit
+
+- Planilha simples em Google Sheets mapeando requisitos → user stories → cenários Gherkin → classes Java.
+- Como não há stakeholder externo, rastreabilidade até a Lei 15.042/2024 é suficiente.
+
+### Gestão de mudanças no Carbon Credit
+
+- Como projeto é fechado (entrega Fatec), CRs são raras. Mudanças decididas no grupo via WhatsApp / reunião.
+- ADRs (Architecture Decision Records, da Trilha de Arquitetura) documentam decisões importantes — ADR-0005 já registrou a escolha de in-memory repositories.
+
+## Próximos passos
+
+| Lição | Tema |
+|---|---|
+| L1 | Introdução à Engenharia de Requisitos |
+| L2 | Elicitação de Requisitos |
+| L3 | Levantamento de Requisitos de Domínio |
+| L4 | Análise e Classificação |
+| L5 | Especificação e Documentação |
+| **L6 (esta)** | Validação, Verificação e Gestão |
+| **L7 (próxima)** | Requisitos Ágeis — Story Mapping, épicos, refinement, Definition of Ready/Done |
+
+A L7 fecha a trilha cobrindo requisitos no contexto ágil: **Story Mapping** de Jeff Patton, decomposição de épicos, refinement contínuo, Definition of Ready (quando uma story está pronta pra entrar em sprint) e Definition of Done (quando está pronta pra ser entregue).
+
+---
+
+**Referências canônicas usadas nesta lição**:
+
+- Boehm, Barry W. *"Verifying and validating software requirements and design specifications"*. IEEE Software, vol. 1, nº 1, pp. 75-88, 1984. Origem da distinção V&V mais citada na engenharia de software.
+- Boehm, Barry W. *Software Engineering Economics*. Prentice Hall, 1981. Introduz a curva exponencial de custo de mudança, baseada em dados empíricos de projetos TRW e IBM.
+- Fagan, Michael. *"Design and code inspections to reduce errors in program development"*. IBM Systems Journal, vol. 15, nº 3, pp. 182-211, 1976. Introduz a Fagan Inspection — processo estruturado de revisão.
+- ISO/IEC/IEEE 29148:2018 — formaliza rastreabilidade como característica obrigatória de bom requisito.
+- Crispin, Lisa; Gregory, Janet. *Agile Testing: A Practical Guide for Testers and Agile Teams*. Addison-Wesley, 2008. Popularizou ATDD e práticas de "Three Amigos".
+- Adzic, Gojko. *Specification by Example: How Successful Teams Deliver the Right Software*. Manning, 2011. Conecta exemplos concretos à validação de requisitos.
+- RTCA DO-178B — *Software Considerations in Airborne Systems and Equipment Certification*. Padrão da indústria aeroespacial que formaliza V&V em contexto crítico.
+
+**Observações sobre fontes**:
+
+- A curva de custo de mudança de Boehm (1:10:100) tem variações entre estudos e foi medida principalmente em projetos do governo dos EUA e contratados nos anos 70-80, com ferramentas e processos da época. A direção (custo cresce com fase tardia) é robusta; o número exato varia conforme contexto e tamanho do projeto.
+- Métricas de defeitos por origem (~40% vindos de requisitos) aparecem em literatura como Wiegers & Beatty *Software Requirements* (3ª edição, 2013) — proporção aproximada, varia entre estudos.
+- A norma RTCA DO-178B foi substituída pela DO-178C (aprovada em dezembro/2011, disponível pra uso em janeiro/2012) como padrão atual da aeroespacial, mas DO-178B ainda é frequentemente citada na literatura de V&V.

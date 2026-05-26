@@ -1,0 +1,573 @@
+---
+titulo: "Union-Find: A Estrutura Que Roda em Tempo (Quase) Constante"
+trilha: "algoritmos"
+duracaoMin: 55
+dificuldade: "intermediario"
+referencias:
+  - "Bernard A. Galler, Michael J. Fischer (1964), 'An improved equivalence algorithm', Communications of the ACM 7(5), pp. 301-303 — paper original"
+  - "John Hopcroft, Jeffrey Ullman (1973), 'Set Merging Algorithms', SIAM Journal on Computing 2(4), pp. 294-303"
+  - "Robert E. Tarjan (1975), 'Efficiency of a Good But Not Linear Set Union Algorithm', Journal of the ACM 22(2), pp. 215-225 — análise O(α(n))"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 19 — Data Structures for Disjoint Sets"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Seção 1.5 — Case Study: Union-Find (Princeton)"
+  - "MIT OCW 6.046J (Spring 2015), Lecture 16 — Amortized Analysis, Erik Demaine"
+  - "Kleinberg & Tardos, Algorithm Design (Cornell, 2005), Capítulo 4.6"
+  - "Princeton COS 423 — Path Compression notes by Raimund Seidel"
+---
+
+## A função que cresce mais devagar que tudo
+
+Em **1928**, dois matemáticos alemães — **Wilhelm Ackermann** (aluno de David Hilbert) e mais tarde **Rózsa Péter** — definiram uma função recursiva pra demonstrar algo curioso na teoria da computação: existem funções computáveis mas **não primitivamente recursivas**. A função, hoje chamada de **função de Ackermann**, ficou famosa por **crescer absurdamente rápido**:
+
+```
+A(1, 1) = 3
+A(2, 2) = 7
+A(3, 3) = 61
+A(4, 4) = 2^(2^(2^65536)) - 3
+```
+
+`A(4, 4)` tem mais dígitos que átomos no universo observável. `A(5, 5)` é literalmente impossível de escrever — não cabe em nenhuma representação física conhecida.
+
+Agora considere a **função inversa** dela, chamada **α(n)**. Se Ackermann cresce explosivamente, sua inversa cresce **devagar de um jeito que parece magia**:
+
+```
+α(n) ≤ 1 para n ≤ 3
+α(n) ≤ 2 para n ≤ 7
+α(n) ≤ 3 para n ≤ 2.000 (aproximadamente)
+α(n) ≤ 4 para n ≤ 10^80 (mais que átomos no universo observável!)
+α(n) ≤ 5 para qualquer n que algum dia rodará em um computador
+```
+
+Pra qualquer entrada que você vai ver na vida — qualquer banco de dados, qualquer rede social, qualquer simulação — **α(n) é no máximo 4**. Constante na prática. Pra todos os efeitos.
+
+Em **1975**, **Robert Endre Tarjan** publicou um paper de 11 páginas no Journal of the ACM com um título que parece modesto: *"Efficiency of a Good But Not Linear Set Union Algorithm"*. Nele, ele provou que uma estrutura de dados surpreendentemente simples, chamada **Union-Find** (ou **Disjoint Set Union**, ou **DSU**), opera em tempo amortizado **O(α(n))** por operação. Quase constante. **Em qualquer caso prático.**
+
+Esta lição é sobre essa estrutura. Vamos ver de onde ela veio, como funciona, as duas otimizações que a transformam de O(n) por operação pra praticamente O(1), e por onde ela está rodando em produção. É uma das estruturas mais elegantes em toda a computação — e uma das mais subestimadas.
+
+---
+
+## O problema que Union-Find resolve
+
+Imagine que você está modelando uma rede social. Pessoas começam isoladas. Aos poucos, pares de pessoas se tornam **amigos**. Você precisa responder duas perguntas eficientemente:
+
+1. **A pessoa X e a pessoa Y estão no mesmo grupo de amizade?** (mesma componente conexa)
+2. **Conecte os grupos da pessoa X e da pessoa Y.**
+
+Operações:
+
+- **find(x)**: retorna o "líder" do grupo de x
+- **union(x, y)**: mescla os grupos de x e y
+
+Se `find(x) == find(y)`, os dois estão no mesmo grupo. Simples.
+
+Esse padrão aparece em muitos problemas: detecção de ciclos em grafos não-direcionados (durante construção, se uma aresta conecta dois vértices já no mesmo componente, é um ciclo), **algoritmo de Kruskal pra MST** (vimos na lição passada), análise de conectividade dinâmica em redes, agrupamento hierárquico, análise de equações de equivalência.
+
+### Soluções ingênuas e seus problemas
+
+**Tentativa 1**: array `componente[x]` = "id do componente de x".
+
+- `find(x)`: O(1) — acessa o array
+- `union(x, y)`: O(n) — precisa renomear todos os elementos de um componente para o id do outro
+
+Total pra n operações: **O(n²)**. Lento.
+
+**Tentativa 2**: cada elemento aponta pra outro elemento do mesmo grupo, formando uma árvore.
+
+```
+parent[x] = "o pai de x na árvore"
+```
+
+O líder do grupo é a **raiz da árvore** (o elemento onde `parent[x] == x`).
+
+- `find(x)`: sobe pela árvore até a raiz
+- `union(x, y)`: faz a raiz de uma árvore apontar pra raiz da outra
+
+Sem cuidado, a árvore pode ficar **muito alta** (vira lista ligada), e `find` cai pra O(n).
+
+A solução: duas otimizações que mantêm a árvore **rasa**.
+
+---
+
+## Implementação básica
+
+Começamos com a estrutura crua, sem otimizações:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class UnionFind {
+    private int[] parent;
+
+    public UnionFind(int n) {
+        parent = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;     // cada um é sua própria raiz
+    }
+
+    public int find(int x) {
+        while (parent[x] != x) x = parent[x];           // sobe até a raiz
+        return x;
+    }
+
+    public void union(int x, int y) {
+        int raizX = find(x);
+        int raizY = find(y);
+        if (raizX != raizY) {
+            parent[raizX] = raizY;                       // une as raízes
+        }
+    }
+
+    public boolean conectados(int x, int y) {
+        return find(x) == find(y);
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+class UnionFind {
+private:
+    std::vector<int> parent;
+public:
+    UnionFind(int n) : parent(n) {
+        for (int i = 0; i < n; i++) parent[i] = i;
+    }
+
+    int find(int x) {
+        while (parent[x] != x) x = parent[x];
+        return x;
+    }
+
+    void unite(int x, int y) {
+        int raizX = find(x);
+        int raizY = find(y);
+        if (raizX != raizY) {
+            parent[raizX] = raizY;
+        }
+    }
+
+    bool conectados(int x, int y) {
+        return find(x) == find(y);
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+Funciona. Mas tem um problema sério: se você faz `union(1, 2)`, `union(2, 3)`, `union(3, 4)`, ..., `union(n-1, n)`, a árvore vira:
+
+```
+n → n-1 → n-2 → ... → 2 → 1
+```
+
+`find(n)` percorre n nós. **O(n) por operação**. Tudo o que evitamos com a Tentativa 2 voltou.
+
+Pra resolver, precisamos de duas otimizações **independentes mas complementares**.
+
+---
+
+## Otimização 1: Union by Rank (ou Union by Size)
+
+Ideia simples: quando vai unir duas árvores, sempre **anexa a árvore menor à maior**. Isso evita criar árvores altas.
+
+**Rank**: estimativa da altura da árvore (não exata após path compression — mas serve como limite superior).
+
+```java
+parent[i] = i;
+rank[i] = 0;          // todos começam com altura 0 (folhas)
+```
+
+Em `union(x, y)`:
+- Acha raiz de x e raiz de y
+- Se ranks são diferentes, anexa a de menor rank na de maior rank (rank não muda)
+- Se ranks são iguais, anexa uma na outra e incrementa o rank da raiz resultante
+
+```java
+public void union(int x, int y) {
+    int rx = find(x);
+    int ry = find(y);
+    if (rx == ry) return;
+    if (rank[rx] < rank[ry]) {
+        parent[rx] = ry;
+    } else if (rank[rx] > rank[ry]) {
+        parent[ry] = rx;
+    } else {
+        parent[ry] = rx;
+        rank[rx]++;
+    }
+}
+```
+
+Garantia: com union by rank, a **altura é O(log n)**. Isso já reduz `find` pra O(log n) por operação. Pra n operações, total O(n log n).
+
+### Union by Size (variante)
+
+Em vez de rank (altura), pode usar tamanho do componente:
+
+```java
+size[i] = 1;          // cada um começa com 1 elemento
+
+public void union(int x, int y) {
+    int rx = find(x);
+    int ry = find(y);
+    if (rx == ry) return;
+    if (size[rx] < size[ry]) {
+        parent[rx] = ry;
+        size[ry] += size[rx];
+    } else {
+        parent[ry] = rx;
+        size[rx] += size[ry];
+    }
+}
+```
+
+**Union by size e union by rank dão a mesma complexidade assintótica.** Use o que for mais conveniente — size tem a vantagem de você saber quantos elementos tem cada componente "de graça".
+
+---
+
+## Otimização 2: Path Compression
+
+Outra ideia simples: durante `find(x)`, depois de subir até a raiz, **aponta todos os nós do caminho diretamente pra raiz**.
+
+Antes:
+```
+1 → 2 → 3 → 4 → 5 (raiz)
+```
+
+Depois de `find(1)`:
+```
+1 → 5
+2 → 5
+3 → 5
+4 → 5
+5 (raiz)
+```
+
+Resultado: chamadas futuras pra qualquer um desses nós são **O(1)**.
+
+Implementação recursiva (uma linha extra):
+
+```java
+public int find(int x) {
+    if (parent[x] != x) {
+        parent[x] = find(parent[x]);    // ← path compression aqui
+    }
+    return parent[x];
+}
+```
+
+Versão iterativa (mais comum em produção, evita risco de stack overflow):
+
+```java
+public int find(int x) {
+    int raiz = x;
+    while (parent[raiz] != raiz) raiz = parent[raiz];
+
+    // segunda passada: aponta todos os do caminho pra raiz
+    while (parent[x] != raiz) {
+        int proximo = parent[x];
+        parent[x] = raiz;
+        x = proximo;
+    }
+    return raiz;
+}
+```
+
+A versão iterativa faz duas passadas (uma pra achar a raiz, outra pra comprimir), mas evita recursão profunda.
+
+---
+
+## A magia: as duas otimizações juntas
+
+**Union by rank** (ou size) **+ path compression** = a estrutura "completa".
+
+Tarjan (1975) provou que com **as duas otimizações ativas**, qualquer sequência de m operações em n elementos custa **O(m × α(n))** total, onde α é a inversa da função de Ackermann.
+
+Pra todos os efeitos práticos, **α(n) é constante** (no máximo 4 pra n até 10^80). Significa que cada operação é **praticamente O(1)**, mas o "praticamente" é matematicamente preciso — não é hand-waving.
+
+A demonstração formal é uma das análises de complexidade amortizada mais celebradas em ciência da computação. Tarjan ganhou o **Turing Award em 1986** parcialmente por esse e outros trabalhos relacionados.
+
+<Insight>
+**Por que α(n) e não O(1) exato?** Tarjan também provou no mesmo paper de 1975 que **nenhum algoritmo** pra union-find pode ter complexidade menor que Ω(α(n)) amortizada — a inversa de Ackermann é um **limite inferior** apertado. Tem prova de impossibilidade.
+</Insight>
+
+### Implementação final completa
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class UnionFind {
+    private int[] parent;
+    private int[] rank;
+    private int numComponentes;
+
+    public UnionFind(int n) {
+        parent = new int[n];
+        rank = new int[n];
+        numComponentes = n;
+        for (int i = 0; i < n; i++) parent[i] = i;
+    }
+
+    public int find(int x) {
+        int raiz = x;
+        while (parent[raiz] != raiz) raiz = parent[raiz];
+
+        // path compression
+        while (parent[x] != raiz) {
+            int proximo = parent[x];
+            parent[x] = raiz;
+            x = proximo;
+        }
+        return raiz;
+    }
+
+    public boolean union(int x, int y) {
+        int rx = find(x);
+        int ry = find(y);
+        if (rx == ry) return false;
+
+        // union by rank
+        if (rank[rx] < rank[ry]) {
+            parent[rx] = ry;
+        } else if (rank[rx] > rank[ry]) {
+            parent[ry] = rx;
+        } else {
+            parent[ry] = rx;
+            rank[rx]++;
+        }
+        numComponentes--;
+        return true;
+    }
+
+    public boolean conectados(int x, int y) {
+        return find(x) == find(y);
+    }
+
+    public int count() {
+        return numComponentes;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+class UnionFind {
+private:
+    std::vector<int> parent;
+    std::vector<int> rank_;
+    int numComponentes;
+
+public:
+    UnionFind(int n) : parent(n), rank_(n, 0), numComponentes(n) {
+        for (int i = 0; i < n; i++) parent[i] = i;
+    }
+
+    int find(int x) {
+        int raiz = x;
+        while (parent[raiz] != raiz) raiz = parent[raiz];
+
+        // path compression
+        while (parent[x] != raiz) {
+            int proximo = parent[x];
+            parent[x] = raiz;
+            x = proximo;
+        }
+        return raiz;
+    }
+
+    bool unite(int x, int y) {
+        int rx = find(x);
+        int ry = find(y);
+        if (rx == ry) return false;
+
+        if (rank_[rx] < rank_[ry]) {
+            parent[rx] = ry;
+        } else if (rank_[rx] > rank_[ry]) {
+            parent[ry] = rx;
+        } else {
+            parent[ry] = rx;
+            rank_[rx]++;
+        }
+        numComponentes--;
+        return true;
+    }
+
+    bool conectados(int x, int y) {
+        return find(x) == find(y);
+    }
+
+    int count() const {
+        return numComponentes;
+    }
+};
+```
+
+</Code>
+</CodeSwap>
+
+40 linhas. Cabe em meio quadro. E é uma das estruturas mais eficientes que existem em computação.
+
+<ComplexidadeBox melhor="O(α(n))" media="O(α(n))" pior="O(α(n))" />
+
+---
+
+## Aplicação 1: Kruskal's MST
+
+Já vimos na lição passada. Vamos refazer o pseudocódigo com a estrutura na mão:
+
+```
+Kruskal(grafo):
+    ordena arestas por peso ascendente
+    UF = UnionFind(num_vertices)
+    mst = []
+    para cada aresta (u, v, peso) em ordem:
+        se UF.find(u) != UF.find(v):       // não formam ciclo
+            UF.union(u, v)
+            mst.adicionar(aresta)
+            se size(mst) == V - 1: termina  // já tem todas as arestas necessárias
+    retorna mst
+```
+
+**Por que Union-Find é a estrutura certa aqui?** Porque a detecção de ciclo em Kruskal pergunta exatamente "esses dois vértices já estão no mesmo componente conexo?" — a pergunta fundamental que Union-Find responde rápido. Sem ela, o algoritmo cairia pra O(V × E) ou O(V²), inviável pra grafos grandes.
+
+**Complexidade total do Kruskal**: O(E log E) pelo sort + O(E × α(V)) pelas operações de Union-Find = **O(E log E)** dominada pelo sort.
+
+---
+
+## Aplicação 2: Conectividade dinâmica
+
+Problema clássico em rede: você tem uma rede onde **conexões são adicionadas ao longo do tempo**. A qualquer momento, alguém pode perguntar: "as máquinas A e B conseguem se comunicar?".
+
+Solução ingênua: BFS/DFS toda vez que perguntam. O(V + E) por consulta. Lento.
+
+Com Union-Find: cada nova aresta vira um `union`. Cada consulta é um `find` + comparação. **Praticamente O(1) por operação**.
+
+Essa aplicação está em:
+
+- **Análise de redes de computadores** (quais máquinas estão alcançáveis)
+- **Detecção de fraudes em redes sociais** (clusters de contas suspeitas)
+- **Sistemas de circuitos elétricos** (terminais conectados)
+- **Análise de imagens** (connected components em flood fill, segmentação)
+
+<Aviso>
+Union-Find **não suporta DESCONEXÃO eficiente**. Removendo uma aresta da rede, você não consegue desfazer um union em O(α(n)). Existem estruturas mais sofisticadas (link-cut trees, Euler tour trees) pra suportar conectividade dinâmica completa, mas são muito mais complexas. Quando o problema permite, prefira Union-Find clássica.
+</Aviso>
+
+---
+
+## Aplicação 3: Detecção de ciclo em grafo não-direcionado
+
+Você quer saber se um grafo não-direcionado tem ciclo. Já vimos uma solução com DFS na lição de Grafos. Tem uma alternativa elegante com Union-Find:
+
+```java
+public boolean temCiclo(int n, int[][] arestas) {
+    UnionFind uf = new UnionFind(n);
+    for (int[] aresta : arestas) {
+        int u = aresta[0], v = aresta[1];
+        if (uf.conectados(u, v)) {
+            return true;                  // u e v já estão conectados, esta aresta forma ciclo
+        }
+        uf.union(u, v);
+    }
+    return false;
+}
+```
+
+**Complexidade**: O(E × α(V)). Linear na prática.
+
+---
+
+## Aplicação 4: Problemas de equivalência
+
+Você tem um conjunto de afirmações:
+```
+a == b
+b == c
+d == e
+b == d
+```
+
+Pergunta: `a == e`?
+
+Cada afirmação é um `union`. Pra responder, faz `find(a)` e `find(e)` e compara. Esse problema (formalmente: **decisão de equivalência em álgebra**) é exatamente o que motivou Galler e Fischer a criar a estrutura em **1964**, no paper original *"An improved equivalence algorithm"*. A motivação era análise de equações de equivalência em compiladores.
+
+---
+
+## Aplicação 5: Number of Islands II (LeetCode 305)
+
+Problema clássico em entrevistas: você tem uma grade `m × n` começando vazia (toda água). Operações adicionam terra em posições específicas. Após cada operação, retorne o **número de ilhas** (componentes conexos de terra adjacente horizontal/vertical).
+
+Solução naive: BFS depois de cada operação. O(m × n) por operação.
+
+Solução com Union-Find:
+- Trata cada célula como elemento (id = `linha × n + coluna`)
+- Quando adiciona terra em (r, c), checa as 4 direções
+- Se vizinho é terra, faz `union(célula, vizinho)`
+- Conta de ilhas = número de componentes em UF restrito a células de terra
+
+Cada operação: O(α(n)) ≈ constante. **Tipicamente 100× mais rápido** que a abordagem ingênua em entradas grandes.
+
+---
+
+## Algumas curiosidades históricas
+
+**Galler e Fischer (1964)** — primeira publicação da estrutura, sem as otimizações, motivada por compiladores e equivalência de variáveis.
+
+**Hopcroft e Ullman (1973)** — análise mais cuidadosa, mostraram que com union by rank + path compression a complexidade era O(log* n) — uma função que cresce ainda mais devagar que log, mas não tão lentamente quanto α.
+
+**Tarjan (1975)** — refinou a análise pra O(α(n)) **e provou que esse limite é apertado** (não tem como ficar melhor que isso). Esse paper é considerado um marco em análise amortizada.
+
+**Tarjan ganhou o Turing Award em 1986** com Hopcroft, *"for fundamental achievements in the design and analysis of algorithms and data structures"*. Union-Find foi uma das contribuições citadas explicitamente.
+
+Curioso: a estrutura é tão simples que pode ser implementada em **menos de 40 linhas de código**. A demonstração de corretude e complexidade ocupa **dezenas de páginas** de matemática densa. É um dos casos mais extremos de "código simples, teoria complexa" em CS.
+
+---
+
+## Limitações e variações
+
+### Não suporta desfazer (undo)
+
+Como mencionado, Union-Find não desfaz operações eficientemente. Pra problemas que exigem isso, existem variantes mais complexas:
+
+- **Persistent Union-Find**: mantém versões antigas. Cada operação cria uma nova versão.
+- **Link-Cut Trees** (Sleator e Tarjan, 1983): suporta union, find, **disconnect** em O(log n) amortizado.
+
+### Weighted Union-Find
+
+Pra problemas onde você quer não só "estão conectados?" mas também "qual a relação numérica entre eles?", existe a variante **weighted** ou **with offsets**. Cada nó guarda um peso relativo ao pai. Aparece em problemas de competição que envolvem soma ou produto de "distâncias" entre elementos.
+
+### Small-to-Large merging
+
+Variante simples mas poderosa: quando une duas estruturas qualquer (não só árvores — listas, sets, maps), sempre **insira os elementos da menor na maior**. Garante O(n log n) total mesmo sem balanceamento sofisticado. Truque universal em problemas de offline tree.
+
+---
+
+## Recap
+
+**Union-Find** (também chamado **Disjoint Set Union** ou **DSU**) é uma estrutura que mantém uma coleção de conjuntos disjuntos suportando duas operações: `find(x)` (encontrar o representante do conjunto de x) e `union(x, y)` (mesclar dois conjuntos).
+
+Implementação básica usa um array `parent[]` onde cada elemento aponta para outro do mesmo conjunto, formando uma árvore. Raiz = representante.
+
+Sem otimizações, a estrutura pode degenerar em listas ligadas (find vira O(n)). Duas otimizações **separadas mas complementares** resolvem isso:
+
+1. **Union by rank/size**: sempre anexar a árvore menor à maior. Garante altura O(log n).
+2. **Path compression**: durante `find`, aponta todos os nós do caminho diretamente pra raiz. Acelera consultas futuras.
+
+Com as duas, a complexidade amortizada por operação é **O(α(n))** — onde α é a inversa da função de Ackermann. Pra qualquer entrada prática (até 10^80 elementos), α(n) é no máximo 4. **Constante na prática**, com prova formal por **Robert Tarjan em 1975**.
+
+A estrutura foi proposta por **Galler e Fischer em 1964** pra problemas de equivalência em compiladores. Tarjan ganhou o **Turing Award em 1986** parcialmente por essa e outras análises amortizadas.
+
+Aplicações: **Kruskal's MST** (a aplicação mais clássica), conectividade dinâmica em redes, detecção de ciclos em grafos não-direcionados, problemas de equivalência, Number of Islands II, segmentação de imagens (flood fill com componentes).
+
+Limitação principal: **não suporta desfazer/desconectar eficientemente**. Variantes mais sofisticadas (Persistent UF, Link-Cut Trees) existem mas são significativamente mais complexas.
+
+Próxima lição: **Tries (Árvores de Prefixos)** — estrutura especializada em strings, usada em auto-complete, dicionários, roteamento IP, e algoritmos de matching de strings. Fecha o bloco de estruturas de dados avançadas da trilha.

@@ -1,0 +1,401 @@
+---
+titulo: "Bellman-Ford e Floyd-Warshall: Quando Dijkstra Não Basta"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Lester R. Ford Jr. (1956), 'Network Flow Theory', RAND Corporation paper P-923 — primeira publicação do algoritmo"
+  - "Richard Bellman (1958), 'On a routing problem', Quarterly of Applied Mathematics 16, pp. 87-90"
+  - "Alfonso Shimbel (1955), 'Structure in communication nets', Proceedings of the Symposium on Information Networks — versão anterior"
+  - "Edward F. Moore (1959), 'The shortest path through a maze', Proc. International Symposium on Theory of Switching — variante BFM"
+  - "Robert W. Floyd (1962), 'Algorithm 97: Shortest Path', Communications of the ACM 5(6), p. 345"
+  - "Stephen Warshall (1962), 'A theorem on Boolean matrices', Journal of the ACM 9(1), pp. 11-12"
+  - "Bernard Roy (1959), 'Transitivité et connexité', C. R. Acad. Sci. Paris 249, pp. 216-218"
+  - "Peter Z. Ingerman (1962), 'Algorithm 141: Path Matrix', CACM 5(11), p. 556 — formulação moderna dos 3 loops aninhados"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulos 22 (Bellman-Ford) e 23 (Floyd-Warshall)"
+  - "MIT OCW 6.046J (Spring 2015), Lecture 17 — Erik Demaine"
+  - "Stanford CS 161 — Shortest paths lecture notes"
+---
+
+## Os limites do Dijkstra
+
+Na Lição 12 vimos o algoritmo de Dijkstra — aquele inventado em 20 minutos numa cafeteria em Amsterdã, hoje rodando em todo GPS, todo roteador OSPF, toda IA de pathfinding. Algoritmo brilhante. Com uma **restrição séria**: **só funciona com pesos não-negativos**.
+
+A premissa central do Dijkstra é greedy — "o vértice de menor distância tentativa já tem distância final". Isso vale porque arestas não-negativas não podem encurtar caminhos posteriores. Mas existem problemas reais onde pesos negativos fazem sentido:
+
+- **Arbitragem em câmbio**: você troca dólar por euro, euro por iene, iene por dólar. Se os câmbios forem favoráveis, você termina com **mais dinheiro do que começou** — um "ciclo de lucro". Modelar como grafo: vértices são moedas, arestas têm peso `-log(taxa)`. Procurar **ciclo negativo** = procurar arbitragem.
+- **Roteamento BGP**: pacotes na internet podem ser desincentivados em certas rotas. "Custo negativo" representa preferência.
+- **Manutenção em redes elétricas**: incentivos financeiros pra usar certos caminhos podem ser modelados como pesos negativos.
+- **Project scheduling**: tarefas que reduzem o tempo total (paralelização) podem aparecer como pesos negativos.
+
+Pra esses casos, Dijkstra falha silenciosamente — produz uma resposta, mas pode estar errada. Precisamos de algoritmos diferentes.
+
+Esta lição cobre os **dois algoritmos clássicos pra caminhos mais curtos** que **aceitam pesos negativos**:
+
+- **Bellman-Ford**: single-source shortest path em **O(V·E)**. Detecta ciclos negativos.
+- **Floyd-Warshall**: all-pairs shortest path em **O(V³)**. Aceita pesos negativos (sem ciclos negativos).
+
+Os dois têm histórias fascinantes envolvendo **redescobertas múltiplas independentes** — caso clássico do que Stephen Stigler chamou de **Stigler's Law of Eponymy**: nenhuma descoberta científica é nomeada em homenagem ao seu descobridor original. Vamos ver isso.
+
+---
+
+## Bellman-Ford: o caso dos seis pais
+
+Pra começar, a história. O algoritmo que hoje chamamos de **Bellman-Ford** foi descoberto independentemente por **pelo menos seis pessoas** em um período de três anos (1955-1958):
+
+1. **Alfonso Shimbel** (1955) — *"Structure in communication nets"*, primeiro a publicar a ideia
+2. **Lester Ford Jr.** (1956) — *"Network Flow Theory"*, RAND Corporation paper P-923, no contexto de fluxo em redes
+3. **Edward F. Moore** (1957) — variante com fila
+4. **Max Woodbury & George Dantzig** (1957) — algoritmo não publicado
+5. **Richard Bellman** (1958) — *"On a routing problem"*, Quarterly of Applied Mathematics 16 — formalizou via programação dinâmica
+6. **George Minty** (1958) — algoritmo não publicado
+
+Em conformidade total com a **Lei de Stigler**, o algoritmo recebeu o nome de **Bellman-Ford** (ignorando Shimbel, Moore, Woodbury, Dantzig e Minty). Alguns textos chamam de **Bellman-Ford-Moore** pra dar crédito ao Moore. O cientista da computação Jeff Erickson (Universidade de Illinois) brinca em seu livro: "ninguém quer chamar o algoritmo de 'Shimbel/Moore/Woodbury-Dantzig/Bellman-Ford/Kalaba/Minty'".
+
+Mais detalhes históricos confirmados pelo paper do **Jeff Erickson** ("Algorithms", capítulo de SSSP) e o paper **"Network Flow Theory"** de Ford na RAND.
+
+### A ideia central: relaxar todas as arestas, V-1 vezes
+
+Lembre da Lição 12 a operação fundamental de SSSP: **relaxamento**.
+
+```
+relaxar(u, v, peso):
+    se dist[v] > dist[u] + peso:
+        dist[v] = dist[u] + peso
+        anterior[v] = u
+```
+
+Dijkstra processa vértices em ordem de menor distância (greedy). Bellman-Ford abandona essa estratégia. Em vez disso:
+
+> **Relaxe TODAS as arestas. Repita V-1 vezes.**
+
+Por que V-1 iterações? Porque qualquer caminho simples (sem repetir vértices) tem no máximo V-1 arestas. Depois de V-1 relaxamentos de todas as arestas, todas as distâncias mínimas alcançáveis estão computadas.
+
+A intuição: na iteração `k`, todas as distâncias que envolvem caminhos de **até k arestas** estão corretas. Como qualquer caminho ótimo tem no máximo V-1 arestas (senão tem ciclo, e tirar o ciclo não pode piorar se pesos não-negativos, ou cria ciclo negativo se houver), V-1 iterações bastam.
+
+### Implementação
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public class BellmanFord {
+
+    // Representa uma aresta direcionada com peso
+    static class Aresta {
+        int origem, destino, peso;
+        Aresta(int o, int d, int p) { origem = o; destino = d; peso = p; }
+    }
+
+    // Retorna distâncias da origem para todos os vértices.
+    // Lança exceção se detectar ciclo negativo alcançável.
+    public static int[] executar(int V, List<Aresta> arestas, int origem) {
+        int[] dist = new int[V];
+        Arrays.fill(dist, Integer.MAX_VALUE);
+        dist[origem] = 0;
+
+        // V-1 iterações: relaxa todas as arestas em cada uma
+        for (int i = 0; i < V - 1; i++) {
+            for (Aresta a : arestas) {
+                if (dist[a.origem] != Integer.MAX_VALUE
+                        && dist[a.origem] + a.peso < dist[a.destino]) {
+                    dist[a.destino] = dist[a.origem] + a.peso;
+                }
+            }
+        }
+
+        // V-ésima iteração: se ainda houver relaxamento, tem ciclo negativo
+        for (Aresta a : arestas) {
+            if (dist[a.origem] != Integer.MAX_VALUE
+                    && dist[a.origem] + a.peso < dist[a.destino]) {
+                throw new IllegalStateException("Ciclo negativo alcançável da origem");
+            }
+        }
+
+        return dist;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <climits>
+#include <stdexcept>
+
+struct Aresta {
+    int origem, destino, peso;
+};
+
+std::vector<int> bellmanFord(int V, const std::vector<Aresta>& arestas, int origem) {
+    std::vector<int> dist(V, INT_MAX);
+    dist[origem] = 0;
+
+    for (int i = 0; i < V - 1; i++) {
+        for (const auto& a : arestas) {
+            if (dist[a.origem] != INT_MAX
+                    && dist[a.origem] + a.peso < dist[a.destino]) {
+                dist[a.destino] = dist[a.origem] + a.peso;
+            }
+        }
+    }
+
+    // V-ésima passada para detectar ciclo negativo
+    for (const auto& a : arestas) {
+        if (dist[a.origem] != INT_MAX
+                && dist[a.origem] + a.peso < dist[a.destino]) {
+            throw std::runtime_error("Ciclo negativo alcançável da origem");
+        }
+    }
+
+    return dist;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V·E). Pra grafos esparsos (E ≈ V), fica O(V²). Pra grafos densos (E ≈ V²), fica O(V³).
+
+<ComplexidadeBox melhor="O(V·E)" media="O(V·E)" pior="O(V·E)" />
+
+Bem mais lento que Dijkstra (O((V+E) log V)), mas **necessário quando há pesos negativos**.
+
+### A detecção de ciclo negativo
+
+Esse é o **superpoder** do Bellman-Ford. Se após V-1 iterações **ainda houver relaxamento possível** na V-ésima iteração, **existe um ciclo negativo alcançável a partir da origem**.
+
+Por que isso funciona? Sem ciclo negativo, todas as distâncias ótimas usam no máximo V-1 arestas (já vimos). Depois de V-1 iterações, tudo convergiu. Se ainda dá pra relaxar, é porque tem um ciclo onde dar mais uma volta **diminui** o custo total — exatamente a definição de ciclo negativo.
+
+### Aplicação real: arbitragem em câmbio
+
+A aplicação clássica e mais bonita do Bellman-Ford é **detectar oportunidades de arbitragem em mercados financeiros**.
+
+Considere taxas de câmbio entre moedas:
+
+```
+USD → EUR: 0.85
+EUR → JPY: 130
+JPY → USD: 0.0091
+```
+
+Se você começa com 1 USD e segue esse ciclo: `1 × 0.85 × 130 × 0.0091 = 1.0056`. Você termina com **0.56% mais dinheiro**. Arbitragem! Em mercados reais, oportunidades assim duram milissegundos antes de algoritmos as eliminarem.
+
+**Modelagem como grafo**:
+- Vértices = moedas
+- Aresta de `A` pra `B` com peso `-log(taxa(A,B))`
+
+**Caminho** de A pra B é uma sequência de conversões. O produto das taxas vira **soma de logaritmos negativos** (propriedade `log(a·b) = log(a) + log(b)`). Lucro = produto > 1 = soma de `log(taxa)` > 0 = soma de `-log(taxa)` < 0.
+
+**Ciclo de arbitragem = ciclo negativo no grafo**. Bellman-Ford encontra isso!
+
+Sistemas reais de **high-frequency trading** rodam variantes do Bellman-Ford continuamente sobre books de ordens, procurando ciclos negativos em frações de segundo. Quando achado, executa a sequência antes que outros tradres apaguem a oportunidade.
+
+<Insight>
+A elegância dessa redução — produto vira soma via logaritmo, lucro vira ciclo negativo — é um dos exemplos clássicos de **modelagem algorítmica**. O problema "estou ganhando dinheiro num ciclo de trocas?" não tem cara de problema de grafo, mas se torna trivial com a transformação certa. Bellman-Ford detecta a arbitragem em O(V·E) onde V é o número de moedas e E é o número de pares de câmbio listados.
+</Insight>
+
+### Bellman-Ford vs Dijkstra
+
+| Aspecto | Dijkstra | Bellman-Ford |
+|---|---|---|
+| Pesos negativos | **Não aceita** | **Aceita** |
+| Detecta ciclo negativo | Não | **Sim** |
+| Complexidade | O((V+E) log V) | O(V·E) |
+| Implementação | Min-heap | Loops aninhados (simples) |
+| Memória | O(V) + heap | O(V) |
+| Tipo | Greedy | DP / relaxamento iterativo |
+
+**Quando usar Bellman-Ford**: pesos negativos, detecção de arbitragem, BGP routing, qualquer problema onde Dijkstra falha. **Quando usar Dijkstra**: pesos não-negativos (o caso comum). Em produção, Dijkstra domina; Bellman-Ford aparece em casos especializados.
+
+---
+
+## Floyd-Warshall: shortest paths entre TODOS os pares
+
+Mudança de problema: até agora tratamos **Single-Source Shortest Path** (SSSP). Bellman-Ford e Dijkstra dão distâncias da **origem** pra **todos os outros vértices**.
+
+E se você quiser as distâncias entre **todos os pares** de vértices? Aplicações:
+
+- **GPS com cache**: pré-computar todas as distâncias entre cidades importantes
+- **Análise de redes sociais**: distância "graus de separação" entre cada par
+- **Rotas em rede de transporte público**: distâncias entre todas as estações
+- **Análise de conectividade**: dado um grafo, existe caminho de A pra B?
+- **Schulze voting method**: caminhos mais largos pra ranking de candidatos
+
+Isso é o problema **All-Pairs Shortest Path** (APSP). Tem solução trivial: **rodar Dijkstra V vezes**, uma pra cada origem. Custo: O(V · (V+E) log V) = O(VE log V).
+
+Mas em 1962, **Robert W. Floyd** publicou um algoritmo de **6 linhas** que resolve APSP em **O(V³)** — funciona até com **pesos negativos** (sem ciclos negativos). Beleza absurda.
+
+### A história (de novo, múltiplos pais)
+
+Igual ao Bellman-Ford, Floyd-Warshall tem várias paternidades:
+
+- **Bernard Roy** (1959) — *"Transitivité et connexité"*, C. R. Acad. Sci. Paris 249 — primeira publicação, para **fecho transitivo** de relações binárias. Em francês, ficou relativamente desconhecido fora da França.
+- **Stephen Warshall** (1962) — *"A theorem on Boolean matrices"*, JACM 9(1), pp. 11-12 — versão independente pra fecho transitivo de grafos.
+- **Robert W. Floyd** (1962) — *"Algorithm 97: Shortest Path"*, CACM 5(6), p. 345 — adaptou o algoritmo do Warshall pra grafos com pesos, computando caminhos mais curtos.
+- **Peter Z. Ingerman** (1962) — *"Algorithm 141: Path Matrix"*, CACM 5(11), p. 556 — formulou os **três loops aninhados** que viraram a apresentação canônica.
+
+Os quatro publicaram no **mesmo ano (1962)**. O algoritmo é também chamado **Roy-Warshall**, **Roy-Floyd**, ou **WFI algorithm** (Warshall-Floyd-Ingerman). Mas o nome **Floyd-Warshall** ganhou tração — Floyd recebeu o Turing Award em 1978 por outros trabalhos (precondições e pós-condições em programas, Floyd's cycle detection).
+
+### A ideia: três loops aninhados, programação dinâmica
+
+A ideia é DP pura. Defina:
+
+> **`dp[k][i][j]`** = menor distância de `i` pra `j` **usando apenas vértices `{0, 1, ..., k}`** como intermediários.
+
+A recorrência:
+
+```
+dp[k][i][j] = min(
+    dp[k-1][i][j],                            // não usa o vértice k como intermediário
+    dp[k-1][i][k] + dp[k-1][k][j]             // usa k como intermediário
+)
+```
+
+Caso-base: `dp[-1][i][j]` = peso da aresta direta `i → j` (ou infinito se não existe, 0 se `i == j`).
+
+Resposta final: `dp[V-1][i][j]` = menor distância de `i` pra `j` usando qualquer intermediário.
+
+### A otimização brilhante: três loops, espaço O(V²)
+
+A formulação direta usa **3 dimensões** — O(V³) de memória. Mas tem uma observação genial: a iteração na dimensão `k` só consulta `dp[k-1][...]`, e em qualquer ponto, `dp[k]` substitui `dp[k-1]`. Pode-se **eliminar a dimensão k completamente** e usar uma matriz 2D. Isso é a versão de **Peter Ingerman (1962)**:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public class FloydWarshall {
+
+    // dist[i][j] inicializado como peso da aresta i→j, ou INF se não existe, 0 se i==j
+    // Modifica dist in-place — após a chamada, contém distâncias mínimas entre todos os pares
+    public static void executar(int[][] dist, int V) {
+        for (int k = 0; k < V; k++) {
+            for (int i = 0; i < V; i++) {
+                for (int j = 0; j < V; j++) {
+                    // Cuidado com overflow se INF for usado como INT_MAX
+                    if (dist[i][k] != Integer.MAX_VALUE
+                            && dist[k][j] != Integer.MAX_VALUE
+                            && dist[i][k] + dist[k][j] < dist[i][j]) {
+                        dist[i][j] = dist[i][k] + dist[k][j];
+                    }
+                }
+            }
+        }
+    }
+
+    // Detecta ciclo negativo: se algum dist[i][i] < 0 após a execução
+    public static boolean temCicloNegativo(int[][] dist, int V) {
+        for (int i = 0; i < V; i++) {
+            if (dist[i][i] < 0) return true;
+        }
+        return false;
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <climits>
+
+void floydWarshall(std::vector<std::vector<int>>& dist, int V) {
+    for (int k = 0; k < V; k++) {
+        for (int i = 0; i < V; i++) {
+            for (int j = 0; j < V; j++) {
+                if (dist[i][k] != INT_MAX
+                        && dist[k][j] != INT_MAX
+                        && dist[i][k] + dist[k][j] < dist[i][j]) {
+                    dist[i][j] = dist[i][k] + dist[k][j];
+                }
+            }
+        }
+    }
+}
+
+bool temCicloNegativo(const std::vector<std::vector<int>>& dist, int V) {
+    for (int i = 0; i < V; i++) {
+        if (dist[i][i] < 0) return true;
+    }
+    return false;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**6 linhas de algoritmo central**. Três loops aninhados. Resolve APSP. **Aceita pesos negativos** (sem ciclos negativos). **Detecta ciclos negativos** (`dist[i][i] < 0` após execução).
+
+<ComplexidadeBox melhor="O(V³)" media="O(V³)" pior="O(V³)" />
+
+### Por que a ordem dos loops é importante
+
+Detalhe sutil: **o loop de `k` precisa ser o mais externo**. Os loops de `i` e `j` podem ser invertidos entre si, mas `k` tem que vir antes.
+
+A razão: estamos calculando `dp[k][i][j]` baseado em `dp[k-1][i][k]` e `dp[k-1][k][j]`. Como reusamos a mesma matriz `dist`, precisamos garantir que quando `dp[k][i][j]` é calculado, **`dp[k][i][k]` ainda é igual a `dp[k-1][i][k]`** (e mesmo pra `dp[k][k][j]`).
+
+Acontece que dp `dp[k][i][k] = min(dp[k-1][i][k], dp[k-1][i][k] + dp[k-1][k][k])`. Como `dp[k-1][k][k] = 0` (caminho zero do vértice pra ele mesmo), `dp[k][i][k] = dp[k-1][i][k]`. Mesma coisa pra `dp[k][k][j]`. Por isso a versão in-place funciona — **se `k` for o loop externo**. Inverter os loops quebra a correção.
+
+### Aplicações de Floyd-Warshall
+
+- **Roteamento em redes pequenas/médias**: quando você quer rotas pré-computadas entre todos os pontos
+- **Análise de redes sociais**: graus de separação, centralidade
+- **Compilers**: análise de fluxo de dados, alcançabilidade em CFG
+- **Fecho transitivo de relações** (versão Boolean original do Warshall)
+- **Schulze voting method**: ranqueamento por caminhos mais largos
+- **Bioinformática**: análise de redes metabólicas
+- **Algoritmos de roteamento ad-hoc** (MANETs)
+
+Limitação: **O(V³) e O(V²) memória**. Pra V = 10.000, isso é 10^12 operações e 100 MB de memória. **Inviável pra grafos grandes**. Pra esses casos, usa **Johnson's algorithm** (combinação Bellman-Ford + Dijkstra) que dá O(V·E·log V) — vence quando o grafo é esparso.
+
+---
+
+## Comparando os três: Dijkstra, Bellman-Ford, Floyd-Warshall
+
+A "santíssima trindade" de shortest path:
+
+| Aspecto | Dijkstra | Bellman-Ford | Floyd-Warshall |
+|---|---|---|---|
+| Tipo de problema | SSSP | SSSP | **APSP** |
+| Pesos negativos | Não | **Sim** | **Sim** |
+| Detecta ciclo negativo | Não | **Sim** | **Sim** |
+| Complexidade | O((V+E) log V) | O(V·E) | O(V³) |
+| Memória | O(V) + heap | O(V) | **O(V²)** |
+| Estratégia | Greedy | DP / relaxamento | DP / Ingerman |
+| Quando usar | Pesos ≥ 0, single source | Pesos negativos, single source | All pairs, grafo pequeno-médio |
+
+**Resumo prático**:
+
+- Pesos não-negativos + single source → **Dijkstra**
+- Pesos negativos + single source → **Bellman-Ford**
+- All-pairs em grafo pequeno (V ≤ 1000) → **Floyd-Warshall**
+- All-pairs em grafo grande esparso → **Johnson's** (combina os dois acima)
+
+---
+
+## Recap
+
+**Bellman-Ford** e **Floyd-Warshall** completam a trindade clássica de algoritmos de caminho mais curto (junto com Dijkstra da Lição 12). Ambos têm histórias de **redescobertas independentes múltiplas** — exemplos clássicos da **Lei de Stigler** (nenhuma descoberta científica é nomeada em homenagem ao seu descobridor original).
+
+**Bellman-Ford** foi descoberto por **pelo menos 6 pessoas** entre 1955-1958: Shimbel, Ford (RAND), Moore, Woodbury-Dantzig, Bellman, Minty. Resolve **SSSP** em **O(V·E)**, aceita **pesos negativos**, e **detecta ciclos negativos** alcançáveis. Estratégia: relaxar todas as arestas, V-1 vezes. Implementação trivial (~10 linhas). **Aplicação famosa**: detecção de arbitragem em mercados de câmbio — modela moedas como vértices, taxas como arestas com peso `-log(taxa)`, ciclo negativo = oportunidade de lucro.
+
+**Floyd-Warshall** foi descoberto por **Bernard Roy (1959)** pra fecho transitivo, **Stephen Warshall (1962)** independentemente, **Robert Floyd (1962)** pra pesos, **Peter Ingerman (1962)** formulou os três loops aninhados. Resolve **APSP** em **O(V³)** com **6 linhas de código central**. Aceita pesos negativos sem ciclos negativos. Ciclo negativo é detectado por `dist[i][i] < 0` após execução. Limitação: O(V²) memória inviabiliza grafos grandes.
+
+**Quando usar cada um**:
+- **Dijkstra**: padrão pra pesos não-negativos
+- **Bellman-Ford**: pesos negativos, single source — arbitragem, BGP, project scheduling
+- **Floyd-Warshall**: all-pairs em grafo pequeno-médio (até V ≈ 1000)
+- **Johnson's**: all-pairs em grafo grande esparso (combinação Bellman-Ford + Dijkstra)
+
+A trilha de **grafos** está fechada agora:
+- BFS, DFS, topological sort, SCC (Lição 11)
+- Dijkstra (Lição 12)
+- Bellman-Ford, Floyd-Warshall (Lição 19)
+- Mais Union-Find pra Kruskal (Lição 15) e Greedy pra MST (Lição 14)
+
+Próximas direções possíveis: **Segment Tree + Fenwick (BIT)** pra range queries em ICPC, **Geometria Computacional**, **DP avançada** (DP em árvore, bitmask, SOS), **Fluxo em Redes** (Ford-Fulkerson, Edmonds-Karp). Ou mudar de trilha — **Bancos de Dados**, **Sistemas Operacionais**, **Redes**, **Arquitetura de Software**.

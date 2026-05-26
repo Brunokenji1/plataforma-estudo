@@ -1,0 +1,658 @@
+---
+titulo: "Especialização e Herança ER: Modelando 'É-Um' do Conceitual ao SQL"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "Carlos A. Heuser (2009), 'Projeto de Banco de Dados', 6ª ed., Bookman — notação adotada pelo brModelo, padrão acadêmico brasileiro"
+  - "Peter Chen (1976), 'The Entity-Relationship Model—Toward a Unified View of Data', ACM TODS Vol. 1 No. 1 — fundamento da modelagem ER"
+  - "Elmasri & Navathe, 'Fundamentals of Database Systems', 7ª ed., Pearson 2015 — referência sobre EER (Enhanced ER) com generalização/especialização, disjunção e completude"
+  - "Jakarta Persistence Specification (JSR 338) — define InheritanceType.SINGLE_TABLE, JOINED, TABLE_PER_CLASS e @MappedSuperclass"
+  - "Hibernate ORM Documentation — docs.hibernate.org/orm/current/userguide/html_single/Hibernate_User_Guide.html#entity-inheritance"
+  - "PostgreSQL Documentation 18, 'Table Inheritance' — postgresql.org/docs/current/ddl-inherit.html (recurso específico do PostgreSQL, não recomendado pra novos projetos)"
+  - "Martin Fowler (2003), 'Patterns of Enterprise Application Architecture', Addison-Wesley — Single Table Inheritance, Class Table Inheritance, Concrete Table Inheritance"
+---
+
+## Por que isso importa
+
+Voltando ao modelo relacional puro (Lição 1), você só tem **tabelas**. Não tem herança. Não tem polimorfismo. Não tem "Pessoa Física **é-um** Cliente". O banco entende `cliente_pf` e `cliente_pj` como duas tabelas distintas, no máximo ligadas por FK.
+
+Mas o **mundo real tem hierarquias**. Um sistema de RH tem `Funcionario` que pode ser `FuncionarioCLT`, `FuncionarioPJ` ou `Estagiario` — cada um com **atributos próprios** mas **compartilhando dados básicos** (nome, CPF, data de admissão). Modelar isso bem no conceitual e traduzir corretamente pro físico **é o tópico desta lição**.
+
+A teoria vem da extensão **EER (Enhanced ER)** ao modelo de Peter Chen — adiciona **generalização** e **especialização** (também chamadas de "subclasses" e "superclasses"). Você representa isso no brModelo com notação específica que veremos. Depois, **3 estratégias** físicas pra traduzir essa hierarquia em tabelas SQL — cada uma com trade-off documentado.
+
+Esta lição cobre:
+
+1. **Conceito**: generalização vs especialização
+2. **Notação Heuser**: combinações `(t,x)`, `(t,c)`, `(p,x)`, `(p,c)` — significado de cada letra
+3. **Atributos herdados vs próprios** — onde fica cada coisa
+4. **3 estratégias físicas** documentadas:
+   - **Single Table** (tabela única com discriminador)
+   - **Joined** (tabela por subclasse com JOINs)
+   - **Table Per Class** (tabela por classe concreta)
+5. **Mapeamento em JPA** com cada estratégia
+6. **Anti-pattern**: `@MappedSuperclass` — quando NÃO é herança
+7. **Herança nativa do PostgreSQL** — recurso histórico, por que **não** usar
+8. **Trade-offs reais** — quando escolher cada estratégia
+
+---
+
+## Generalização vs Especialização
+
+Os dois termos descrevem o **mesmo relacionamento** vendo de pontas diferentes:
+
+- **Generalização** (bottom-up): a partir de várias entidades similares, identifica-se uma entidade comum. Você tem `FuncionarioCLT`, `FuncionarioPJ`, `Estagiario` — generaliza-se pra `Funcionario`
+- **Especialização** (top-down): a partir de uma entidade genérica, identificam-se subtipos com atributos específicos. Tem `Funcionario` — especializa-se em `FuncionarioCLT`, `FuncionarioPJ`, `Estagiario`
+
+Na modelagem prática, você frequentemente faz **os dois ao mesmo tempo**: percebe que entidades têm dados comuns (generalização) e diferenças importantes (especialização).
+
+**A relação semântica é "é-um"**: `FuncionarioCLT` **é um** `Funcionario`. `Estagiario` **é um** `Funcionario`. Isso difere de "tem-um" (composição/agregação) — `Funcionario` **tem um** `Endereco` é outra coisa.
+
+### Atributos: herdados vs próprios
+
+A entidade **genérica** (superclasse) contém **atributos comuns** a todas as especializações. As entidades **especializadas** (subclasses) contêm **atributos próprios** da especialização — campos que **só fazem sentido** naquele subtipo.
+
+```
+Funcionario (genérica)
+├── id, nome, cpf, data_admissao   ← atributos COMUNS
+
+FuncionarioCLT (especializada)     ← É UM Funcionario
+└── salario_base, dependentes, faltas   ← atributos PRÓPRIOS
+
+FuncionarioPJ (especializada)      ← É UM Funcionario
+└── cnpj_empresa, valor_hora, contrato_inicio   ← atributos PRÓPRIOS
+
+Estagiario (especializada)         ← É UM Funcionario
+└── instituicao_ensino, curso, supervisor_id   ← atributos PRÓPRIOS
+```
+
+`salario_base` em `Funcionario` não faria sentido — porque estagiário recebe bolsa, PJ recebe nota fiscal. Cada um tem **sua forma** de remuneração, fica na subclasse.
+
+---
+
+## Notação Heuser: as 4 combinações
+
+Carlos A. Heuser (referência do brModelo, livro *Projeto de Banco de Dados*) define **dois eixos** pra classificar uma especialização. Combinando os dois, você tem **4 tipos possíveis** que você anota perto do triângulo do diagrama com **duas letras**.
+
+### Eixo 1: Completude (`t` ou `p`)
+
+Responde: **toda ocorrência da entidade genérica está em alguma especialização?**
+
+- **`t` — Total**: para **CADA** ocorrência da entidade genérica, **EXISTE** uma ocorrência em pelo menos uma das entidades especializadas. Não dá pra ter um `Funcionario` que **não seja** CLT nem PJ nem Estagiário
+- **`p` — Parcial**: pode haver ocorrência da genérica que **não está** em nenhuma especialização. Existe `Funcionario` genérico que não se enquadra em nenhuma subclasse específica
+
+### Eixo 2: Disjunção (`x` ou `c`)
+
+Responde: **uma ocorrência pode estar em MAIS DE UMA especialização ao mesmo tempo?**
+
+- **`x` — Exclusiva** (disjunta): ocorrência da genérica está em **NO MÁXIMO UMA** especialização. Um `Funcionario` é CLT OU PJ OU Estagiário — **nunca dois ao mesmo tempo**
+- **`c` — Compartilhada** (sobreposta/overlap): ocorrência da genérica pode estar em **VÁRIAS** especializações simultaneamente. Uma `Pessoa` pode ser **simultaneamente** `Professor` E `Aluno` (numa universidade onde professor faz pós-graduação)
+
+### As 4 combinações possíveis
+
+Você anota junto do triângulo de especialização, na forma `(completude, disjunção)`:
+
+| Notação | Significado |
+|---|---|
+| `(t,x)` | **Total exclusiva**: toda genérica em UMA especialização |
+| `(t,c)` | **Total compartilhada**: toda genérica em PELO MENOS UMA especialização, pode ser várias |
+| `(p,x)` | **Parcial exclusiva**: genérica em NO MÁXIMO UMA especialização (pode não estar em nenhuma) |
+| `(p,c)` | **Parcial compartilhada**: genérica pode estar em ZERO ou VÁRIAS especializações |
+
+### Exemplos do mundo real
+
+**`(t,x)` — Total exclusiva — caso mais comum**:
+
+```
+Conta (genérica)
+├── (t,x)
+├── ContaPessoaFisica (especializada)
+└── ContaPessoaJuridica (especializada)
+```
+
+Toda conta é **necessariamente** PF ou PJ (total), e **uma só** (exclusiva). Nunca tem `Conta` "neutra"; nunca tem conta que é PF **e** PJ ao mesmo tempo.
+
+**`(p,x)` — Parcial exclusiva**:
+
+```
+Funcionario (genérica)
+├── (p,x)
+├── Motorista
+└── Secretaria
+```
+
+Nem todo funcionário é Motorista ou Secretária (parcial — pode ser TI, RH, contabilidade...). Se for um desses, é só um dos dois (exclusiva).
+
+**`(t,c)` — Total compartilhada**:
+
+```
+Pessoa (genérica)
+├── (t,c)
+├── Professor
+└── Aluno
+```
+
+Toda pessoa na universidade é Professor OU Aluno (total — sistema só cadastra quem se enquadra). E pode ser **os dois ao mesmo tempo** — professor cursando doutorado é Professor E Aluno (compartilhada).
+
+**`(p,c)` — Parcial compartilhada — menos comum**:
+
+```
+Funcionario (genérica)
+├── (p,c)
+├── Coordenador
+└── Pesquisador
+```
+
+Funcionário pode ser nem um nem outro (parcial — atendente comum), ou ser ambos (compartilhada — coordenador que também faz pesquisa).
+
+<Aviso>
+**Pegadinha no brModelo**: o software brModelo **não altera graficamente** o DER para representar exclusiva vs compartilhada (ambas aparecem iguais visualmente). Você precisa **anotar com a letra** ao lado do triângulo. Sem a anotação, o diagrama fica ambíguo. Lembre-se de incluir as letras nos seus trabalhos da faculdade — perder ponto por causa disso é frustrante.
+</Aviso>
+
+---
+
+## Traduzindo para o físico: as 3 estratégias
+
+Aqui o modelo conceitual encontra o modelo físico. SQL puro **não tem herança** — você precisa **escolher uma estratégia** pra representar a hierarquia em tabelas. A literatura clássica (Martin Fowler, *Patterns of Enterprise Application Architecture*, 2003) identifica três:
+
+- **Single Table Inheritance** — uma tabela só, com coluna discriminadora
+- **Class Table Inheritance** — uma tabela por classe da hierarquia (genérica + cada especializada)
+- **Concrete Table Inheritance** — uma tabela por classe **concreta** (só especializadas, sem tabela da genérica)
+
+Em **JPA**, são as 3 estratégias nomeadas: `SINGLE_TABLE`, `JOINED`, `TABLE_PER_CLASS` (default no JPA é `SINGLE_TABLE`).
+
+Vamos cada uma com exemplo SQL + JPA + trade-offs.
+
+### Estratégia 1: Single Table (SINGLE_TABLE)
+
+**Ideia**: **uma única tabela** contém **todas as colunas** de toda a hierarquia. Uma coluna especial — **discriminadora** — indica qual subtipo cada linha representa.
+
+#### SQL
+
+```sql
+CREATE TABLE funcionario (
+    id BIGSERIAL PRIMARY KEY,
+    tipo VARCHAR(20) NOT NULL,           -- discriminadora: CLT, PJ, ESTAGIARIO
+    -- atributos comuns da genérica
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    data_admissao DATE NOT NULL,
+    -- atributos específicos de CLT
+    salario_base NUMERIC(10,2) NULL,
+    dependentes INT NULL,
+    -- atributos específicos de PJ
+    cnpj_empresa VARCHAR(18) NULL,
+    valor_hora NUMERIC(10,2) NULL,
+    -- atributos específicos de Estagiario
+    instituicao_ensino VARCHAR(150) NULL,
+    curso VARCHAR(100) NULL,
+
+    CONSTRAINT chk_tipo CHECK (tipo IN ('CLT', 'PJ', 'ESTAGIARIO'))
+);
+```
+
+Note que **todas as colunas específicas são `NULL`** — porque uma linha de Estagiario não tem `salario_base`, uma linha de CLT não tem `cnpj_empresa`.
+
+#### JPA
+
+```java
+@Entity
+@Table(name = "funcionario")
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "tipo", discriminatorType = DiscriminatorType.STRING)
+public abstract class Funcionario {
+    @Id @GeneratedValue
+    private Long id;
+    private String nome;
+    private String cpf;
+    private LocalDate dataAdmissao;
+}
+
+@Entity
+@DiscriminatorValue("CLT")
+public class FuncionarioCLT extends Funcionario {
+    private BigDecimal salarioBase;
+    private Integer dependentes;
+}
+
+@Entity
+@DiscriminatorValue("PJ")
+public class FuncionarioPJ extends Funcionario {
+    private String cnpjEmpresa;
+    private BigDecimal valorHora;
+}
+
+@Entity
+@DiscriminatorValue("ESTAGIARIO")
+public class Estagiario extends Funcionario {
+    private String instituicaoEnsino;
+    private String curso;
+}
+```
+
+#### Trade-offs
+
+**Vantagens**:
+- **Mais rápida** pra queries polimórficas — `SELECT * FROM funcionario WHERE nome LIKE 'Bruno%'` lê uma tabela só
+- **Sem JOINs** — operações simples
+- **Insert/Update simples** — uma única tabela
+
+**Desvantagens**:
+- **Colunas com muitos NULL** — desperdício de espaço se as subclasses têm atributos próprios muito diferentes
+- **Não dá pra ter `NOT NULL` em atributos próprios** — banco não tem como exigir `salario_base NOT NULL` só pra linhas CLT (validação tem que ficar na aplicação)
+- **Tabela cresce horizontalmente** — adicionar subclasse com 10 atributos próprios adiciona 10 colunas pra TODA linha
+- **Discriminadora vira responsabilidade da aplicação** — qualquer INSERT mal escrito pode corromper
+
+**Quando usar**: hierarquias rasas (2-4 subclasses), subclasses com poucos atributos próprios não-obrigatórios, performance é prioridade. Recomendado por **Simon Martinelli** quando "subclasse tem poucos campos não-mandatórios".
+
+### Estratégia 2: Joined (JOINED)
+
+**Ideia**: **uma tabela para cada classe** da hierarquia. Tabela da genérica tem **atributos comuns + ID**. Tabela de cada especializada tem **atributos próprios + FK ligando à genérica**.
+
+#### SQL
+
+```sql
+-- Tabela da entidade genérica
+CREATE TABLE funcionario (
+    id BIGSERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    data_admissao DATE NOT NULL
+);
+
+-- Tabela CLT (FK pra funcionario, mesma PK)
+CREATE TABLE funcionario_clt (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    salario_base NUMERIC(10,2) NOT NULL,    -- agora pode ser NOT NULL
+    dependentes INT NOT NULL DEFAULT 0
+);
+
+-- Tabela PJ
+CREATE TABLE funcionario_pj (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    cnpj_empresa VARCHAR(18) NOT NULL,
+    valor_hora NUMERIC(10,2) NOT NULL
+);
+
+-- Tabela Estagiario
+CREATE TABLE estagiario (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    instituicao_ensino VARCHAR(150) NOT NULL,
+    curso VARCHAR(100) NOT NULL
+);
+```
+
+Note que **a PK da tabela especializada é FK pra `funcionario`** — mesmo valor de `id` se repete nas tabelas. Pra ler todos os dados de um CLT: `SELECT * FROM funcionario f JOIN funcionario_clt c ON c.id = f.id`.
+
+#### JPA
+
+```java
+@Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+public abstract class Funcionario {
+    @Id @GeneratedValue
+    private Long id;
+    private String nome;
+    private String cpf;
+    private LocalDate dataAdmissao;
+}
+
+@Entity
+@Table(name = "funcionario_clt")
+public class FuncionarioCLT extends Funcionario {
+    @Column(nullable = false)        // agora pode ser NOT NULL
+    private BigDecimal salarioBase;
+    private Integer dependentes;
+}
+
+@Entity
+@Table(name = "funcionario_pj")
+public class FuncionarioPJ extends Funcionario {
+    @Column(nullable = false)
+    private String cnpjEmpresa;
+    @Column(nullable = false)
+    private BigDecimal valorHora;
+}
+
+@Entity
+@Table(name = "estagiario")
+public class Estagiario extends Funcionario {
+    @Column(nullable = false)
+    private String instituicaoEnsino;
+    @Column(nullable = false)
+    private String curso;
+}
+```
+
+#### Trade-offs
+
+**Vantagens**:
+- **Schema normalizado** — sem NULLs desnecessários, cada coluna faz sentido
+- **`NOT NULL` em atributos próprios funciona** — banco garante invariantes
+- **Sem desperdício de espaço** — cada tabela só armazena o relevante
+- **Sem coluna discriminadora explícita necessária** (subtype é deduzido pela presença em uma das tabelas filhas)
+
+**Desvantagens**:
+- **Queries polimórficas exigem JOINs** — buscar "todos os funcionários com nome Bruno" precisa de JOIN com as 3 tabelas filhas (ou LEFT JOIN com todas) — mais lento
+- **INSERT precisa de 2 operações** — uma na tabela genérica, outra na especializada (Hibernate faz automaticamente, mas é 2 round-trips)
+- **UPDATE também é 2 operações** — se mudar atributos de ambas as tabelas
+- **Mais complexo de consultar manualmente** — DBAs precisam saber a hierarquia
+
+**Quando usar**: hierarquias com **muitos atributos próprios obrigatórios**, normalização é prioridade, performance de query polimórfica não é crítica. Recomendação de várias fontes: "default para a maioria dos casos".
+
+### Estratégia 3: Table Per Class (TABLE_PER_CLASS)
+
+**Ideia**: **uma tabela por classe concreta** (só as especializadas). **Sem tabela da genérica**. Cada tabela tem **todos os atributos** — comuns + próprios.
+
+#### SQL
+
+```sql
+CREATE TABLE funcionario_clt (
+    id BIGINT PRIMARY KEY,        -- ID compartilhado entre tabelas
+    -- atributos da genérica
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL,
+    data_admissao DATE NOT NULL,
+    -- próprios de CLT
+    salario_base NUMERIC(10,2) NOT NULL,
+    dependentes INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE funcionario_pj (
+    id BIGINT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL,
+    data_admissao DATE NOT NULL,
+    cnpj_empresa VARCHAR(18) NOT NULL,
+    valor_hora NUMERIC(10,2) NOT NULL
+);
+
+CREATE TABLE estagiario (
+    id BIGINT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL,
+    data_admissao DATE NOT NULL,
+    instituicao_ensino VARCHAR(150) NOT NULL,
+    curso VARCHAR(100) NOT NULL
+);
+
+-- IDs PRECISAM ser únicos entre as 3 tabelas — uso de sequence compartilhada:
+CREATE SEQUENCE funcionario_seq;
+-- Cada tabela usa: id BIGINT DEFAULT nextval('funcionario_seq')
+```
+
+Note: atributos da genérica (`nome`, `cpf`, `data_admissao`) **se repetem em cada tabela**. Pra buscar "todos os funcionários", precisa **UNION** das três.
+
+#### JPA
+
+```java
+@Entity
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+public abstract class Funcionario {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "func_seq")
+    @SequenceGenerator(name = "func_seq", sequenceName = "funcionario_seq")
+    private Long id;
+    private String nome;
+    private String cpf;
+    private LocalDate dataAdmissao;
+}
+
+@Entity
+@Table(name = "funcionario_clt")
+public class FuncionarioCLT extends Funcionario {
+    private BigDecimal salarioBase;
+    private Integer dependentes;
+}
+
+// PJ e Estagiario seguem mesma estrutura
+```
+
+#### Trade-offs
+
+**Vantagens**:
+- **Queries em uma subclasse específica são rápidas** — sem JOIN, sem discriminadora — `SELECT * FROM funcionario_clt WHERE salario_base > 5000` lê uma tabela só
+- **`NOT NULL` em atributos próprios funciona** — como no JOINED
+- **Sem coluna discriminadora**
+- **Sem JOIN obrigatório nas queries específicas**
+
+**Desvantagens**:
+- **Atributos da genérica REPETIDOS em cada tabela** — `nome`, `cpf` aparecem em 3 lugares; mudar tipo da coluna é dor de cabeça
+- **Queries polimórficas são UNION** — buscar "todos os funcionários" exige `SELECT * FROM clt UNION ALL SELECT * FROM pj UNION ALL SELECT * FROM estagiario`. Lento e feio
+- **IDs precisam ser únicos entre as tabelas** — exige sequence compartilhada (não pode usar IDENTITY/AUTO_INCREMENT por tabela)
+- **Referências externas problemáticas** — se outra tabela precisa de FK pra `Funcionario` genérico, não tem como apontar pra uma única tabela. Tem que ter 3 FKs separadas ou usar UUID
+- **JPA: `TABLE_PER_CLASS` é a estratégia menos suportada**, com várias limitações (queries polimórficas usando IDENTITY não funcionam, alguns recursos de fetch são problemáticos)
+
+**Quando usar**: raramente. Pode fazer sentido se as subclasses são **muito diferentes** e quase nunca consultadas polimorficamente. Em prática, **JOINED costuma ser melhor** mesmo nesses casos.
+
+### Resumo comparativo
+
+| Aspecto | SINGLE_TABLE | JOINED | TABLE_PER_CLASS |
+|---|---|---|---|
+| Número de tabelas | 1 | 1 + N | N |
+| NULLs em colunas específicas | Sim, muitos | Não | Não |
+| `NOT NULL` em atributos próprios | Não viável | Sim | Sim |
+| Queries polimórficas | Rápidas (sem JOIN) | Com JOIN | Com UNION |
+| INSERT | 1 operação | 2 operações | 1 operação |
+| Atributos comuns | Centralizados | Centralizados | **Duplicados** |
+| Suporte JPA | Excelente | Bom | Limitado |
+| Default JPA | **Sim** | — | — |
+
+---
+
+## @MappedSuperclass — quando NÃO é herança ER
+
+Existe uma 4ª opção em JPA que **não é** estratégia de herança propriamente, mas confunde muito: `@MappedSuperclass`.
+
+**O que faz**: você define uma classe abstrata com atributos comuns (ex: `id`, `criadoEm`, `atualizadoEm`) e marca com `@MappedSuperclass`. Outras entidades **herdam o código** desses atributos, mas **não há tabela** pra superclasse — cada subclasse tem sua tabela com **as colunas duplicadas**.
+
+```java
+@MappedSuperclass         // NÃO é @Entity — não tem tabela própria
+@EntityListeners(AuditingEntityListener.class)
+public abstract class BaseEntity {
+    @Id @GeneratedValue
+    private Long id;
+
+    @CreatedDate
+    private LocalDateTime criadoEm;
+
+    @LastModifiedDate
+    private LocalDateTime atualizadoEm;
+}
+
+@Entity     // ← cada subclasse vira tabela própria, sem relação ER
+@Table(name = "produto")
+public class Produto extends BaseEntity {
+    private String nome;
+    private BigDecimal preco;
+    // ganha id, criadoEm, atualizadoEm "de graça" via herança Java
+}
+
+@Entity
+@Table(name = "categoria")
+public class Categoria extends BaseEntity {
+    private String nome;
+    // mesmo aqui — atributos da BaseEntity aparecem como colunas
+}
+```
+
+**A diferença central**: `@MappedSuperclass` é **reuso de código Java**, não relacionamento ER. `Produto` **não é** uma "BaseEntity" no sentido de modelagem — você não pode `SELECT * FROM BaseEntity` (não existe tabela). Não há queries polimórficas. É só uma forma de não duplicar `@Id @GeneratedValue private Long id` em 50 entities.
+
+**Quando usar**: campos comuns de auditoria/identidade (`id`, `criadoEm`, `atualizadoEm`, `versao` pra optimistic locking) que aparecem em **toda entity** mas não representam um "tipo" no domínio.
+
+**Quando NÃO usar**: quando há relacionamento ER real ("FuncionarioCLT é-um Funcionario"). Aí use `@Inheritance` (SINGLE_TABLE/JOINED/TABLE_PER_CLASS).
+
+<Insight>
+**Heurística**: pergunte "existe um conceito de domínio na classe pai?". Se sim (Funcionario), use `@Inheritance`. Se não (BaseEntity só agrupa colunas técnicas), use `@MappedSuperclass`. Sintoma de mau uso: você nunca vai consultar "todas as BaseEntities" — porque o conceito não faz sentido como dado.
+</Insight>
+
+---
+
+## Herança nativa do PostgreSQL — recurso histórico
+
+PostgreSQL tem um recurso peculiar: **herança nativa de tabelas** via `INHERITS`:
+
+```sql
+CREATE TABLE funcionario (
+    id BIGSERIAL PRIMARY KEY,
+    nome VARCHAR(100),
+    cpf VARCHAR(14)
+);
+
+CREATE TABLE funcionario_clt (
+    salario_base NUMERIC(10,2)
+) INHERITS (funcionario);
+-- Herda colunas + adiciona próprias
+
+SELECT * FROM funcionario;          -- inclui linhas de funcionario_clt
+SELECT * FROM ONLY funcionario;     -- só linhas da tabela pai
+```
+
+A documentação oficial do PostgreSQL (capítulo 5 - Data Definition) documenta esse recurso, mas com **avisos importantes**:
+
+- **Constraints e FKs não são herdadas automaticamente** — UNIQUE e FK na tabela pai não se aplicam às filhas
+- **Não há suporte do padrão SQL** — recurso específico do PostgreSQL
+- **Tempo verbal "limited"** em vários pontos da documentação
+- **Hibernate/JPA não suportam** — usar isso te tira do ecossistema padrão
+
+**Recomendação prática**: **não use `INHERITS` em projetos novos**. É herança nativa real, mas tem limitações severas e não conversa com ORMs padrão. Use uma das 3 estratégias padrão (SINGLE_TABLE/JOINED/TABLE_PER_CLASS).
+
+Antigamente, `INHERITS` era usada como base de **table partitioning** no PostgreSQL — desde PostgreSQL 10 (2017), há **declarative partitioning** (`PARTITION BY`) que substitui esse uso.
+
+---
+
+## Modelando o problema do Bruno na faculdade
+
+Você fez no projeto de folha de pagamento um exemplo dessa hierarquia. Vou mostrar como **modelaria do zero**, aplicando tudo:
+
+### Modelo conceitual
+
+```
+              Funcionario
+        ─────────────────────
+        id, nome, cpf, data_adm
+                  ▽
+              ═══════
+              (t,x)        ← total exclusiva
+              ═══════
+              /  |  \
+             /   |   \
+            ▼    ▼    ▼
+     CLT     PJ    Estagiario
+   ────────────────────────────
+   salario  cnpj   instituicao
+   depend.  hora   curso
+```
+
+`(t,x)` = total exclusiva: todo funcionário é exatamente um dos três tipos.
+
+### Decisão de estratégia física
+
+Critérios:
+1. Atributos próprios são **obrigatórios** (NOT NULL faz sentido) → favorece JOINED ou TABLE_PER_CLASS
+2. Hierarquia rasa (3 subclasses, sem aninhamento profundo) → ambas funcionam
+3. Sistema vai consultar polimorficamente? "Lista de funcionários sem filtro de tipo" — sim → favorece JOINED (JOIN é melhor que UNION)
+4. Atributos comuns mudam às vezes (nova coluna em `Funcionario`)? Se sim, JOINED evita duplicação em 3 tabelas
+
+**Escolha**: `JOINED`. Casa bem com os critérios.
+
+### DDL final
+
+```sql
+CREATE TABLE funcionario (
+    id BIGSERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    data_admissao DATE NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE funcionario_clt (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    salario_base NUMERIC(10,2) NOT NULL CHECK (salario_base > 0),
+    dependentes INT NOT NULL DEFAULT 0 CHECK (dependentes >= 0)
+);
+
+CREATE TABLE funcionario_pj (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    cnpj_empresa VARCHAR(18) NOT NULL,
+    valor_hora NUMERIC(10,2) NOT NULL CHECK (valor_hora > 0)
+);
+
+CREATE TABLE estagiario (
+    id BIGINT PRIMARY KEY REFERENCES funcionario(id) ON DELETE CASCADE,
+    instituicao_ensino VARCHAR(150) NOT NULL,
+    curso VARCHAR(100) NOT NULL,
+    supervisor_id BIGINT REFERENCES funcionario(id)   -- estagiário tem supervisor
+);
+
+-- Garantia da exclusividade (uma trigger ou aplicação):
+-- Mesmo id não pode existir em duas tabelas filhas simultaneamente
+```
+
+A **exclusividade** (`x` na notação) **não é garantida automaticamente** pelo schema acima — nada impede você inserir o mesmo `id` em `funcionario_clt` E `funcionario_pj`. Pra garantir, opções:
+
+1. **Trigger** que valida antes de cada INSERT
+2. **Lógica na aplicação** (Service Layer no Spring Boot valida antes)
+3. **Coluna discriminadora** na tabela `funcionario` (tipo VARCHAR) que indica qual filha tem a linha — UNIQUE e CHECK garantem
+
+Trade-off entre purismo do modelo e simplicidade. Em prática, lógica na aplicação é a opção mais comum em sistemas modernos.
+
+---
+
+## Quando ESPECIALIZAR vale a pena
+
+Nem todo agrupamento merece virar hierarquia. Antes de modelar especialização, pergunte:
+
+- **Há atributos próprios significativos** em cada subtipo? Se todas as subclasses têm os mesmos campos, basta uma coluna `tipo` na entidade — não vale criar hierarquia
+- **Subtipos têm comportamentos diferentes**? Em DDD, especialização faz sentido quando há lógica de domínio diferente em cada subclasse
+- **Subtipos podem ser confundidos?** "Cliente Premium" vs "Cliente Comum" são especializações ou simplesmente um campo `nivel` em `Cliente`? Se a diferença é apenas configuração, **não vire entidade nova**
+- **A hierarquia é estável?** Se o conjunto de subtipos muda mensalmente (novos planos, novas categorias), modelar como hierarquia rígida vira pesadelo — prefira composição/strategy pattern em código
+
+**Anti-pattern**: forçar hierarquia onde só há variação de comportamento. `Conta` com subclasses `ContaCorrente`, `ContaPoupanca` faz sentido se cada uma tem **regras diferentes de juros, taxas, limites** e **atributos próprios**. Se a diferença é só "uma flag", use enum ou coluna.
+
+---
+
+## Recap
+
+**Especialização e Generalização** são conceitos de EER (Enhanced ER) — extensão ao modelo de Peter Chen (1976). Relação semântica é "**é-um**" (`FuncionarioCLT` **é um** `Funcionario`), diferente de "tem-um" (composição). Entidade **genérica** (superclasse) carrega atributos comuns; entidades **especializadas** (subclasses) carregam atributos próprios.
+
+**Notação Heuser** (Carlos A. Heuser, *Projeto de Banco de Dados*, padrão acadêmico brasileiro) usa **duas letras** entre parênteses:
+
+| Eixo | Letra | Significado |
+|---|---|---|
+| Completude | `t` (total) | Toda ocorrência genérica está em alguma especialização |
+| Completude | `p` (parcial) | Pode haver genérica sem especialização |
+| Disjunção | `x` (exclusiva) | Genérica está em no máximo uma especialização |
+| Disjunção | `c` (compartilhada) | Genérica pode estar em várias especializações simultaneamente |
+
+**4 combinações possíveis**: `(t,x)` é a mais comum (toda genérica em uma só subclasse — ex: Conta PF/PJ); `(t,c)` permite múltiplos papéis simultâneos (ex: Pessoa Professor+Aluno); `(p,x)` para opcional sem sobreposição; `(p,c)` permite zero ou várias (raro).
+
+**Pegadinha do brModelo**: não altera graficamente o DER pra exclusiva/compartilhada — **anote com letra**.
+
+**3 estratégias físicas** documentadas (Martin Fowler, *Patterns of Enterprise Application Architecture*, 2003; JPA spec):
+
+| Estratégia | Tabelas | Trade-off principal |
+|---|---|---|
+| **SINGLE_TABLE** (default JPA) | 1 tabela com discriminadora | Rápida, mas muitas colunas NULL |
+| **JOINED** | 1 tabela genérica + N filhas com FK | Normalizada, NOT NULL em próprios, exige JOINs em queries polimórficas |
+| **TABLE_PER_CLASS** | N tabelas (só concretas) | Atributos comuns duplicados, UNION em queries polimórficas, suporte limitado em JPA |
+
+Em **JPA**: `@Inheritance(strategy = InheritanceType.XXX)` na superclasse, `@DiscriminatorColumn`/`@DiscriminatorValue` se SINGLE_TABLE. **Default é SINGLE_TABLE**.
+
+**Recomendação geral**: **JOINED** é default seguro pra maioria dos casos com atributos próprios obrigatórios. **SINGLE_TABLE** quando subclasses têm poucos campos opcionais e performance é prioridade. **TABLE_PER_CLASS** raramente — suporte limitado em JPA, queries polimórficas via UNION lentas.
+
+**`@MappedSuperclass`** — NÃO é estratégia de herança ER. É reuso de código Java (campos comuns de auditoria como `id`, `criadoEm`, `atualizadoEm`) sem criar relacionamento de domínio. Não suporta queries polimórficas (`SELECT FROM BaseEntity` não existe). Use quando classe pai **não representa conceito de domínio**.
+
+**Herança nativa do PostgreSQL** (`INHERITS`) — recurso histórico, com avisos na documentação oficial. **Não usar em projetos novos** — sem suporte a constraints herdadas, fora do padrão SQL, não conversa com JPA. PostgreSQL 10+ tem **declarative partitioning** (`PARTITION BY`) que substituiu o uso principal antigo de INHERITS.
+
+**Garantir exclusividade `x`**: schema relacional puro **não força** que mesmo `id` apareça em apenas uma tabela filha. Garantir via trigger, lógica de aplicação, ou coluna discriminadora com CHECK.
+
+**Quando NÃO especializar**: se subtipos compartilham todos os atributos, basta coluna `tipo`. Se diferença é só configuração (flags), use enum. Hierarquia que muda frequentemente é melhor modelada com composição/strategy pattern.
+
+Próximas lições da trilha:
+
+- **SQL Server vs PostgreSQL** — diferenças práticas de sintaxe entre os dois SGBDs mais usados
+- **NoSQL Básico** — CAP theorem, tipos (key-value/document/column/graph), quando NÃO usar relacional
+
+Manda qual quer.

@@ -1,0 +1,530 @@
+---
+titulo: "Stored Procedures e Functions: Código Executável no Banco"
+trilha: "banco-de-dados"
+duracaoMin: 80
+dificuldade: "intermediario"
+referencias:
+  - "PostgreSQL Documentation 18, 'CREATE PROCEDURE' — postgresql.org/docs/current/sql-createprocedure.html"
+  - "PostgreSQL Documentation 18, 'CREATE FUNCTION' — postgresql.org/docs/current/sql-createfunction.html"
+  - "PostgreSQL Documentation 18, '36.4. User-Defined Procedures' — postgresql.org/docs/current/xproc.html"
+  - "PostgreSQL Release Notes 11 (out 2018) — introdução de CREATE PROCEDURE separado de CREATE FUNCTION"
+  - "Microsoft Learn, 'CREATE PROCEDURE (Transact-SQL)' — learn.microsoft.com/en-us/sql/t-sql/statements/create-procedure-transact-sql"
+  - "Microsoft Learn, 'CREATE FUNCTION (Transact-SQL)' — learn.microsoft.com/en-us/sql/t-sql/statements/create-function-transact-sql"
+  - "Microsoft Learn, 'Scalar UDF Inlining' — learn.microsoft.com/en-us/sql/relational-databases/user-defined-functions/scalar-udf-inlining"
+  - "Microsoft Learn, 'Use Table-Valued Parameters' — learn.microsoft.com/en-us/sql/relational-databases/tables/use-table-valued-parameters-database-engine"
+---
+
+## Por que isso existe
+
+Você já viu como triggers (Lição 10) rodam **automaticamente** em resposta a eventos. **Stored Procedures e Functions** são parecidas, mas **invocadas explicitamente** — você (ou a aplicação, ou outra procedure) chama. São pedaços de código nomeado armazenados no banco, executados sob demanda.
+
+A pergunta natural é: **por que colocar código no banco em vez de na aplicação?** Razões legítimas:
+
+- **Reuso de lógica SQL complexa** — uma sequência de queries usada em 10 lugares fica mais limpa como uma procedure
+- **Performance em operações em lote** — uma procedure rodando 1 milhão de linhas no banco evita ida-e-volta de dados pra aplicação
+- **Encapsulamento de operações atômicas** — várias mudanças com transação coordenada
+- **Segurança** — concede `EXECUTE` na procedure sem dar `SELECT/INSERT/UPDATE` direto nas tabelas
+- **Compatibilidade com sistemas legados** — banco antigo onde toda lógica vivia lá
+
+Razões ilegítimas (anti-pattern):
+
+- **Lógica de negócio inteira no banco** — código difícil de testar, versionar, debugar
+- **"O DBA prefere assim"** — argumento por hábito, não por engenharia
+
+Esta lição cobre, baseado nas documentações oficiais:
+
+1. **Function vs Procedure** — diferenças formais (PostgreSQL e SQL Server)
+2. **PostgreSQL**: `CREATE FUNCTION`, `CREATE PROCEDURE` (introduzida na v11), parâmetros `IN`/`OUT`/`INOUT`
+3. **SQL Server**: `CREATE PROCEDURE` com `OUTPUT` params, `CREATE FUNCTION` com scalar/table-valued/inline-TVF/multi-statement-TVF
+4. **Scalar UDF Inlining** (SQL Server 2019+) — solução pra problema clássico de performance
+5. **Controle de transação** — quem pode (procedure) e quem não pode (function)
+6. **Table-Valued Parameters** (SQL Server) — passar tabelas como parâmetro
+7. **Quando usar e quando NÃO usar** — heurística pragmática
+
+---
+
+## Function vs Procedure: a diferença fundamental
+
+Em ambos os SGBDs principais, **function** e **procedure** são diferentes — não são sinônimos como muita gente pensa.
+
+A documentação oficial do PostgreSQL é cirúrgica sobre isso (capítulo 36.4 - User-Defined Procedures). Citação literal: *"A procedure is a database object similar to a function. The key differences are: Procedures are defined with the CREATE PROCEDURE command, not CREATE FUNCTION. Procedures do not return a function value; hence CREATE PROCEDURE lacks a RETURNS clause. However, procedures can instead return data to their callers via output parameters. While a function is called as part of a query or DML command, a procedure is called in isolation using the CALL command."*
+
+Resumindo as diferenças formais:
+
+| Aspecto | Function | Procedure |
+|---|---|---|
+| **Retorna valor?** | Sim, sempre | Não (usa OUT params se precisar devolver dados) |
+| **Como invocar?** | Dentro de query: `SELECT minha_funcao(...)` | Comando próprio: `CALL minha_procedure(...)` (PG) / `EXEC` (SQL Server) |
+| **Pode controlar transação?** | **Não** (PostgreSQL) | **Sim** — pode `COMMIT`/`ROLLBACK` (PG 11+) |
+| **Uso típico** | Calcular valor, retornar conjunto | Executar sequência de operações |
+
+A documentação PostgreSQL nomeia **routine** como o termo coletivo: *"Collectively, functions and procedures are also known as routines."* Comandos como `ALTER ROUTINE` e `DROP ROUTINE` operam em ambos.
+
+### Por que CREATE PROCEDURE existe no PostgreSQL
+
+Aqui tem um pedaço de história importante. **PostgreSQL 11 (outubro 2018) introduziu `CREATE PROCEDURE` como comando separado**. Antes disso, **só existia `CREATE FUNCTION`** — pra criar algo que parecesse procedure, você fazia função retornando `void`:
+
+```sql
+-- Truque pré-PostgreSQL 11
+CREATE FUNCTION enviar_email_diario() RETURNS void AS $$
+BEGIN
+    -- código que parecia procedure mas era função
+END;
+$$ LANGUAGE plpgsql;
+```
+
+A documentação enterprisedb explica: *"Before PostgreSQL version 11, stored procedures were effectively functions that didn't return data. But now there is a way to explicitly declare stored procedures, which also has the advantage of being able to open a new transaction."*
+
+**A motivação real** pra introduzir procedure separada foi o **controle de transação**: funções no PostgreSQL **não podem** chamar `COMMIT` ou `ROLLBACK` (rodam sempre dentro da transação do caller). Procedures **podem**, o que habilita padrões como "rodar em batches commitando a cada 1000 linhas".
+
+---
+
+## PostgreSQL: CREATE FUNCTION
+
+Sintaxe geral (PL/pgSQL como linguagem mais comum):
+
+```sql
+CREATE OR REPLACE FUNCTION calcular_imposto(valor NUMERIC, aliquota NUMERIC)
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN valor * (aliquota / 100);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Uso dentro de query
+SELECT calcular_imposto(1000, 7.5);  -- retorna 75.00
+SELECT id, valor, calcular_imposto(valor, 7.5) AS imposto FROM pedido;
+```
+
+Note: a função é chamada **dentro de uma query** (`SELECT`), não isoladamente. Pode aparecer em `WHERE`, `ORDER BY`, `GROUP BY`, computed columns — funciona como qualquer expressão SQL.
+
+### Parâmetros IN, OUT e INOUT
+
+PostgreSQL suporta 3 modos:
+
+- **`IN`** (default se omitir): valor de entrada
+- **`OUT`**: valor de saída (function "retorna" via parâmetros — útil pra retornar vários valores)
+- **`INOUT`**: entra com valor e sai modificado
+
+```sql
+-- Função que retorna múltiplos valores via OUT params
+CREATE OR REPLACE FUNCTION calcular_total(
+    IN valor_bruto NUMERIC,
+    IN aliquota NUMERIC,
+    OUT imposto NUMERIC,
+    OUT total NUMERIC
+) AS $$
+BEGIN
+    imposto := valor_bruto * (aliquota / 100);
+    total := valor_bruto + imposto;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Chamada
+SELECT * FROM calcular_total(1000, 7.5);
+-- imposto | total
+-- 75.00   | 1075.00
+```
+
+### Funções retornando conjuntos (SETOF e RETURNS TABLE)
+
+PostgreSQL permite função retornar **múltiplas linhas** como se fosse uma tabela:
+
+```sql
+CREATE OR REPLACE FUNCTION pedidos_de_cliente(cliente_id_param BIGINT)
+RETURNS TABLE (
+    pedido_id BIGINT,
+    valor NUMERIC,
+    data_pedido DATE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT p.id, p.valor, p.data
+    FROM pedido p
+    WHERE p.cliente_id = cliente_id_param;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Uso como se fosse tabela
+SELECT * FROM pedidos_de_cliente(42);
+```
+
+`RETURNS TABLE(...)` é a forma mais legível. Alternativa: `RETURNS SETOF tipo` (retorna conjunto de um tipo existente).
+
+---
+
+## PostgreSQL: CREATE PROCEDURE (v11+)
+
+Sintaxe similar, mas sem `RETURNS` e invocada via `CALL`:
+
+```sql
+CREATE OR REPLACE PROCEDURE processar_pedidos_pendentes()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    pedido_atual RECORD;
+    processados INT := 0;
+BEGIN
+    FOR pedido_atual IN
+        SELECT id FROM pedido WHERE status = 'PENDENTE'
+    LOOP
+        UPDATE pedido SET status = 'PROCESSANDO' WHERE id = pedido_atual.id;
+        -- ... lógica de processamento ...
+        UPDATE pedido SET status = 'CONCLUIDO' WHERE id = pedido_atual.id;
+
+        processados := processados + 1;
+
+        -- A cada 100 pedidos, commita pra liberar locks
+        IF processados % 100 = 0 THEN
+            COMMIT;
+        END IF;
+    END LOOP;
+
+    -- Commit final
+    COMMIT;
+END;
+$$;
+
+-- Chamar
+CALL processar_pedidos_pendentes();
+```
+
+O `COMMIT` dentro da procedure é o ponto crítico — **funções não podem fazer isso**. Aplicação útil: jobs de migração de dados, ETL, batch processing.
+
+<Aviso>
+**Detalhe importante**: pra usar `COMMIT`/`ROLLBACK` dentro de procedure no PostgreSQL, ela **não pode** ter sido chamada de dentro de uma transação já iniciada com `BEGIN`. Documentação PostgreSQL: a procedure precisa rodar em modo "auto-commit" ou ser invocada num contexto onde transações podem ser controladas internamente. Em prática: chame procedures de auto-commit (psql normal, sem BEGIN antes); aplicações via JDBC/JPA precisam configurar adequadamente.
+</Aviso>
+
+---
+
+## SQL Server: CREATE PROCEDURE
+
+Stored procedures são **a forma canônica** de organizar lógica no SQL Server — historicamente, antes do .NET ter ORMs maduros, era comum aplicações chamarem **só** stored procedures.
+
+### Sintaxe básica
+
+```sql
+CREATE OR ALTER PROCEDURE dbo.AtualizarStatusPedido
+    @PedidoID INT,
+    @NovoStatus NVARCHAR(20),
+    @LinhasAfetadas INT OUTPUT     -- parâmetro de saída
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE Pedido
+    SET status = @NovoStatus,
+        atualizado_em = SYSUTCDATETIME()
+    WHERE id = @PedidoID;
+
+    SET @LinhasAfetadas = @@ROWCOUNT;
+
+    RETURN 0;  -- código de retorno (0 = sucesso convencionalmente)
+END;
+GO
+
+-- Chamar
+DECLARE @afetadas INT;
+EXEC dbo.AtualizarStatusPedido @PedidoID = 42, @NovoStatus = 'PAGO', @LinhasAfetadas = @afetadas OUTPUT;
+SELECT @afetadas AS LinhasAfetadas;
+```
+
+Pontos a notar:
+
+- `OUTPUT` keyword **obrigatório** tanto na declaração quanto na chamada
+- `@@ROWCOUNT` retorna número de linhas afetadas pela última instrução
+- `RETURN` opcional, retorna **inteiro** (não confunda com `OUTPUT`); convenção: 0 = sucesso, não-zero = erro
+- `SET NOCOUNT ON` impede mensagens "X rows affected" indo pra cliente
+
+### Múltiplos result sets
+
+Stored procedures SQL Server podem retornar **vários result sets** simplesmente fazendo múltiplos `SELECT`:
+
+```sql
+CREATE PROCEDURE dbo.RelatorioCliente @ClienteID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Result set 1: dados do cliente
+    SELECT id, nome, email FROM Cliente WHERE id = @ClienteID;
+
+    -- Result set 2: pedidos
+    SELECT id, valor, data FROM Pedido WHERE cliente_id = @ClienteID;
+
+    -- Result set 3: totais
+    SELECT COUNT(*) AS total_pedidos, SUM(valor) AS valor_total
+    FROM Pedido WHERE cliente_id = @ClienteID;
+END;
+GO
+```
+
+Aplicação recebe os 3 result sets em sequência. Útil pra dashboards. Em JDBC: `Statement.getMoreResults()`. Em ADO.NET: `SqlDataReader.NextResult()`.
+
+### Limite de parâmetros: 2.100
+
+Microsoft Learn documenta literalmente: *"One or more parameters can be declared; the maximum is 2,100."* Você nunca vai precisar disso, mas é o teto formal.
+
+### Table-Valued Parameters (TVP)
+
+Pra passar **uma lista** de valores como parâmetro (ex: "atualizar status de 100 pedidos de uma vez"), SQL Server tem **Table-Valued Parameters** desde 2008.
+
+Citação literal Microsoft Learn: *"Table-valued parameters (TVPs), user-defined table types that are passed into a procedure or function, provide an efficient way to pass multiple rows of data to the server."*
+
+```sql
+-- 1. Definir um tipo de tabela (user-defined table type)
+CREATE TYPE dbo.PedidoIDList AS TABLE (
+    PedidoID INT NOT NULL PRIMARY KEY
+);
+GO
+
+-- 2. Procedure que aceita o tipo como parâmetro READONLY
+CREATE PROCEDURE dbo.AtualizarMultiplosPedidos
+    @Pedidos dbo.PedidoIDList READONLY,
+    @NovoStatus NVARCHAR(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE Pedido
+    SET status = @NovoStatus
+    WHERE id IN (SELECT PedidoID FROM @Pedidos);
+
+    SELECT @@ROWCOUNT AS LinhasAtualizadas;
+END;
+GO
+
+-- 3. Uso a partir de T-SQL
+DECLARE @lista dbo.PedidoIDList;
+INSERT INTO @lista VALUES (1), (2), (3), (42), (99);
+EXEC dbo.AtualizarMultiplosPedidos @Pedidos = @lista, @NovoStatus = 'PROCESSANDO';
+```
+
+Documentação Microsoft sublinha duas regras: *"Table-valued parameters can only be INPUT parameters and must be accompanied by the READONLY keyword."* Ou seja, TVP é só de entrada, e dentro da procedure não pode modificar a tabela (precisa copiar pra outra variável se quiser).
+
+**Casos de uso**: bulk operations passando IDs (em vez de chamar a procedure 100 vezes com 1 ID), substituto pra string CSV `"1,2,3,42,99"` que precisa ser parseada.
+
+---
+
+## SQL Server: User-Defined Functions (UDF)
+
+SQL Server tem **três tipos** de funções definidas pelo usuário:
+
+### 1. Scalar UDF (retorna um único valor)
+
+```sql
+CREATE OR ALTER FUNCTION dbo.CalcularImposto(
+    @Valor MONEY,
+    @Aliquota DECIMAL(5,2)
+) RETURNS MONEY
+AS
+BEGIN
+    RETURN @Valor * (@Aliquota / 100);
+END;
+GO
+
+-- Uso
+SELECT id, valor, dbo.CalcularImposto(valor, 7.5) AS imposto FROM Pedido;
+```
+
+**Problema histórico de performance**: Microsoft Learn documenta literalmente: *"SQL Server doesn't allow intra-query parallelism in queries that invoke UDFs."* Antes do SQL Server 2019, scalar UDFs eram **conhecidamente lentos** — sem paralelismo, processados linha-a-linha, opacos pro otimizador.
+
+**SQL Server 2019 trouxe Scalar UDF Inlining** (Intelligent Query Processing). Documentação oficial: *"This feature improves the performance of queries that invoke scalar UDFs in SQL Server 2019 (15.x) and later versions. (...) With this new feature, scalar UDFs are automatically transformed into scalar expressions or scalar subqueries that are substituted in the calling query in place of the UDF operator. These expressions and subqueries are then optimized."*
+
+Em prática: o otimizador "expande" o corpo da UDF dentro da query principal, fazendo o plano considerar a lógica completa. Performance pode melhorar dramaticamente (em alguns casos, **muitas vezes mais rápido**).
+
+Pra inlining funcionar:
+- Database em **compatibility level 150 ou superior** (SQL Server 2019)
+- UDF precisa ser "inlineable" — várias restrições documentadas (sem `@@ROWCOUNT`, sem certas funções intrínsecas, sem labels sem GOTO)
+- Pode desativar explicitamente com `WITH INLINE = OFF` na criação
+
+Pra ver se sua UDF está sendo inlined, verifique o plano de execução — não deve haver mais operador "User Defined Function" no plano.
+
+### 2. Inline Table-Valued Function (inline TVF)
+
+Retorna uma tabela, mas o corpo é **um único SELECT**. Comporta-se como **view com parâmetros**:
+
+```sql
+CREATE OR ALTER FUNCTION dbo.PedidosDeCliente(@ClienteID INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT id, valor, data, status
+    FROM Pedido
+    WHERE cliente_id = @ClienteID
+);
+GO
+
+-- Uso como tabela
+SELECT * FROM dbo.PedidosDeCliente(42);
+SELECT * FROM dbo.PedidosDeCliente(42) WHERE valor > 1000;
+```
+
+**Inline TVFs têm boa performance** — otimizador as expande na query principal como se fosse uma view. **Recomendadas** sobre scalar UDFs e MSTVFs quando possível.
+
+### 3. Multi-Statement Table-Valued Function (MSTVF)
+
+Retorna tabela, mas o corpo tem **lógica com `BEGIN/END`** populando uma tabela variável:
+
+```sql
+CREATE OR ALTER FUNCTION dbo.PedidosCalculados(@ClienteID INT)
+RETURNS @Resultado TABLE (
+    id INT,
+    valor MONEY,
+    imposto MONEY,
+    total MONEY
+)
+AS
+BEGIN
+    INSERT INTO @Resultado
+    SELECT id, valor,
+           valor * 0.075 AS imposto,
+           valor * 1.075 AS total
+    FROM Pedido
+    WHERE cliente_id = @ClienteID;
+
+    -- Mais lógica possível aqui
+
+    RETURN;
+END;
+GO
+```
+
+**MSTVFs historicamente têm performance ruim** — otimizador trata como caixa-preta, estimativa de cardinalidade fixa (geralmente 1 linha ou 100), planos subótimos. SQL Server 2017+ introduziu **Interleaved Execution** que melhora o cenário (estima cardinalidade real na primeira execução), mas mesmo assim **inline TVFs costumam ser melhores quando dá pra usar**.
+
+### Resumo SQL Server UDFs
+
+| Tipo | Retorna | Performance | Recomendação |
+|---|---|---|---|
+| **Scalar UDF** | Valor único | Ruim antes do SQL 2019; aceitável depois com inlining | Use, mas monitore plano |
+| **Inline TVF** | Tabela (1 SELECT) | Boa (igual view) | **Preferir sempre que possível** |
+| **MSTVF** | Tabela (lógica) | Histórica ruim; melhor com 2017+ | Evitar; use procedure se for complexo |
+
+---
+
+## Function vs Procedure no SQL Server
+
+Diferença é parecida com PostgreSQL, mas com alguns detalhes específicos.
+
+| Aspecto | Function (SQL Server) | Procedure (SQL Server) |
+|---|---|---|
+| **Retorno** | Valor (scalar) ou tabela (TVF) | Múltiplos result sets ou OUTPUT params |
+| **Invocação** | Dentro de query: `SELECT dbo.fn(...)` | Comando próprio: `EXEC dbo.proc ...` |
+| **Pode modificar dados?** | **NÃO** (sem INSERT/UPDATE/DELETE em tabelas físicas) | Sim |
+| **Pode controlar transação?** | Não | Sim (BEGIN TRAN/COMMIT/ROLLBACK) |
+| **Pode TRY/CATCH?** | Não (em UDFs) | Sim |
+| **Pode chamar procedures?** | Não | Sim |
+| **Determinismo importa?** | Sim (afeta indexação) | Pouco relevante |
+
+Limitação importante das funções SQL Server: **não podem ter efeitos colaterais**. Sem `INSERT/UPDATE/DELETE` em tabelas físicas (pode em tabelas variáveis locais), sem dinamismo via `EXEC()`, sem chamadas a procedures. Essa restrição é o que permite usá-las dentro de queries com segurança.
+
+---
+
+## Encapsulamento e segurança
+
+Padrão importante de segurança: dar à aplicação apenas permissão `EXECUTE` em procedures, **sem** acesso direto às tabelas.
+
+```sql
+-- Aplicação tem só EXECUTE nas procedures
+GRANT EXECUTE ON SCHEMA::app TO usuario_app;
+
+-- Aplicação NÃO TEM SELECT/INSERT/UPDATE/DELETE direto
+REVOKE SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dados FROM usuario_app;
+
+-- Procedure acessa as tabelas internamente (com permissão dela)
+CREATE PROCEDURE app.RegistrarPedido @ClienteID INT, @Valor MONEY
+AS
+BEGIN
+    INSERT INTO dados.Pedido (cliente_id, valor) VALUES (@ClienteID, @Valor);
+END;
+```
+
+A aplicação **só pode** fazer o que procedures expõem. **Não consegue** rodar `DELETE FROM Pedido` ad-hoc. Reduz superfície de ataque (SQL injection ainda pode rodar a procedure, mas com efeito limitado ao que ela faz).
+
+Esse padrão é mais difundido em ambientes corporativos SQL Server tradicionais. Em sistemas Spring Boot modernos com ORM, geralmente se confia no controle de aplicação. Trade-off entre segurança e flexibilidade.
+
+---
+
+## Quando usar e quando NÃO usar
+
+Resumindo a posição arquitetural moderna sobre stored procedures e functions.
+
+### Use procedures/functions quando
+
+- **Operações em lote massivas** rodando inteiramente no banco — ETL, migrations, agregações pesadas. Evita transferir milhões de linhas pra aplicação
+- **Lógica SQL complexa** reutilizada em vários lugares — query de 100 linhas com 8 CTEs encapsulada em function fica mais limpa
+- **Cálculos derivados em queries** — `CalcularImposto(valor)` em SELECTs várias colunas
+- **Ambientes onde a aplicação não controla tudo** — relatórios via SSRS, exports manuais, integrações de terceiros conectando direto no banco
+- **Encapsulamento de segurança** — aplicação tem apenas `EXECUTE`, sem acesso direto às tabelas
+
+### Evite procedures/functions quando
+
+- **Lógica de negócio complexa que muda frequentemente** — banco é pior pra versionar (migrations), testar (precisa banco real), debugar (sem IDE moderna) que código de aplicação
+- **Cálculos simples já cobertos por SQL nativo** — não escreva `dbo.Soma(a, b)`, use `a + b`
+- **Operações que envolvem chamadas externas** — HTTP, email, integração — proibido (mesmo motivo de triggers, ver Lição 10)
+- **Validações simples** — use `CHECK` constraints
+- **Em sistemas Spring Boot modernos** — prefira lógica no Service Layer / Use Case (Clean Architecture, ver trilha Arquitetura)
+- **Quando equipe não domina** — código que ninguém entende vira dívida técnica
+
+### Posição prática
+
+Em sistemas **Java/Spring Boot modernos**: lógica de negócio fica na aplicação (em `@Service` ou Use Cases), banco guarda dados. Procedures/functions ficam pra **operações bulk que ganham muito** rodando 100% no banco, e operações de DBA/manutenção.
+
+Em sistemas **legados ou .NET tradicional**: procedures podem ser muito mais difundidas — perfeitamente válido se a equipe e o ambiente sustentam isso bem.
+
+**Não há resposta universal** — depende do contexto, tamanho da equipe, manutenibilidade exigida.
+
+<Insight>
+**Heurística pragmática**: se a operação roda mais rápido inteira no banco (ex: agregação massiva sem ida-e-volta) e é estável, vale uma procedure. Se é lógica de negócio que evolui com regras de produto, prefira a aplicação. **Não esconda regras complexas no banco se a equipe vai precisar mudar elas mensalmente** — debug e versionamento são piores lá.
+</Insight>
+
+---
+
+## Recap
+
+**Stored Procedures e Functions** são código executável armazenado no banco, invocado **explicitamente** (diferente de triggers, que disparam automaticamente). Servem pra encapsular SQL reutilizável, operações em lote, segurança via `EXECUTE`-only.
+
+**Diferença Function vs Procedure** (documentação PostgreSQL 36.4):
+
+- Function: retorna valor, chamada dentro de query, **não pode** controlar transação (PostgreSQL)
+- Procedure: sem retorno (usa OUT params), chamada via `CALL` / `EXEC`, **pode** controlar transação
+
+Termo coletivo é **routine** (PostgreSQL); `ALTER ROUTINE`/`DROP ROUTINE` operam em ambos.
+
+**PostgreSQL 11 (outubro 2018)** introduziu `CREATE PROCEDURE` separado de `CREATE FUNCTION`. Antes disso, só existia function — quem precisava de "procedure" usava function retornando `void`. A motivação principal pra adicionar procedure: **controle de transação** (`COMMIT`/`ROLLBACK` dentro do código).
+
+**PostgreSQL parâmetros**: `IN` (default), `OUT`, `INOUT`. Funções podem retornar `SETOF tipo` ou `RETURNS TABLE(...)` pra retornar conjuntos. PL/pgSQL é a linguagem procedural mais comum, mas há outras (SQL, PL/Python, PL/Perl, PL/Tcl, C).
+
+**SQL Server CREATE PROCEDURE**:
+
+- Parâmetros com keyword `OUTPUT` (declaração e chamada)
+- `@@ROWCOUNT` pega linhas afetadas pela última instrução
+- `RETURN` (inteiro) é convencionalmente 0 = sucesso, separado de `OUTPUT` params
+- `SET NOCOUNT ON` evita mensagens "X rows affected" indo pra cliente
+- Pode retornar **múltiplos result sets** via `SELECT`s sequenciais
+- Limite documentado: **2.100 parâmetros** (Microsoft Learn)
+- **Table-Valued Parameters** desde 2008 — user-defined table types passados como `READONLY`, eficientes pra bulk operations
+
+**SQL Server UDFs (3 tipos)**:
+
+- **Scalar UDF** — retorna valor único. Historicamente ruim de performance. **SQL Server 2019 (compat level 150+) introduziu Scalar UDF Inlining** — otimizador expande UDF na query principal automaticamente, ganho dramático
+- **Inline TVF** — retorna tabela via único `SELECT`. Comporta-se como view parametrizada. **Performance boa**, recomendada
+- **Multi-Statement TVF** — retorna tabela com lógica em `BEGIN/END`. Histórica ruim performance (estimativa cardinalidade fixa); SQL Server 2017+ melhorou com Interleaved Execution mas inline TVFs continuam preferíveis
+
+**Limitações importantes de functions SQL Server**: não podem `INSERT`/`UPDATE`/`DELETE` em tabelas físicas, não podem chamar procedures, não podem `TRY/CATCH`, sem `EXEC()` dinâmico. Essa restrição é o que permite usá-las em queries com segurança.
+
+**Padrão de segurança** difundido em SQL Server tradicional: aplicação tem apenas `EXECUTE` nas procedures, sem acesso direto às tabelas. Reduz superfície de ataque.
+
+**Quando usar**: bulk operations massivas no banco, lógica SQL complexa reusada, cálculos em queries, ambientes onde múltiplos consumidores acessam direto.
+
+**Quando NÃO usar**: lógica de negócio complexa em sistemas modernos com Service Layer/Use Cases, cálculos simples cobertos por SQL nativo, chamadas externas (HTTP, email), validações simples (use `CHECK`), código que vai mudar frequentemente.
+
+**Posição prática**: em Java/Spring Boot moderno, lógica fica na aplicação; procedures/functions são pra operações bulk e manutenção. Em .NET tradicional ou legado, procedures podem ser mais centrais. **Depende do contexto** — não há resposta universal.
+
+Próximas lições da trilha:
+
+- **Especialização e Herança ER** — (t,c)/(t,e)/(p,c)/(p,e), 3 estratégias de mapeamento físico
+- **SQL Server vs PostgreSQL** — diferenças práticas de sintaxe entre os dois SGBDs mais usados
+- **NoSQL Básico** — CAP theorem, tipos, quando NÃO usar relacional
+
+Manda qual quer.

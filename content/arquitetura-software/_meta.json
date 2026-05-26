@@ -1,0 +1,16 @@
+{
+  "titulo": "Arquitetura de Software",
+  "descricao": "Da base conceitual ao enforcement automatizado: Princípios, Clean Architecture, DDD, Hexagonal, Event-Driven, Estilos, Resilience, Documentação e Spring Modulith.",
+  "licoes": [
+    { "slug": "01-introducao-arquitetura", "ordem": 1 },
+    { "slug": "02-clean-architecture", "ordem": 2, "prerequisitos": ["01-introducao-arquitetura"] },
+    { "slug": "03-ddd-strategic-design", "ordem": 3, "prerequisitos": ["02-clean-architecture"] },
+    { "slug": "04-ddd-tactical-design", "ordem": 4, "prerequisitos": ["03-ddd-strategic-design"] },
+    { "slug": "05-hexagonal-architecture", "ordem": 5, "prerequisitos": ["04-ddd-tactical-design"] },
+    { "slug": "06-event-driven-architecture", "ordem": 6, "prerequisitos": ["05-hexagonal-architecture"] },
+    { "slug": "07-estilos-arquiteturais", "ordem": 7, "prerequisitos": ["06-event-driven-architecture"] },
+    { "slug": "08-resilience-patterns", "ordem": 8, "prerequisitos": ["07-estilos-arquiteturais"] },
+    { "slug": "09-c4-model-adr", "ordem": 9, "prerequisitos": ["08-resilience-patterns"] },
+    { "slug": "10-modular-monolith-spring-modulith", "ordem": 10, "prerequisitos": ["09-c4-model-adr"] }
+  ]
+}

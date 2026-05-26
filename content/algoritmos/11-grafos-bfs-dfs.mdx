@@ -1,0 +1,732 @@
+---
+titulo: "Grafos: A Estrutura Que Modela Tudo"
+trilha: "algoritmos"
+duracaoMin: 60
+dificuldade: "intermediario"
+referencias:
+  - "Leonhard Euler (1736), 'Solutio problematis ad geometriam situs pertinentis', Commentarii Academiae Scientarum Imperialis Petropolitanae 8 — paper que fundou a teoria dos grafos"
+  - "CLRS, Introduction to Algorithms, 4ª ed., Capítulo 22 — Elementary Graph Algorithms"
+  - "Sedgewick & Wayne, Algorithms, 4ª ed., Capítulo 4 — Graphs (Princeton)"
+  - "MIT OCW 6.006 (Spring 2020), Lectures 9-12 — Erik Demaine, Jason Ku"
+  - "Stanford CS 161 (2023) — Graph Algorithms lecture notes"
+  - "Arthur B. Kahn (1962), 'Topological Sorting of Large Networks', Communications of the ACM 5(11)"
+  - "Robert Tarjan (1972), 'Depth-First Search and Linear Graph Algorithms', SIAM Journal on Computing"
+  - "Antti Laaksonen, Competitive Programmer's Handbook, Cap. 11-12"
+  - "Oracle Java SE 21 + cppreference (estruturas usadas: ArrayDeque, std::queue, std::vector)"
+---
+
+## O dia em que a matemática conheceu uma cidade
+
+Em 1736, na cidade de Königsberg, Prússia (hoje Kaliningrado, Rússia), as pessoas tinham um passatempo de domingo: passear pela cidade tentando atravessar **cada uma das sete pontes** que cruzavam o rio Pregel **exatamente uma vez**, voltando ao ponto de partida. Ninguém conseguia. Mas será que era impossível ou só ninguém tinha sido esperto o suficiente?
+
+A pergunta chegou a **Leonhard Euler**, o matemático mais prolífico da história. Ele percebeu que o problema não era sobre **geometria** (distâncias, ângulos, formato exato da cidade) — era sobre **conexões**. Quem se importa se a ponte é longa ou curta? Só importa **o que conecta o quê**.
+
+Euler abstraiu a cidade num diagrama: cada **massa de terra** virou um ponto (vértice), cada **ponte** virou uma linha (aresta) ligando os pontos. Aplicou um argumento engenhoso sobre paridade dos graus dos vértices e provou: **é impossível**. Não tem caminho que atravesse cada ponte uma vez.
+
+O paper *"Solutio problematis ad geometriam situs pertinentis"* (Solução de um problema sobre a geometria da posição), publicado em 1736 nos Commentarii Academiae Scientarum Imperialis Petropolitanae, é considerado o **nascimento da teoria dos grafos** — toda uma área da matemática (e depois da computação) que existe pra estudar "coisas conectadas a coisas".
+
+Quase 300 anos depois, o que Euler começou virou a estrutura mais geral em computação. **Tudo é grafo:**
+
+- A internet (nós são roteadores, arestas são cabos)
+- Redes sociais (pessoas conectadas por amizades)
+- Mapas e GPS (interseções conectadas por ruas)
+- Dependências de software (módulos que importam outros módulos)
+- Estados de um jogo (configurações conectadas por jogadas válidas)
+- Compiladores (fluxo de controle entre instruções)
+- Renderizadores 3D (cenas com objetos pais e filhos)
+
+Esta lição vai cobrir os fundamentos: como representar grafos em código, e como **percorrê-los** com BFS e DFS — as duas técnicas de travessia que estão por trás de quase todo algoritmo sério em CS.
+
+---
+
+## Vocabulário básico
+
+Antes de mergulhar, alguns termos que vão aparecer o tempo todo:
+
+**Vértice** (ou **nó**): um "ponto" no grafo. Pode representar qualquer coisa — uma pessoa, uma cidade, um estado de jogo.
+
+**Aresta** (ou **edge**): uma "linha" conectando dois vértices. Pode representar amizade, estrada, transição de estado.
+
+**Grafo direcionado**: arestas têm direção (uma seta de A para B é diferente de B para A). Modelagem natural pra "A segue B" no Twitter, "A é pré-requisito de B" em currículo, "A chama B" em código.
+
+**Grafo não direcionado**: arestas são bidirecionais (amizade no Facebook é simétrica).
+
+**Grafo ponderado**: arestas têm pesos (distâncias, custos, capacidades). Sem peso, a aresta é "binária": ou existe, ou não.
+
+**Caminho**: sequência de arestas que liga dois vértices. **Caminho mais curto** é um problema clássico (Dijkstra, BFS).
+
+**Ciclo**: caminho que volta ao vértice inicial. Detectar ciclos é fundamental em validação de dependências.
+
+**Componente conexo**: subconjunto de vértices onde todos estão alcançáveis entre si. Um grafo pode ter vários componentes desconectados.
+
+**DAG** (Directed Acyclic Graph): grafo direcionado **sem ciclos**. Estrutura natural pra dependências, currículos, build systems.
+
+---
+
+## Como representar um grafo em código
+
+Tem duas representações dominantes em produção. Escolher a errada pode fazer seu algoritmo ser 100 vezes mais lento.
+
+### Matriz de adjacência
+
+Tabela quadrada de tamanho V por V (V = número de vértices). A célula `matriz[i][j]` é `true` (ou o peso da aresta) se existe aresta de i para j, e `false` (ou infinito) caso contrário.
+
+```
+Grafo:                    Matriz:
+                              0  1  2  3
+   0 ─── 1                0 [ 0  1  1  0 ]
+   │     │                1 [ 1  0  0  1 ]
+   2 ─── 3                2 [ 1  0  0  1 ]
+                          3 [ 0  1  1  0 ]
+```
+
+**Vantagens:**
+- Verificar se aresta existe entre i e j é **O(1)**
+- Simples de implementar
+
+**Desvantagens:**
+- Memória **O(V²)** mesmo pra grafo esparso (poucas arestas)
+- Iterar vizinhos de um vértice é O(V) — precisa varrer linha inteira da matriz, mesmo se o vértice tem só 2 vizinhos
+- Inviável pra grafos grandes: 1 milhão de vértices precisa de 10^12 células — 1 TB de memória
+
+Use matriz de adjacência quando o grafo é **denso** (a maioria dos pares de vértices tem aresta) e **pequeno** (até alguns milhares de vértices).
+
+### Lista de adjacência
+
+Para cada vértice, mantém uma **lista** dos seus vizinhos.
+
+```
+Grafo:                  Listas:
+                          0 → [1, 2]
+   0 ─── 1                1 → [0, 3]
+   │     │                2 → [0, 3]
+   2 ─── 3                3 → [1, 2]
+```
+
+**Vantagens:**
+- Memória **O(V + E)** — proporcional ao tamanho real do grafo, sem desperdiçar com não-arestas
+- Iterar vizinhos é **O(grau do vértice)** — diretamente, sem varrer não-vizinhos
+
+**Desvantagens:**
+- Verificar se aresta existe entre i e j é **O(grau de i)** — precisa varrer a lista
+- Levemente mais complexo de implementar
+
+Use lista de adjacência **por padrão**. É a representação certa pra **a maioria absoluta** dos grafos do mundo real — eles são esparsos (Facebook tem ~3 bilhões de usuários, ninguém tem mais que alguns milhares de amigos).
+
+### Implementação da lista de adjacência
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+// Representação por LISTA DE ADJACÊNCIA (padrão)
+public class Grafo {
+    private int V;                          // número de vértices
+    private List<List<Integer>> adj;        // adj[i] = vizinhos de i
+
+    public Grafo(int V) {
+        this.V = V;
+        this.adj = new ArrayList<>();
+        for (int i = 0; i < V; i++) {
+            adj.add(new ArrayList<>());
+        }
+    }
+
+    public void adicionarAresta(int u, int v) {
+        adj.get(u).add(v);
+        adj.get(v).add(u);                   // grafo NÃO direcionado
+    }
+
+    public List<Integer> vizinhos(int u) {
+        return adj.get(u);
+    }
+}
+
+// Para grafo direcionado, basta NÃO adicionar a aresta reversa:
+// adj.get(u).add(v);   apenas
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+class Grafo {
+private:
+    int V;
+    std::vector<std::vector<int>> adj;       // adj[i] = vizinhos de i
+
+public:
+    Grafo(int V) : V(V), adj(V) {}
+
+    void adicionarAresta(int u, int v) {
+        adj[u].push_back(v);
+        adj[v].push_back(u);                  // grafo NÃO direcionado
+    }
+
+    const std::vector<int>& vizinhos(int u) const {
+        return adj[u];
+    }
+
+    int numVertices() const { return V; }
+};
+
+// Para grafo direcionado, omita a aresta reversa
+```
+
+</Code>
+</CodeSwap>
+
+<Insight>
+**Para grafos ponderados**, troque `List<Integer>` por `List<int[]>` (Java) ou `vector<pair<int,int>>` (C++), guardando `[vizinho, peso]` em cada entrada. A estrutura é a mesma, só carrega informação adicional.
+</Insight>
+
+---
+
+## BFS: percorrer em camadas
+
+**Breadth-First Search** (busca em largura) visita os vértices em **camadas concêntricas** a partir de um vértice inicial. Primeiro o vértice inicial, depois todos os vizinhos diretos, depois todos os vizinhos dos vizinhos, e assim por diante.
+
+A analogia clássica: **ondulação na água**. Você joga uma pedra num lago, e as ondas se expandem em círculos concêntricos. BFS visita os nós exatamente assim — pelo menos uma camada totalmente antes de passar pra próxima.
+
+### Por que BFS usa fila
+
+A propriedade-chave do BFS é processar nós **na ordem em que foram descobertos**. Isso é FIFO — exatamente o que uma fila faz.
+
+```
+                          1
+                        / | \
+                       2  3  4              ← camada 1 (distância 1)
+                      /|  |  |\
+                     5 6  7  8 9            ← camada 2 (distância 2)
+```
+
+Começando do nó 1:
+1. Coloca 1 na fila.
+2. Tira 1, adiciona vizinhos 2, 3, 4 na fila. Marca como visitados.
+3. Tira 2, adiciona vizinhos 5, 6. Tira 3, adiciona 7. Tira 4, adiciona 8, 9.
+4. Continua até a fila esvaziar.
+
+Resultado: visita na ordem 1, 2, 3, 4, 5, 6, 7, 8, 9 — exatamente em ordem de distância da origem.
+
+### A propriedade mais importante do BFS
+
+> **Em grafos sem peso (ou onde todas as arestas têm peso igual), BFS encontra o caminho mais curto da origem para qualquer outro vértice.**
+
+Isso é o que torna BFS tão importante. Você quer saber a menor quantidade de "saltos" entre duas pessoas no Facebook? BFS. A menor quantidade de movimentos pra resolver um quebra-cabeça? BFS. A distância mais curta num labirinto? BFS.
+
+### Implementação do BFS
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+// Retorna distâncias do nó 'origem' a todos os outros (em arestas)
+public int[] bfs(List<List<Integer>> adj, int origem) {
+    int n = adj.size();
+    int[] dist = new int[n];
+    Arrays.fill(dist, -1);                  // -1 = não alcançado ainda
+    dist[origem] = 0;
+
+    Queue<Integer> fila = new ArrayDeque<>();
+    fila.offer(origem);
+
+    while (!fila.isEmpty()) {
+        int u = fila.poll();
+        for (int v : adj.get(u)) {
+            if (dist[v] == -1) {              // ainda não visitado
+                dist[v] = dist[u] + 1;
+                fila.offer(v);
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <queue>
+
+std::vector<int> bfs(const std::vector<std::vector<int>>& adj, int origem) {
+    int n = adj.size();
+    std::vector<int> dist(n, -1);            // -1 = não alcançado ainda
+    dist[origem] = 0;
+
+    std::queue<int> fila;
+    fila.push(origem);
+
+    while (!fila.empty()) {
+        int u = fila.front(); fila.pop();
+        for (int v : adj[u]) {
+            if (dist[v] == -1) {
+                dist[v] = dist[u] + 1;
+                fila.push(v);
+            }
+        }
+    }
+    return dist;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V + E) — cada vértice entra na fila uma vez (graças ao array de distâncias funcionando como "visitado"), e cada aresta é examinada uma vez.
+
+<ComplexidadeBox melhor="O(V+E)" media="O(V+E)" pior="O(V+E)" />
+
+<Aviso>
+O array `dist` serve **duplo propósito**: armazena a distância calculada E marca quem já foi visitado (valor `-1` = não visitado, qualquer outro valor = visitado). Isso é mais eficiente que manter um conjunto separado de visitados, e elimina uma fonte comum de bugs (esquecer de marcar como visitado).
+</Aviso>
+
+### Pegadinhas comuns em BFS
+
+**Marcar como visitado na hora errada.** O momento certo de marcar é **quando você coloca na fila**, não quando tira. Se você marca só na hora de tirar, o mesmo nó pode ser colocado na fila várias vezes pelos vizinhos diferentes — o algoritmo continua correto, mas vira O(V * E) no pior caso. Sutil mas devastador em grafos grandes.
+
+**Confundir BFS com DFS.** A diferença é literalmente uma palavra: fila vira pilha, BFS vira DFS. As implementações são quase idênticas, mas o comportamento é radicalmente diferente.
+
+**Pesos nas arestas.** BFS só dá caminho mais curto quando todas as arestas têm o mesmo peso. Com pesos diferentes, use **Dijkstra** (BFS com fila de prioridade).
+
+---
+
+## DFS: percorrer mergulhando
+
+**Depth-First Search** (busca em profundidade) faz o oposto do BFS: em vez de explorar todos os vizinhos antes de aprofundar, **mergulha o mais fundo possível** em um ramo antes de voltar.
+
+A analogia: **explorar uma caverna com várias saídas**. Você escolhe uma saída e vai até onde der. Quando bate num beco sem saída, **volta atrás** até a última bifurcação não explorada, e tenta outra. Isso é DFS.
+
+### Por que DFS usa pilha (ou recursão)
+
+DFS quer "ir fundo primeiro". Isso significa: **o último vértice descoberto é o primeiro a ser explorado** — LIFO, comportamento de pilha. E como a recursão usa a stack de chamadas implicitamente, DFS pode ser escrito recursivamente sem usar pilha explícita.
+
+### Trace do DFS
+
+Aplicado ao mesmo grafo do BFS, começando do nó 1:
+
+```
+                          1
+                        / | \
+                       2  3  4
+                      /|  |  |\
+                     5 6  7  8 9
+```
+
+1. Visita 1. Filho não-visitado mais à esquerda: 2.
+2. Visita 2. Filho não-visitado: 5.
+3. Visita 5. Sem filhos não-visitados. **Volta** pra 2.
+4. Outro filho não-visitado de 2: 6.
+5. Visita 6. Sem filhos não-visitados. **Volta** pra 2.
+6. Sem mais filhos não-visitados de 2. **Volta** pra 1.
+7. Próximo filho de 1: 3.
+8. ... continua nessa lógica.
+
+Ordem de visita: **1, 2, 5, 6, 3, 7, 4, 8, 9**. Bem diferente do BFS (1, 2, 3, 4, 5, 6, 7, 8, 9).
+
+### Duas formas de implementar
+
+A versão recursiva é mais elegante:
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+// DFS recursivo
+private boolean[] visitado;
+
+public void dfs(List<List<Integer>> adj, int origem) {
+    visitado = new boolean[adj.size()];
+    dfsHelper(adj, origem);
+}
+
+private void dfsHelper(List<List<Integer>> adj, int u) {
+    if (visitado[u]) return;
+    visitado[u] = true;
+    // processar u aqui (imprimir, registrar, etc.)
+    System.out.println(u);
+    for (int v : adj.get(u)) {
+        if (!visitado[v]) {
+            dfsHelper(adj, v);              // mergulha mais fundo
+        }
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+std::vector<bool> visitado;
+
+void dfsHelper(const std::vector<std::vector<int>>& adj, int u) {
+    if (visitado[u]) return;
+    visitado[u] = true;
+    std::cout << u << "\n";
+    for (int v : adj[u]) {
+        if (!visitado[v]) {
+            dfsHelper(adj, v);
+        }
+    }
+}
+
+void dfs(const std::vector<std::vector<int>>& adj, int origem) {
+    visitado.assign(adj.size(), false);
+    dfsHelper(adj, origem);
+}
+```
+
+</Code>
+</CodeSwap>
+
+A versão iterativa com pilha explícita é útil quando você quer evitar stack overflow em grafos muito profundos (mais de 10.000 níveis):
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public void dfsIterativo(List<List<Integer>> adj, int origem) {
+    boolean[] visitado = new boolean[adj.size()];
+    Deque<Integer> pilha = new ArrayDeque<>();
+    pilha.push(origem);
+
+    while (!pilha.isEmpty()) {
+        int u = pilha.pop();
+        if (visitado[u]) continue;
+        visitado[u] = true;
+        System.out.println(u);
+        for (int v : adj.get(u)) {
+            if (!visitado[v]) {
+                pilha.push(v);
+            }
+        }
+    }
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <stack>
+
+void dfsIterativo(const std::vector<std::vector<int>>& adj, int origem) {
+    std::vector<bool> visitado(adj.size(), false);
+    std::stack<int> pilha;
+    pilha.push(origem);
+
+    while (!pilha.empty()) {
+        int u = pilha.top(); pilha.pop();
+        if (visitado[u]) continue;
+        visitado[u] = true;
+        std::cout << u << "\n";
+        for (int v : adj[u]) {
+            if (!visitado[v]) {
+                pilha.push(v);
+            }
+        }
+    }
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V + E), mesma que BFS. Cada vértice é visitado uma vez, cada aresta é examinada uma vez.
+
+---
+
+## BFS vs DFS: quando usar cada um
+
+Os dois percorrem todos os vértices em O(V + E), mas têm comportamentos muito diferentes. Saber escolher é metade da batalha.
+
+| Aspecto | BFS | DFS |
+|---|---|---|
+| Estrutura usada | Fila (FIFO) | Pilha (recursão ou explícita, LIFO) |
+| Ordem de visita | Por camadas (distância da origem) | Por ramos (vai fundo, depois volta) |
+| Caminho mais curto | **Sim** (grafos sem peso) | Não garante |
+| Detectar ciclos | Pode, mas DFS é mais natural | **Sim**, natural |
+| Topological sort | Possível (algoritmo de Kahn) | Possível (mais elegante) |
+| Memória usada | Pode ser pesada (toda uma camada na fila) | Pode ser pesada (profundidade da recursão) |
+| Componentes fortemente conexos | Não | **Sim** (Tarjan, Kosaraju) |
+| Encontrar QUALQUER caminho | Funciona | Funciona |
+
+**Use BFS quando**: você precisa do caminho mais curto em grafo sem peso, quer processar nós em ordem de distância (level-by-level BFS), está em redes sociais (graus de separação).
+
+**Use DFS quando**: precisa detectar ciclos, fazer topological sort, encontrar componentes fortemente conexos, gerar permutações/subconjuntos (backtracking), avaliar expressões em árvores.
+
+---
+
+## Detectar ciclos com DFS
+
+Um problema clássico de grafos: **o grafo tem ciclo?** A solução é uma extensão simples do DFS.
+
+A ideia: mantenha **três estados** pra cada vértice durante o DFS — `NÃO VISITADO`, `EM EXPLORAÇÃO` (no caminho atual da pilha), `FINALIZADO` (já voltei dele). Se durante a exploração você encontra um vizinho `EM EXPLORAÇÃO`, achou um ciclo (achou um caminho que volta para algum ancestral).
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+public boolean temCiclo(List<List<Integer>> adj) {
+    int n = adj.size();
+    // 0 = não visitado, 1 = em exploração, 2 = finalizado
+    int[] estado = new int[n];
+
+    for (int i = 0; i < n; i++) {
+        if (estado[i] == 0 && temCicloHelper(adj, i, estado)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+private boolean temCicloHelper(List<List<Integer>> adj, int u, int[] estado) {
+    estado[u] = 1;                                // marca como em exploração
+    for (int v : adj.get(u)) {
+        if (estado[v] == 1) return true;          // ciclo: vizinho está no caminho atual
+        if (estado[v] == 0 && temCicloHelper(adj, v, estado)) return true;
+    }
+    estado[u] = 2;                                // finaliza
+    return false;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+
+bool temCicloHelper(const std::vector<std::vector<int>>& adj, int u, std::vector<int>& estado) {
+    estado[u] = 1;                                // em exploração
+    for (int v : adj[u]) {
+        if (estado[v] == 1) return true;
+        if (estado[v] == 0 && temCicloHelper(adj, v, estado)) return true;
+    }
+    estado[u] = 2;                                // finalizado
+    return false;
+}
+
+bool temCiclo(const std::vector<std::vector<int>>& adj) {
+    int n = adj.size();
+    std::vector<int> estado(n, 0);
+
+    for (int i = 0; i < n; i++) {
+        if (estado[i] == 0 && temCicloHelper(adj, i, estado)) {
+            return true;
+        }
+    }
+    return false;
+}
+```
+
+</Code>
+</CodeSwap>
+
+Esse código é a base de detecção de **deadlocks** em sistemas operacionais, validação de **dependências circulares** em build systems (npm, Maven, Cargo), e checagem de currículos com **pré-requisitos circulares** em sistemas universitários.
+
+---
+
+## Topological Sort: ordenando dependências
+
+Imagina que você está montando uma janta. Precisa lavar a salada antes de temperar. Precisa cortar a cebola antes de refogar. Precisa refogar antes de servir. Cada tarefa tem **pré-requisitos** — outras tarefas que precisam terminar antes.
+
+Esse problema aparece em todo lugar: instalação de pacotes (`npm install` precisa instalar dependências antes do pacote principal), compilação de código (módulos importados precisam compilar antes de quem importa), currículo escolar (Cálculo II depende de Cálculo I), agendamento de processos com prioridades.
+
+**Topological Sort** resolve isso: dado um **DAG** (grafo direcionado sem ciclos), produz uma ordem linear dos vértices onde cada vértice aparece **antes** de todos que dependem dele.
+
+### Algoritmo de Kahn (BFS-based, 1962)
+
+Em 1962, **Arthur B. Kahn** publicou na Communications of the ACM o paper *"Topological Sorting of Large Networks"*, com um algoritmo elegante baseado em BFS:
+
+1. Calcule o **in-degree** (número de arestas que chegam) de cada vértice
+2. Adicione todos os vértices com in-degree zero (sem dependências) numa fila
+3. Enquanto a fila tiver elementos:
+   - Tire um vértice. Adicione ao resultado.
+   - Para cada vizinho dele, reduza seu in-degree em 1
+   - Se algum vizinho ficou com in-degree zero, adicione na fila
+
+Se ao final o tamanho do resultado é menor que V, **há ciclo** — topological sort impossível.
+
+<CodeSwap>
+<Code lang="java">
+
+```java
+import java.util.*;
+
+public List<Integer> topologicalSort(List<List<Integer>> adj) {
+    int n = adj.size();
+    int[] inDegree = new int[n];
+
+    // Calcula in-degree de cada vértice
+    for (int u = 0; u < n; u++) {
+        for (int v : adj.get(u)) {
+            inDegree[v]++;
+        }
+    }
+
+    Queue<Integer> fila = new ArrayDeque<>();
+    for (int i = 0; i < n; i++) {
+        if (inDegree[i] == 0) fila.offer(i);
+    }
+
+    List<Integer> resultado = new ArrayList<>();
+    while (!fila.isEmpty()) {
+        int u = fila.poll();
+        resultado.add(u);
+        for (int v : adj.get(u)) {
+            inDegree[v]--;
+            if (inDegree[v] == 0) fila.offer(v);
+        }
+    }
+
+    if (resultado.size() != n) {
+        throw new IllegalStateException("Grafo tem ciclo, sem ordem topológica");
+    }
+    return resultado;
+}
+```
+
+</Code>
+<Code lang="cpp">
+
+```cpp
+#include <vector>
+#include <queue>
+#include <stdexcept>
+
+std::vector<int> topologicalSort(const std::vector<std::vector<int>>& adj) {
+    int n = adj.size();
+    std::vector<int> inDegree(n, 0);
+
+    for (int u = 0; u < n; u++) {
+        for (int v : adj[u]) {
+            inDegree[v]++;
+        }
+    }
+
+    std::queue<int> fila;
+    for (int i = 0; i < n; i++) {
+        if (inDegree[i] == 0) fila.push(i);
+    }
+
+    std::vector<int> resultado;
+    while (!fila.empty()) {
+        int u = fila.front(); fila.pop();
+        resultado.push_back(u);
+        for (int v : adj[u]) {
+            if (--inDegree[v] == 0) {
+                fila.push(v);
+            }
+        }
+    }
+
+    if ((int)resultado.size() != n) {
+        throw std::runtime_error("Grafo tem ciclo, sem ordem topológica");
+    }
+    return resultado;
+}
+```
+
+</Code>
+</CodeSwap>
+
+**Complexidade**: O(V + E), igual BFS puro.
+
+### Aplicações reais de Topological Sort
+
+- **Build systems** (Make, Bazel, Gradle, npm): qual ordem compilar os módulos.
+- **Resolução de pacotes** (apt, pip, Maven): qual ordem instalar dependências.
+- **Linkers**: qual ordem montar arquivos objeto.
+- **Currículo universitário**: em qual ordem cursar matérias, respeitando pré-requisitos.
+- **Spreadsheet recalculation**: quando uma célula muda, qual ordem recalcular as outras que dependem dela. Excel faz isso o tempo todo.
+- **Task scheduling**: pipelines de CI/CD, fluxos de aprovação corporativos.
+
+---
+
+## Componentes conexos com BFS ou DFS
+
+Outro problema clássico: descobrir quantos **"pedaços desconectados"** o grafo tem.
+
+```
+   1 ── 2          5 ── 6
+   │                    │
+   3 ── 4          7
+```
+
+Esse grafo tem **3 componentes**: {1,2,3,4}, {5,6,7}, e nenhum outro.
+
+A solução é simples: rode BFS (ou DFS) começando de cada vértice não-visitado. Cada vez que o algoritmo termina sem visitar todos, você tem um novo componente.
+
+```java
+public int contarComponentes(List<List<Integer>> adj) {
+    int n = adj.size();
+    boolean[] visitado = new boolean[n];
+    int componentes = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (!visitado[i]) {
+            componentes++;
+            bfsMarcando(adj, i, visitado);   // marca todo o componente
+        }
+    }
+    return componentes;
+}
+```
+
+Aplicações: **detecção de cluster** em redes sociais ("amigos de amigos"), **flood fill** em editores de imagem (selecionar região conectada por cor), **análise de redes** em geral.
+
+---
+
+## Outros algoritmos de grafo (gancho pra próximas lições)
+
+Pra fechar o panorama, alguns algoritmos importantes que dependem do que cobrimos aqui:
+
+**Dijkstra** (1959): caminho mais curto em grafos com pesos não-negativos. É BFS + fila de prioridade. **Visto na lição de Heap.**
+
+**Bellman-Ford**: caminho mais curto permitindo pesos negativos (e detectando ciclos negativos). Lentidão proporcional a V * E.
+
+**Floyd-Warshall**: caminho mais curto entre **todos os pares** de vértices, O(V³). Mais simples que rodar Dijkstra V vezes.
+
+**A***: variante de Dijkstra com heurística. Usado em jogos, navegação GPS, robótica.
+
+**Minimum Spanning Tree** (Kruskal, Prim): conectar todos os vértices com custo mínimo. Aplicações em redes elétricas, telecomunicações, clusterização.
+
+**Tarjan's algorithm** (1972): componentes fortemente conexos em grafos direcionados. Robert Tarjan ganhou o Turing Award em parte por contribuições nessa área.
+
+**Maximum Flow** (Ford-Fulkerson, Edmonds-Karp): fluxo máximo em redes. Aplicações em logística, escalonamento, matching bipartido.
+
+Cada um desses merece sua própria lição — vamos cobrir na ordem certa.
+
+---
+
+## Recap
+
+Teoria dos grafos começou em **1736 com Euler** resolvendo o problema das pontes de Königsberg. Quase 300 anos depois, virou a estrutura mais geral em computação — modela qualquer coisa com conexões.
+
+Duas representações principais: **matriz de adjacência** (O(V²) memória, bom pra grafos densos) e **lista de adjacência** (O(V+E) memória, padrão pra grafos esparsos). Lista é o padrão.
+
+**BFS** percorre em camadas usando **fila**. Garante caminho mais curto em grafos sem peso (ou peso uniforme). Aplicações: graus de separação, BFS em labirintos, level-order traversal de árvore.
+
+**DFS** percorre mergulhando em profundidade, usando **pilha** ou **recursão**. Aplicações: detecção de ciclos, topological sort, componentes fortemente conexos, backtracking em problemas combinatórios.
+
+Os dois rodam em **O(V + E)** — toca cada vértice e cada aresta uma vez. A escolha não é por performance, é por **comportamento**.
+
+**Detectar ciclo** com DFS usa três estados (não visitado, em exploração, finalizado). Base de detecção de deadlocks, dependências circulares, validação de currículos.
+
+**Topological Sort** (Kahn, 1962) ordena vértices de um DAG respeitando dependências. Roda em O(V + E). Aplicações: build systems, instalação de pacotes, agendamento de tarefas com pré-requisitos.
+
+**Componentes conexos** se descobrem rodando BFS/DFS a partir de cada vértice não-visitado. Conta de pedaços desconectados.
+
+Grafos são a base de quase tudo em algoritmos avançados. Esta lição cobriu o esqueleto. As próximas vão explorar Dijkstra, A*, MST, fluxo máximo — tudo construído em cima de BFS e DFS.
+
+Próxima lição: **Dijkstra e Caminhos Mais Curtos** — onde grafo ponderado encontra heap, e o algoritmo mais usado em GPS, redes, e jogos toma forma.

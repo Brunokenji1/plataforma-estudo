@@ -1,0 +1,122 @@
+[
+  {
+    "id": "uf-01",
+    "enunciado": "Quais são as DUAS operações fundamentais de uma estrutura Union-Find?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "insert(x) e delete(x)",
+      "find(x) — retorna o representante do conjunto de x; e union(x, y) — mescla os conjuntos de x e y",
+      "push(x) e pop()",
+      "sort() e search(x)"
+    ],
+    "resposta": 1,
+    "explicacao": "find(x) retorna o representante (raiz da árvore) do conjunto que contém x. union(x, y) mescla os conjuntos de x e y em um único conjunto. Com essas duas operações, você pode responder 'x e y estão no mesmo conjunto?' verificando se find(x) == find(y). É uma das estruturas mais simples e poderosas em algoritmos — implementação cabe em ~40 linhas, e as operações rodam em tempo praticamente constante com as otimizações certas."
+  },
+  {
+    "id": "uf-02",
+    "enunciado": "Qual a complexidade AMORTIZADA por operação de Union-Find com path compression + union by rank, segundo o teorema de Tarjan (1975)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(1) exato",
+      "O(log n)",
+      "O(α(n)) — onde α é a INVERSA DA FUNÇÃO DE ACKERMANN, que para n até 10^80 vale no máximo 4",
+      "O(n)"
+    ],
+    "resposta": 2,
+    "explicacao": "O(α(n)) amortizado, demonstrado por Robert Tarjan em 1975 no paper 'Efficiency of a Good But Not Linear Set Union Algorithm' (JACM 22(2)). α(n) é a inversa da função de Ackermann — uma função que cresce TÃO DEVAGAR que para qualquer n até 10^80 (mais que átomos no universo observável), α(n) ≤ 4. Na prática é constante, mas formalmente não é O(1). Tarjan também provou no mesmo paper que NENHUM algoritmo pode fazer melhor que Ω(α(n)) — é um limite inferior apertado. Por essa e outras análises amortizadas, Tarjan ganhou o Turing Award em 1986."
+  },
+  {
+    "id": "uf-03",
+    "enunciado": "O que é PATH COMPRESSION em Union-Find?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Comprimir o array parent[] para usar menos memória",
+      "Durante a operação find(x), depois de subir até a raiz, apontar todos os nós do caminho percorrido DIRETAMENTE para a raiz, achatando a árvore",
+      "Substituir a árvore por uma lista ligada",
+      "Remover componentes desconexos"
+    ],
+    "resposta": 1,
+    "explicacao": "Path compression: durante find(x), depois de identificar a raiz subindo pela árvore, faz uma segunda passada apontando todos os nós do caminho diretamente para a raiz. Resultado: chamadas futuras a qualquer um desses nós são O(1). A árvore vai ficando cada vez mais 'achatada' a cada operação find. Implementação recursiva é apenas uma linha: 'parent[x] = find(parent[x])'. Implementação iterativa faz duas passadas. É uma das otimizações mais elegantes em ciência da computação — código simples, mas a análise da complexidade resultante é complexa (envolve a função de Ackermann)."
+  },
+  {
+    "id": "uf-04",
+    "enunciado": "O que é UNION BY RANK (ou union by size)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ordenar os conjuntos alfabeticamente antes de unir",
+      "Ao fazer union(x, y), sempre anexar a árvore MENOR (de menor rank/size) à MAIOR — evita criar árvores altas, mantendo altura O(log n) sem path compression",
+      "Unir conjuntos em ordem crescente de IDs",
+      "Permitir apenas uma operação union por chamada"
+    ],
+    "resposta": 1,
+    "explicacao": "Union by rank: ao unir duas árvores, sempre anexa a de menor rank (estimativa da altura) na de maior rank. Se ranks são iguais, anexa uma na outra e incrementa o rank. Garantia: a altura da árvore fica O(log n). Union by SIZE é uma variante equivalente — usa o número de elementos do componente em vez de altura. Os dois dão a MESMA complexidade assintótica. Tipicamente union by size é preferido porque você também ganha 'tamanho de cada componente' de graça, útil em muitos problemas."
+  },
+  {
+    "id": "uf-05",
+    "enunciado": "Qual o valor APROXIMADO da inversa da função de Ackermann α(n) para n = 10^80 (mais átomos que o universo observável)?",
+    "tipo": "multipla-escolha",
+    "opcoes": ["1", "4", "100", "10^80"],
+    "resposta": 1,
+    "explicacao": "α(10^80) é aproximadamente 4. A função de Ackermann cresce TÃO RÁPIDO (A(4,4) tem mais dígitos que átomos no universo, A(5,5) é literalmente impossível de escrever) que sua inversa cresce ABSURDAMENTE devagar. Tabela aproximada: α(n) ≤ 1 para n ≤ 3; α(n) ≤ 2 para n ≤ 7; α(n) ≤ 3 para n ≤ ~2000; α(n) ≤ 4 para n ≤ 10^80; α(n) ≤ 5 para qualquer n imaginável. Pra todos os efeitos práticos, α(n) é constante — daí o costume de tratar Union-Find como 'O(1) amortizado'. Mas formalmente NÃO é O(1) — é O(α(n)), e Tarjan provou que esse limite é apertado."
+  },
+  {
+    "id": "uf-06",
+    "enunciado": "Qual é a aplicação MAIS CLÁSSICA de Union-Find em algoritmos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ordenação de arrays",
+      "Algoritmo de Kruskal para Minimum Spanning Tree — Union-Find responde 'esses dois vértices já estão no mesmo componente?' a cada aresta sendo considerada",
+      "Busca binária",
+      "Compressão de dados"
+    ],
+    "resposta": 1,
+    "explicacao": "Kruskal's MST é a aplicação clássica. O algoritmo ordena arestas por peso ascendente e pega cada uma SE não formar ciclo. A detecção de ciclo é a pergunta exata 'esses dois vértices já estão no mesmo componente conexo?' — que Union-Find responde em O(α(V)). Sem Union-Find, Kruskal cairia pra O(V × E) ou pior. Com Union-Find, a complexidade total fica O(E log E) dominada pelo sort das arestas. Outras aplicações importantes: conectividade dinâmica em redes, detecção de ciclos em grafos não-direcionados, Number of Islands II, flood fill com componentes em processamento de imagens, e problemas de equivalência em compiladores (motivação original da estrutura por Galler e Fischer em 1964)."
+  },
+  {
+    "id": "uf-07",
+    "enunciado": "Qual a LIMITAÇÃO mais importante de Union-Find clássica?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Só funciona com até 1000 elementos",
+      "Não suporta DESFAZER/DESCONECTAR (remover uma aresta) eficientemente — uma vez que dois conjuntos são unidos, separá-los exige reconstruir a estrutura",
+      "Não funciona com strings, apenas com inteiros",
+      "Requer mais de 1 GB de memória para qualquer problema"
+    ],
+    "resposta": 1,
+    "explicacao": "Union-Find clássica não suporta desconexão eficiente. Uma vez unidos dois conjuntos, separá-los exige reconstruir a estrutura, perdendo todas as otimizações. Pra problemas que exigem 'undo' ou conectividade dinâmica completa (com adição E remoção de arestas), existem variantes mais sofisticadas: Persistent Union-Find (mantém versões antigas, cada operação cria uma nova versão), Link-Cut Trees de Sleator e Tarjan (1983) que suportam union, find, E disconnect em O(log n) amortizado. Mas essas são significativamente mais complexas de implementar. Quando o problema permite só adição de conexões (caso comum), Union-Find clássica é imbatível."
+  },
+  {
+    "id": "uf-08",
+    "enunciado": "Quem inventou a função de Ackermann (cuja INVERSA aparece na análise do Union-Find)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Alan Turing, 1936",
+      "Wilhelm Ackermann (aluno de David Hilbert) em 1928, refinada por Rózsa Péter — para demonstrar a EXISTÊNCIA de funções computáveis mas não primitivamente recursivas",
+      "John von Neumann, 1945",
+      "Donald Knuth, 1968"
+    ],
+    "resposta": 1,
+    "explicacao": "Wilhelm Ackermann, matemático alemão (1896-1962), aluno de David Hilbert, definiu a função em 1928 para responder uma questão na teoria da computação: existem funções computáveis (calculáveis por máquinas) que NÃO são primitivamente recursivas? A função de Ackermann é uma — cresce explosivamente rápido. A(4,4) já tem mais dígitos que átomos no universo observável. Rózsa Péter refinou a definição. Curiosamente, essa função apareceu décadas depois na análise de Tarjan (1975) sobre Union-Find — através da sua INVERSA, que cresce absurdamente devagar. É um daqueles casos onde matemática 'pura' dos anos 1920 ressurge em ciência da computação aplicada dos anos 1970."
+  },
+  {
+    "id": "uf-09",
+    "enunciado": "Verdadeiro ou falso: se você usar Union-Find com APENAS path compression (sem union by rank), a complexidade já é O(α(n)) amortizada.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "Falso. As DUAS otimizações são necessárias para atingir O(α(n)). Com APENAS path compression (sem union by rank), a complexidade amortizada é O(log n) por operação — melhor que sem otimizações, mas longe do α(n). Com APENAS union by rank (sem path compression), também O(log n) por operação. As duas COMBINADAS dão o efeito multiplicativo de O(α(n)) — uma achata a árvore reativamente, a outra mantém ela balanceada proativamente. Tarjan demonstrou em 1975 que essa combinação é ótima: nenhum algoritmo de Union-Find pode fazer melhor que Ω(α(n)) amortizado."
+  },
+  {
+    "id": "uf-10",
+    "enunciado": "Quem ganhou o Turing Award em 1986, em parte pela análise de Union-Find?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth",
+      "Edsger Dijkstra",
+      "Robert Tarjan e John Hopcroft — 'for fundamental achievements in the design and analysis of algorithms and data structures'",
+      "Tim Berners-Lee"
+    ],
+    "resposta": 2,
+    "explicacao": "Robert Endre Tarjan e John Hopcroft ganharam o Turing Award em 1986, com a citação 'for fundamental achievements in the design and analysis of algorithms and data structures'. Union-Find foi uma das contribuições centrais citadas. Tarjan tem uma lista impressionante de algoritmos com seu nome: Tarjan's SCC (componentes fortemente conexos), Splay Trees (com Sleator), Link-Cut Trees, Fibonacci Heaps (com Fredman), análise amortizada formal. Hopcroft é famoso pelo Hopcroft-Karp (matching bipartido), Hopcroft-Tarjan planarity, e contribuições à teoria de autômatos. Hopcroft escreveu junto com Ullman o famoso livro 'Introduction to Automata Theory, Languages, and Computation', um dos clássicos da CS."
+  }
+]

@@ -1,0 +1,116 @@
+{
+  "exercicios": [
+    {
+      "id": "ex1",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Domain Events fazem parte dos padrões táticos originais propostos por Eric Evans no livro 'Domain-Driven Design: Tackling Complexity in the Heart of Software' de 2003.",
+      "correta": false,
+      "explicacao": "Falso. Domain Events NÃO aparecem no livro original de Eric Evans de 2003. Foram introduzidos formalmente pelo próprio Evans depois, no 'DDD Reference' de 2010 (domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf). Vaughn Vernon confirma isso explicitamente no preface do 'Implementing Domain-Driven Design' (2013): 'Domain Events were not formally introduced by Eric Evans as part of DDD until after his book was published'. O capítulo 8 do IDDD é dedicado ao padrão, baseado em práticas estabelecidas por Udi Dahan (post 'Domain Events – Salvation', 14/jun/2009) e Jimmy Bogard (post 'Strengthening Your Domain: Domain Events', 8/abr/2010), além das publicações de Greg Young sobre Event Sourcing."
+    },
+    {
+      "id": "ex2",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença essencial entre um Command e um Domain Event?",
+      "opcoes": [
+        "Command é síncrono, Event é assíncrono",
+        "Command representa intenção (no imperativo, pode ser rejeitado), Event representa fato ocorrido (no particípio passado, imutável)",
+        "Command é usado em REST, Event é usado em messaging",
+        "Não há diferença real — são sinônimos para 'mensagens entre componentes'"
+      ],
+      "correta": 1,
+      "explicacao": "A distinção é fundamental e frequentemente confundida. Command: 'EfetivarCompensacao', 'ReservarCredito', 'CancelarPedido' — verbo no imperativo presente, representa intenção do usuário. Pode ser rejeitado pelo agregado (validações falham, estado inválido, capacidade excedida). Vai do mundo externo PRO agregado. Event: 'CompensacaoEfetivada', 'CreditoReservado', 'PedidoCancelado' — verbo no particípio passado, representa fato ocorrido. Imutável (eventos do passado não podem ser 'desfeitos'). Vai do agregado PRO mundo externo. Essa distinção é formalizada por Greg Young na sua 'CQRS Documents' (cqrs.files.wordpress.com, 2010) e por Vernon no IDDD capítulo 8. As outras opções confundem com aspectos técnicos (sync/async, transporte) que são ortogonais à distinção semântica."
+    },
+    {
+      "id": "ex3",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a diferença prática entre Domain Events e Integration Events?",
+      "opcoes": [
+        "Domain Events usam JSON, Integration Events usam Protobuf",
+        "Domain Events são publicados síncronos, Integration Events são publicados assíncronos",
+        "Domain Events vivem dentro de um Bounded Context (podem usar tipos do domínio); Integration Events cruzam contextos (usam tipos primitivos, schema versionado, contrato estável)",
+        "Domain Events são gerados pelo agregado, Integration Events são gerados pelo controller"
+      ],
+      "correta": 2,
+      "explicacao": "A separação reflete o princípio de Bounded Context da lição 3 aplicada a eventos. Domain Events vivem DENTRO de um contexto, falam a linguagem ubíqua daquele contexto e podem usar tipos ricos do domínio (CompensacaoId, CNPJ, Money). Quando você precisa comunicar pra outro Bounded Context (ou pra fora do sistema), você publica um Integration Event SEPARADO: tipos primitivos (string em vez de CompensacaoId), schema versionado (V1, V2), formato neutro (JSON Schema, Protobuf, Avro). Razão: Domain Events evoluem com o modelo (você troca BigDecimal por Toneladas Value Object e tudo bem); Integration Events são CONTRATO com outros sistemas — se você muda, quebra todos os subscribers. As outras opções confundem com aspectos técnicos ortogonais ou descrições incorretas."
+    },
+    {
+      "id": "ex4",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual problema o Transactional Outbox Pattern resolve?",
+      "opcoes": [
+        "Reduzir latência de chamadas HTTP",
+        "Garantir atomicidade entre escrita no banco e publicação no broker (problema do dual-write)",
+        "Comprimir mensagens para economizar banda de rede",
+        "Validar JSON Schema dos eventos antes de publicar"
+      ],
+      "correta": 1,
+      "explicacao": "O problema do dual-write: quando você precisa (1) salvar agregado no banco e (2) publicar evento no broker (Kafka, RabbitMQ), o que acontece se o banco salva mas o broker está fora do ar? Estado mudou mas ninguém soube — auditoria some, e-mail não vai, e reiniciando a aplicação o evento se perde para sempre. Outbox Pattern (popularizado por Chris Richardson, microservices.io/patterns/data/transactional-outbox.html): na mesma transação que salva o agregado, você grava o evento numa tabela 'outbox' no mesmo banco. Um worker separado lê a outbox, publica no broker e marca como enviado. Se o broker falha, retenta. Como banco + outbox estão no mesmo schema, a transação ACID garante: se commit, evento existe; se rollback, evento não existe. É padrão essencial em quase todo sistema event-driven sério em produção."
+    },
+    {
+      "id": "ex5",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Event Sourcing é uma técnica avançada que deve ser aplicada por padrão em todo sistema event-driven moderno.",
+      "correta": false,
+      "explicacao": "Falso. Event Sourcing é uma escolha RADICAL: em vez de armazenar o estado atual, você armazena o LOG COMPLETO de eventos que levaram a esse estado. Tem benefícios poderosos (auditoria perfeita gratuita, time travel, novas projeções a qualquer momento) mas custos altos (complexidade enorme, migração de schema de eventos antigos vira problema sério, consultas ad-hoc viram pesadelo, curva de aprendizagem de 6-12 meses). Greg Young (fundador da Event Store DB, praticante canônico) e Martin Fowler ('Event Sourcing', martinfowler.com/eaaDev/EventSourcing.html, 12/dez/2005) são cautelosos em recomendar: use quando o HISTÓRICO de mudanças é tão importante quanto o estado atual — sistemas financeiros (extrato bancário literalmente é event-sourced), logística (rastreamento), saúde (histórico médico). Pra CRUDs comuns e SaaS, é overkill que destrói produtividade do time."
+    },
+    {
+      "id": "ex6",
+      "tipo": "multipla-escolha",
+      "pergunta": "Quem cunhou o termo CQRS (Command Query Responsibility Segregation) e em qual base teórica anterior ele se baseou?",
+      "opcoes": [
+        "Martin Fowler cunhou em 2011, baseado em padrões REST",
+        "Eric Evans cunhou em 2003, como parte do DDD original",
+        "Greg Young cunhou (primeira menção pública em 2006, formalização em 2010), baseado no princípio CQS (Command-Query Separation) de Bertrand Meyer",
+        "Robert C. Martin cunhou em 2012, junto com Clean Architecture"
+      ],
+      "correta": 2,
+      "explicacao": "Greg Young cunhou CQRS — primeira menção pública em 2006 (em discussões da comunidade ALT.NET sobre DDD aplicado a sistemas de alta escala), formalização em 2010 (no seu PDF 'CQRS Documents'). Young estendeu o princípio CQS (Command-Query Separation) de Bertrand Meyer (criador da linguagem Eiffel, no livro 'Object-Oriented Software Construction', 1988) do nível de método para o nível arquitetural. CQS dizia: um método deve OU mudar estado (command) OU retornar dados (query), mas não ambos. CQRS estende: o MODELO inteiro de escrita deve ser separado do MODELO de leitura. Martin Fowler descreveu CQRS no bliki em 14/jul/2011 (martinfowler.com/bliki/CQRS.html), reconhecendo Young como fonte. A opção C captura essa cadeia: Meyer → CQS (anos 1980) → Young → CQRS (2006/2010) → Fowler descrição detalhada (2011)."
+    },
+    {
+      "id": "ex7",
+      "tipo": "verdadeiro-falso",
+      "afirmacao": "Martin Fowler recomenda aplicar CQRS na maioria dos sistemas modernos, porque ele simplifica a arquitetura e reduz complexidade.",
+      "correta": false,
+      "explicacao": "Falso. Fowler é EXPLICITAMENTE cauteloso sobre CQRS no bliki dele (martinfowler.com/bliki/CQRS.html, 14/jul/2011). A formulação dele: você pode usar um modelo diferente pra atualizar informação do que pra ler informação; em ALGUMAS situações essa separação é valiosa, mas pra MAIORIA dos sistemas CQRS adiciona complexidade arriscada ('risky complexity'). CQRS faz sentido quando: (a) leitura tem padrão muito diferente da escrita (queries denormalizadas pra dashboards), (b) leitura é muito mais frequente que escrita, (c) o time já tem maturidade com DDD e Event-Driven. Em sistemas simples, é overhead — você duplica modelos, gerencia consistência eventual entre eles, lida com complexidade extra de manutenção. A regra defendida por Fowler, Vernon e Greg Young: comece SEM CQRS; adicione quando o problema concreto justificar. Times que aplicam CQRS por padrão costumam ter projetos com 2x o código necessário sem ganho real."
+    },
+    {
+      "id": "ex8",
+      "tipo": "multipla-escolha",
+      "pergunta": "Em CQRS, como o read model fica sincronizado com o write model?",
+      "opcoes": [
+        "Por joins SQL em tempo real entre as tabelas",
+        "Via eventos: quando o write model publica um evento (ex: CompensacaoEfetivada), um subscriber atualiza o read model. Há atraso (consistência eventual), mas ganho de desempenho compensa",
+        "Por compartilhamento direto de memória entre processos",
+        "Por chamadas síncronas REST entre o serviço de escrita e o de leitura"
+      ],
+      "correta": 1,
+      "explicacao": "A sincronização em CQRS acontece via eventos — é por isso que CQRS frequentemente aparece junto com Event-Driven Architecture, embora sejam padrões separados. O fluxo: (1) Command chega no write model (agregados DDD), (2) agregado processa, gera Domain Event, persiste, (3) evento é publicado, (4) subscriber consome o evento e atualiza o read model (view materializada, tabela denormalizada, banco separado otimizado para leitura). Consequência importante: o read model é EVENTUALMENTE CONSISTENTE com o write model — há atraso de milissegundos a segundos. Isso é trade-off aceitável para ganho de desempenho em queries. As outras opções confundem com mecanismos que ANULAM o ponto de CQRS: joins SQL exigem mesma estrutura (que CQRS evita), memória compartilhada quebra isolamento, REST síncrono adiciona acoplamento que CQRS busca eliminar."
+    },
+    {
+      "id": "ex9",
+      "tipo": "multipla-escolha",
+      "pergunta": "Qual a convenção correta para nomear Domain Events em DDD?",
+      "opcoes": [
+        "Imperativo presente (EfetivarCompensacao, ReservarCredito)",
+        "Substantivo simples (Compensacao, Credito)",
+        "Particípio passado (CompensacaoEfetivada, CreditoReservado)",
+        "Gerúndio (CompensacaoEfetivando, CreditoReservando)"
+      ],
+      "correta": 2,
+      "explicacao": "Domain Events representam FATOS OCORRIDOS no domínio. Eles são imutáveis e descrevem algo que JÁ aconteceu. Por isso a convenção universalmente aceita é particípio passado: CompensacaoEfetivada, CreditoReservado, PedidoCancelado, UsuarioAutenticado. A opção A (imperativo presente) é a convenção pra COMMANDS, não pra Events — Command representa intenção ('quero efetivar'), Event representa fato ('foi efetivada'). A opção D (gerúndio) sugere processo em andamento, o que contradiz a natureza imutável de eventos. A opção B (substantivo simples) descreve a entidade, não o fato sobre ela. Essa convenção é universal: Vernon (IDDD), Fowler (DomainEvent post), Udi Dahan, Jimmy Bogard, Microsoft Learn, e técnicas de modelagem como Event Storming de Alberto Brandolini todos usam particípio passado."
+    },
+    {
+      "id": "ex10",
+      "tipo": "multipla-escolha",
+      "pergunta": "Pro projeto Carbon Credit Compensation Platform (Fatec), com decisão do grupo de manter tudo in-memory sem banco, qual a recomendação correta sobre quais padrões event-driven aplicar?",
+      "opcoes": [
+        "Aplicar todos: Domain Events + Integration Events + Outbox Pattern + Event Sourcing + CQRS, para máximo aprendizado",
+        "Não aplicar nada de event-driven, porque sem banco/broker não há benefício",
+        "Aplicar Domain Events com publisher in-memory simples (cadastro de listeners), porque o custo é baixo e o benefício pedagógico/arquitetural é alto. NÃO aplicar Event Sourcing, CQRS, Outbox nem Integration Events versionados — esses fazem sentido só com banco, broker e múltiplos deploys",
+        "Aplicar apenas Event Sourcing porque é o padrão mais sofisticado"
+      ],
+      "correta": 2,
+      "explicacao": "A regra prática consolidada por Vernon, Fowler e Greg Young: comece com o MÍNIMO VIÁVEL e adicione complexidade só quando o problema concreto justificar. Pro projeto Fatec: Domain Events fazem sentido AGORA — custo baixo (interface marcadora + publisher in-memory com lista de listeners), benefício alto (agregados anunciam mudanças sem conhecer subscribers, distinção semântica entre commands/events, base pra evoluir). Os outros padrões NÃO fazem sentido agora: Outbox resolve dual-write entre banco e broker — sem banco, não existe o problema. Integration Events versionados fazem sentido entre Bounded Contexts em deploys separados — no monolito atual todos vivem no mesmo classpath. Event Sourcing tem custo de aprendizagem de 6-12 meses e overkill pra in-memory. CQRS adiciona overhead que não compensa em time de 4 pessoas com produto educacional. A opção A é o anti-pattern do 'aplicar tudo porque ficou interessante' que produz código que ninguém entende em 6 meses; a B descarta o benefício real de Domain Events; a D é over-engineering puro."
+    }
+  ]
+}

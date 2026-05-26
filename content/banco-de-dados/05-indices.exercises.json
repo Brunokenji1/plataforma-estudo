@@ -1,0 +1,127 @@
+[
+  {
+    "id": "idx-01",
+    "enunciado": "Quem inventou o B-tree e em qual contexto histórico?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, no livro 'The Art of Computer Programming', 1968",
+      "Rudolf Bayer e Edward M. McCreight, em 1970 no Boeing Scientific Research Laboratories, paper 'Organization and Maintenance of Large Ordered Indices' apresentado no SIGFIDET '70 e publicado em Acta Informatica em 1972. Resolveram o problema central de indexar dados que NÃO CABEM NA MEMÓRIA — assumindo desde o início que só pequenos pedaços do índice cabem em RAM",
+      "Edgar F. Codd, junto com o modelo relacional em 1970",
+      "Tim Berners-Lee, 1989"
+    ],
+    "resposta": 1,
+    "explicacao": "Rudolf Bayer (alemão, matemático, depois professor em Munique) e Edward M. McCreight, trabalhando no Boeing Scientific Research Laboratories. Paper 'Organization and Maintenance of Large Ordered Indices' apresentado no SIGFIDET '70 (julho 1970) e republicado em Acta Informatica Vol. 1, pp. 173-189, em 1972. CONTEXTO: nos anos 70, drums e discos magnéticos eram lentíssimos comparados à RAM. Os autores assumiram que o índice INTEIRO não caberia em memória — só pedaços. Otimizaram para MINIMIZAR LEITURAS DE DISCO, exatamente o problema que persiste hoje. CURIOSIDADES: (a) o 'B' do B-tree NUNCA foi explicado oficialmente — sugestões: Boeing, Balanced, Bayer, Broad, Between, Bushy. McCreight respondeu anos depois: 'estávamos no almoço pensando num nome. Trabalhávamos pra Boeing, não podíamos usar o nome sem advogados. Então tem um B'; (b) B-tree GENERALIZA o 2-3 tree de John Hopcroft (1970) — Hopcroft veio antes; (c) Douglas Comer (1979) publicou survey 'The Ubiquitous B-Tree' confirmando que VIRTUALMENTE TODO SGBD usa B-trees. Hoje, todo PostgreSQL/MySQL/Oracle/SQL Server usa B+tree (variante onde dados ficam só nas folhas)."
+  },
+  {
+    "id": "idx-02",
+    "enunciado": "Qual a diferença entre Sequential Scan e Index Scan?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sequential Scan é mais rápido",
+      "Sequential Scan lê TODA a tabela linha por linha (O(N)) — usado quando não há índice apropriado ou tabela é pequena. Index Scan usa o índice para localizar diretamente as linhas (O(log N) com B-tree). Para tabela com 10 milhões de linhas: Seq Scan = vários segundos; Index Scan = milissegundos. Em tabelas pequenas (<1000 linhas), o otimizador às vezes prefere Seq Scan — overhead do índice não compensa",
+      "Index Scan só funciona com chaves primárias",
+      "São sinônimos"
+    ],
+    "resposta": 1,
+    "explicacao": "Sequential Scan (table scan, full scan): banco lê TODAS as páginas de disco da tabela, do início ao fim, aplicando o filtro a cada linha. Custo O(N). Aceitável em tabelas pequenas, desastroso em grandes. Index Scan: banco navega no B-tree (3-4 acessos típicos) até localizar a entrada, segue ponteiro pra linha real. Custo O(log N) — praticamente constante mesmo para bancos enormes. EXEMPLO PRÁTICO: tabela Pedido com 10 milhões de linhas. SELECT * WHERE id = 7891234. Sem índice: leitura de ~5 milhões de linhas até achar = vários segundos. Com índice em id: 3-4 acessos = <1ms. SINAL DE ALERTA em EXPLAIN ANALYZE: 'Seq Scan' em tabela grande quando você esperava usar índice — geralmente significa que falta índice ou query está em formato que bloqueia uso (função sobre coluna, LIKE com curinga no início, tipo incompatível). PostgreSQL ÀS VEZES escolhe Seq Scan DE PROPÓSITO em tabelas pequenas — é decisão correta porque overhead de ler páginas do índice + páginas da tabela não compensa em <1000 linhas. Você não força índice nesse caso."
+  },
+  {
+    "id": "idx-03",
+    "enunciado": "Por que B+tree é preferível ao B-tree original em SGBDs reais?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "B+tree é só uma renomeação do B-tree",
+      "B+tree mantém DADOS APENAS NAS FOLHAS (B-tree também tem dados em nós internos) e as folhas formam LISTA LIGADA. Resultado: (1) range queries muito eficientes via varredura sequencial das folhas; (2) mais entradas por página interna (não precisa armazenar valores, só chaves separadoras) → árvore mais baixa → menos I/O; (3) altura menor para mesma quantidade de dados",
+      "B+tree usa menos memória",
+      "B+tree não precisa estar balanceada"
+    ],
+    "resposta": 1,
+    "explicacao": "B+tree (variante usada em PostgreSQL, MySQL/InnoDB, Oracle, SQL Server) tem dois ajustes sobre B-tree original: (1) DADOS (ou ponteiros pra linhas) ficam APENAS NAS FOLHAS — nós internos só têm chaves separadoras; (2) FOLHAS FORMAM LISTA LIGADA — cada folha aponta pra próxima. CONSEQUÊNCIAS: (a) RANGE QUERIES ULTRA-EFICIENTES — 'WHERE id BETWEEN 100 AND 200' encontra primeira folha relevante via B-tree (log N), depois VARRE LINEARMENTE as folhas seguindo a lista ligada, sem voltar pra raiz; (b) MAIS ENTRADAS POR PÁGINA INTERNA — como nós internos só armazenam chaves (não valores), cabem mais por página de disco; (c) ÁRVORE MAIS BAIXA — fator de ramificação maior = menos níveis = menos I/O pra cada busca; (d) ORDER BY na coluna indexada também usa varredura sequencial das folhas. Em SQL, quando você escreve 'CREATE INDEX ... USING BTREE', o que é criado internamente é B+tree — mas o nome do tipo no padrão SQL continuou 'B-tree' por razões históricas. ConTEXTO HISTÓRICO: B+tree foi proposto por Knuth ('The Art of Computer Programming' Vol. 3, 1973) como melhoria do B-tree original."
+  },
+  {
+    "id": "idx-04",
+    "enunciado": "Para um índice composto CREATE INDEX idx ON Aluno (curso, semestre), qual query NÃO usa o índice eficientemente?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "WHERE curso = 'ADS'",
+      "WHERE curso = 'ADS' AND semestre = 4",
+      "WHERE semestre = 4 (sem filtrar curso). Razão: índice composto serve queries que filtram pelas COLUNAS MAIS À ESQUERDA primeiro (regra do PREFIXO). Filtrar só por semestre força sequential scan ou index full scan. Analogia: lista telefônica ordenada por sobrenome+nome — encontrar 'Bruno qualquer sobrenome' exige varrer tudo",
+      "WHERE curso = 'ADS' AND nome = 'Bruno'"
+    ],
+    "resposta": 2,
+    "explicacao": "Índice composto serve queries que filtram pelas colunas MAIS À ESQUERDA primeiro — regra do PREFIXO (leftmost prefix rule). Analogia: lista telefônica ordenada por (sobrenome, nome). Encontrar 'Silva, Bruno' é rápido — segue a ordem do índice. Encontrar 'qualquer Bruno' (só pelo nome) exige varrer a lista inteira. PARA idx (curso, semestre): WHERE curso = 'ADS' usa (cobertura parcial, eficiente); WHERE curso = 'ADS' AND semestre = 4 usa (cobertura total, ideal); WHERE curso = 'ADS' AND nome = 'Bruno' usa o índice pra filtrar 'curso', depois aplica 'nome' nas linhas resultantes (parcialmente útil); WHERE semestre = 4 (SOZINHO) NÃO USA o índice como esperado — semestre não é prefixo. PostgreSQL pode escolher 'Index Full Scan' (varre o índice inteiro), mas é só marginalmente melhor que Seq Scan em alguns casos. HEURÍSTICAS de ordenação: (1) IGUALDADE PRIMEIRO, range depois — pra 'WHERE curso = ADS AND semestre > 4', criar (curso, semestre); (2) MAIOR SELETIVIDADE PRIMEIRO — coluna que reduz mais linhas vai antes (cpf único antes de cidade com milhares de repetições); (3) COMBINAR COM ORDER BY — pra 'WHERE x = ? ORDER BY y', criar (x, y) permite usar índice pra ordenação."
+  },
+  {
+    "id": "idx-05",
+    "enunciado": "Quando você usaria um índice GIN em PostgreSQL?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Sempre, como substituto do B-tree",
+      "Para colunas que contêm MÚLTIPLOS VALORES por linha: arrays (ARRAY['java', 'python']), JSONB (consultas com @>, ?, ?|), e full-text search (tsvector com @@). Trade-off: GIN é MAIOR e MAIS LENTO PRA ESCREVER que B-tree, mas MUITO MAIS RÁPIDO pra esse tipo de consulta. Se a coluna não é filtrada por @>, ?, ou @@, não vale",
+      "Apenas para chaves primárias",
+      "Apenas para colunas numéricas"
+    ],
+    "resposta": 1,
+    "explicacao": "GIN (Generalized Inverted Index) é o índice pra colunas com MÚLTIPLOS VALORES por linha. Pensa como índice remissivo de livro: pra cada VALOR encontrado em qualquer linha, mantém lista de linhas onde ele aparece. CASOS DE USO TÍPICOS: (1) ARRAYS — 'WHERE tags @> ARRAY[java]' (linhas onde array tags contém java); (2) JSONB — 'WHERE prefs @> {tema: dark}' (linhas onde JSONB contém esse subobjeto), 'WHERE prefs ? idioma' (linhas onde JSONB tem essa chave); (3) FULL-TEXT SEARCH — 'WHERE tsv @@ to_tsquery(banco & dados)' (linhas onde tsvector matches a query). CRIAR: 'CREATE INDEX idx ON Configuracao USING GIN (prefs)' (JSONB inteira), 'CREATE INDEX idx ON Artigo USING GIN (to_tsvector(portuguese, titulo))' (full-text). TRADE-OFFS: (a) GIN é GRANDE — frequentemente 2-3x maior que B-tree equivalente; (b) MAIS LENTO PRA ESCREVER — atualiza estrutura inversa a cada INSERT; (c) MUITO MAIS RÁPIDO pra consultas de continência. SE A COLUNA não é filtrada por @>, ?, @@ etc., NÃO CRIE GIN — apenas custa caro sem benefício. ALTERNATIVA: GiST faz coisa similar pra alguns casos, com trade-offs opostos (menor, mais rápido pra escrever, mais lento pra ler) — bom pra full-text com atualizações frequentes."
+  },
+  {
+    "id": "idx-06",
+    "enunciado": "Para uma tabela de logs com 100 milhões de linhas inseridas em ordem cronológica, qual índice é IDEAL no campo timestamp?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "B-tree padrão",
+      "BRIN (Block Range Index) — armazena min/max de cada BLOCO físico da tabela, em vez de indexar cada linha. Resultado: índice MINÚSCULO (pode ser 1000x menor que B-tree equivalente) e inserção quase grátis. Só funciona se dados estão FISICAMENTE ORDENADOS pela coluna — caso perfeito de time-series e logs",
+      "Hash index",
+      "Não usar índice"
+    ],
+    "resposta": 1,
+    "explicacao": "BRIN (Block Range INdex) é desenhado pra esse cenário exato. Em vez de indexar cada linha individualmente, BRIN armazena MÍNIMO E MÁXIMO de cada BLOCO físico da tabela (default: ~128 páginas por bloco). FUNCIONAMENTO: 'WHERE criado_em BETWEEN x AND y' — BRIN verifica quais blocos podem conter timestamps no intervalo (baseado em min/max do bloco), descarta o resto sem ler, lê só os blocos relevantes. PRÉ-REQUISITO CRÍTICO: dados precisam estar FISICAMENTE ORDENADOS pela coluna (ou quase). Logs/time-series inseridos sequencialmente: PERFEITO. Dados inseridos aleatoriamente: BRIN fica INÚTIL (cada bloco tem min/max muito amplo, não filtra nada). VANTAGENS: (a) ÍNDICE MINÚSCULO — pra 100GB de tabela, BRIN pode ter alguns MB, enquanto B-tree teria vários GB; (b) INSERÇÃO QUASE GRÁTIS — só atualiza min/max do bloco atual quando insere uma linha; (c) MANUTENÇÃO BARATA — não tem reorganização constante. DESVANTAGENS: (a) só funciona se dados ordenados fisicamente; (b) menos preciso que B-tree — devolve 'candidatos' que precisam refilter. CRIAR: 'CREATE INDEX idx_log_data ON Log USING BRIN (criado_em)'. Em Spring Boot/JPA com tabela de auditoria/log, BRIN frequentemente é a escolha certa em vez do default B-tree."
+  },
+  {
+    "id": "idx-07",
+    "enunciado": "Qual o TRADE-OFF central de criar índices?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Índice sempre acelera tudo, sem trade-off",
+      "Acelera SELECT (filtrado), MAS DESACELERA INSERT/UPDATE/DELETE (banco precisa manter o índice atualizado a cada operação de escrita) e consome disco. Cada índice é estrutura adicional mantida. Em tabelas com muita escrita, índices demais matam performance. Regra: criar índice quando query é frequente, tabela é grande, coluna tem boa seletividade e leitura >> escrita",
+      "Só consome disco, sem outros custos",
+      "Apenas afeta DELETE"
+    ],
+    "resposta": 1,
+    "explicacao": "Trade-off real e ignorado por muito dev: ÍNDICE ACELERA LEITURA, DESACELERA ESCRITA. Cada INSERT, UPDATE (em coluna indexada) e DELETE precisa atualizar TODOS os índices da tabela. Em tabela com 10 índices, cada INSERT escreve em 11 estruturas (tabela + 10 índices). Tabelas de logging/auditoria com muita escrita ficam lentas com índices demais. TAMBÉM consome DISCO — em produção, índices podem facilmente totalizar 2-3x o tamanho da tabela. REGRA PRÁTICA para decidir CRIAR ÍNDICE: (1) Query é FREQUENTE? (sai em todo endpoint, dashboard, batch); (2) Query roda em VOLUME GRANDE de dados? (filtra entre milhares/milhões de linhas); (3) Query é LENTA sem índice? (medido com EXPLAIN ANALYZE, não chute); (4) Coluna tem BOA SELETIVIDADE? (muitos valores distintos — indexar coluna gênero com 2 valores quase nunca ajuda; indexar email único quase sempre ajuda); (5) Tabela tem MUITO MAIS LEITURA QUE ESCRITA? (típico de aplicação corporativa). Se sim pra todas → cria. Se não pra alguma → pensa duas vezes. SINTOMA CLÁSSICO: app Spring Boot rápido em dev (1000 linhas), lento em produção (10M linhas) = falta de índice em 80% dos casos. Solução: EXPLAIN ANALYZE → identifica Seq Scan → cria índice apropriado."
+  },
+  {
+    "id": "idx-08",
+    "enunciado": "Em PostgreSQL, qual é o tipo de scan IDEAL — o mais rápido possível — em EXPLAIN ANALYZE?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Seq Scan",
+      "Nested Loop",
+      "INDEX ONLY SCAN — tudo que a query precisa está NO ÍNDICE, banco não toca na tabela. Para acontecer, índice precisa COBRIR todas as colunas do SELECT. Pode-se forçar com INCLUDE (PostgreSQL 11+): CREATE INDEX idx ON Aluno (curso) INCLUDE (nome) — agora 'SELECT nome WHERE curso = ?' usa Index Only Scan",
+      "Bitmap Heap Scan"
+    ],
+    "resposta": 2,
+    "explicacao": "Index Only Scan é o tipo mais rápido — banco NÃO PRECISA tocar na tabela, todos os dados estão no índice. EXPLAIN mostra 'Index Only Scan using idx...'. CONDIÇÃO: índice precisa COBRIR todas as colunas referenciadas pelo SELECT, WHERE, ORDER BY. EXEMPLO: 'CREATE INDEX idx ON Aluno (curso)' + 'SELECT nome FROM Aluno WHERE curso = ADS' = Index Scan (vai no índice por curso, depois acessa tabela pra pegar nome). 'CREATE INDEX idx ON Aluno (curso, nome)' + mesma query = Index Only Scan (nome já está no índice). COVERING INDEX com INCLUDE (PostgreSQL 11+, SQL Server): 'CREATE INDEX idx ON Aluno (curso) INCLUDE (nome)' — adiciona nome como 'payload' do índice, sem fazer parte da chave de busca. Mais leve que colocar nome no índice composto, mesma performance pra Index Only Scan. HIERARQUIA dos tipos (do mais rápido pro mais lento): (1) Index Only Scan — só índice; (2) Index Scan — índice + acesso à tabela pra cada match; (3) Bitmap Index Scan + Bitmap Heap Scan — pra muitas linhas, monta bitmap depois lê páginas em ordem; (4) Seq Scan — toda a tabela. Pra queries críticas em endpoint REST/API, vale criar índice cobrindo SELECT pra atingir Index Only Scan. Pra 'SELECT *', geralmente não vale (índice ficaria gigante)."
+  },
+  {
+    "id": "idx-09",
+    "enunciado": "O que é um PARTIAL INDEX e quando vale a pena?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Índice que cobre só algumas colunas",
+      "Índice com cláusula WHERE — indexa APENAS LINHAS que satisfazem a condição. Vale quando uma fração pequena da tabela é consultada com frequência. Ex: tabela 100M pedidos onde 99% já foram pagos — índice completo seria enorme; partial index só dos pendentes pode ter apenas centenas de milhares de entradas. Cuidado: query precisa incluir o MESMO WHERE pra usar o índice",
+      "Índice em PK composta",
+      "Índice que falha às vezes"
+    ],
+    "resposta": 1,
+    "explicacao": "Partial Index: índice com cláusula WHERE — indexa apenas linhas que satisfazem a condição. Sintaxe: 'CREATE INDEX idx_pedido_pendente ON Pedido (data_criacao) WHERE status = PENDENTE'. CASOS de uso clássicos: (1) PEDIDOS PENDENTES — 99% dos pedidos já foram pagos; query típica busca pendentes; índice completo seria 100M entradas, partial só dos pendentes pode ter centenas de milhares; (2) USUÁRIOS ATIVOS — 'WHERE deletado_em IS NULL' indexa só usuários não-deletados; (3) FLAGS BOOLEANAS — 'WHERE bloqueado = true' (pequena minoria); (4) ENFORCEMENT de UNIQUE condicional — 'CREATE UNIQUE INDEX idx ON Tabela (email) WHERE ativo = true' (email único só entre usuários ativos). VANTAGENS: (a) MENOR — menos linhas indexadas; (b) MAIS RÁPIDO de manter — não atualiza pra linhas excluídas pelo WHERE; (c) MAIS RÁPIDO de usar — profundidade menor. CUIDADO crítico: query precisa INCLUIR O MESMO WHERE pra otimizador USAR o partial index. 'SELECT * FROM Pedido WHERE status = PENDENTE AND data_criacao > x' USA. 'SELECT * FROM Pedido WHERE data_criacao > x' (sem mencionar status) NÃO USA — otimizador não sabe que a condição implícita está satisfeita. Em SQL Server chama-se 'Filtered Index'."
+  },
+  {
+    "id": "idx-10",
+    "enunciado": "Verdadeiro ou falso: Em PostgreSQL, criar índice em coluna gênero (com valores apenas 'M' e 'F') é uma boa otimização para queries que filtram por gênero.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Coluna com BAIXA SELETIVIDADE (poucos valores distintos) é PÉSSIMA candidata pra índice. SELETIVIDADE = razão entre valores distintos e total de linhas. Gênero com 2 valores em tabela de 1M de pessoas = 500K linhas por valor. Quando você faz 'WHERE genero = M', a query precisa retornar 500K linhas — mais de 30% da tabela. PostgreSQL (e otimizadores em geral) PROVAVELMENTE IGNORA O ÍNDICE NESSE CASO e prefere Seq Scan, porque: (a) ler 500K páginas via Index Scan exige seguir 500K ponteiros pra páginas da tabela, frequentemente em ordem aleatória = I/O ruim; (b) Seq Scan lê em ordem sequencial das páginas (mais eficiente em discos rotacionais; mesmo em SSD ainda é melhor que random I/O). REGRA EMPÍRICA: se a query retorna >5-10% das linhas, otimizador escolhe Seq Scan mesmo com índice. ÍNDICE EM COLUNA DE BAIXA SELETIVIDADE = custo (manutenção, disco) sem benefício (não é usado). COLUNAS RUINS pra indexar individualmente: gênero, status booleano (ativo/inativo), tipo de cliente em poucas categorias. ALTERNATIVA pra esses casos: PARTIAL INDEX. Em vez de indexar gênero, indexa apenas linhas onde gênero = valor específico que é minoria — 'CREATE INDEX idx_pessoa_m ON Pessoa (data_nasc) WHERE genero = M' funciona melhor. EXCEÇÃO: índice composto COMEÇANDO com coluna de alta seletividade pode incluir gênero como segunda coluna sem problema — 'CREATE INDEX idx ON Pessoa (cpf, genero)' é OK porque cpf filtra muito."
+  }
+]

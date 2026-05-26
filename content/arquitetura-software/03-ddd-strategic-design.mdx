@@ -1,0 +1,548 @@
+---
+titulo: "DDD — Design Estratégico"
+descricao: "Ubiquitous Language, Bounded Context, Context Map e os sete padrões de integração entre contextos. Aplicação no Carbon Credit Compensation Platform."
+---
+
+A primeira lição mostrou os princípios; a segunda, como Clean Architecture organiza código em torno do domínio. As duas têm um pressuposto silencioso: existe **um** modelo de domínio.
+
+Quando o sistema cresce, o pressuposto quebra. A equipe de vendas chama de "Cliente" o sujeito que assina contrato. A equipe de suporte chama de "Cliente" quem abre ticket. Mesmo CPF, talvez até o mesmo ser humano, mas regras de negócio diferentes, ciclos de vida diferentes, motivos diferentes pra existir no sistema. Forçar um modelo único produz uma classe `Cliente` com 40 atributos e métodos que se contradizem dependendo de quem chama.
+
+Design estratégico em DDD é o conjunto de ferramentas pra dizer "esse modelo termina aqui, outro modelo começa ali, e aqui está como eles conversam".
+
+<Insight>
+Eric Evans formalizou esses padrões na Parte IV ("Strategic Design") de "Domain-Driven Design: Tackling Complexity in the Heart of Software" (Addison-Wesley, 2003), que cobre os capítulos 14 a 17. Vinte e dois anos depois, Martin Fowler ainda chama Bounded Context de "padrão central do DDD" no bliki dele (Fowler, "BoundedContext", martinfowler.com, 15 de janeiro de 2014). É o conceito que sobreviveu enquanto vários padrões táticos foram absorvidos por frameworks.
+</Insight>
+
+## A escala que muda o jogo
+
+Em um time pequeno, com um especialista de domínio acessível e um modelo que cabe na cabeça de todos, design estratégico é overkill. Você tem um Bounded Context implícito (o sistema inteiro) e uma linguagem comum que emerge nas conversas de corredor.
+
+Os problemas aparecem em três situações:
+
+- O time cresce além do que cabe numa reunião só
+- O sistema integra com outros sistemas (legados, terceiros, microservices internos)
+- Existem subdomínios com vocabulários conflitantes (o "Produto" do catálogo não é o "Produto" do estoque)
+
+Em qualquer uma dessas situações, ignorar design estratégico produz o que Brian Foote e Joseph Yoder descreveram como **Big Ball of Mud** — código sem estrutura discernível, onde mudanças em uma parte quebram coisas aleatórias em outras (Foote and Yoder, "Big Ball of Mud", capítulo 29 de *Pattern Languages of Program Design 4*, editores Neil Harrison, Brian Foote e Hans Rohnert, Addison-Wesley, 1999, págs. 653-692; apresentado originalmente em PLoP'97).
+
+## Linguagem ubíqua: o vocabulário compartilhado
+
+A Ubiquitous Language é o que mantém o modelo consistente entre código, conversa e documentação. A formulação de Evans no padrão "UBIQUITOUS LANGUAGE" (capítulo 2, "Communication and the Use of Language"):
+
+> *"Use the model as the backbone of a language. Commit the team to exercising that language relentlessly in all communication within the team and in the code. Within a bounded context, use the same language in diagrams, writing, and especially speech."* (Evans, 2003)
+
+Em português livre: use o modelo como espinha dorsal da linguagem, e exercite essa linguagem sem trégua em toda comunicação do time e no código. Dentro de um contexto delimitado, a mesma linguagem em diagramas, escrita e principalmente fala. Note que Evans dá ênfase explícita à fala — não basta o código ser consistente; o time precisa falar a língua nas reuniões.
+
+Na prática, três regras:
+
+1. Se um termo do negócio não tem nome claro, invente um e batize. Ambiguidade tolerada hoje vira bug daqui a três meses.
+2. Se o termo mudar de significado em outro contexto, explicite. Não force um único nome global.
+3. O código reflete a linguagem. Variáveis, classes e métodos usam os mesmos nomes que o especialista usa.
+
+Versão sem linguagem ubíqua, num sistema fictício de transporte de cargas:
+
+```java
+public class Carga {
+    private double peso;
+    private int status;
+    private List<Object> historico;
+
+    public void atualizar(int novoStatus) {
+        if (novoStatus == 3 && this.status != 2) {
+            throw new IllegalStateException("transição inválida");
+        }
+        this.status = novoStatus;
+    }
+}
+```
+
+O método se chama `atualizar`. O status é um inteiro mágico. Ninguém olhando esse código entende o que `status == 3` significa sem abrir uma tabela de constantes em outro arquivo.
+
+Versão com linguagem ubíqua, depois de conversar com um operador logístico real:
+
+```java
+public class Carregamento {
+    private Peso peso;
+    private EstadoCarregamento estado;
+    private List<EventoCarregamento> historico;
+
+    public void despachar() {
+        if (estado != EstadoCarregamento.CONFERIDO) {
+            throw new EstadoInvalidoParaDespacho(this.estado);
+        }
+        this.estado = EstadoCarregamento.EM_ROTA;
+        this.historico.add(EventoCarregamento.despachado(Instant.now()));
+    }
+
+    public void confirmarEntrega(AssinaturaDigital assinatura) {
+        if (estado != EstadoCarregamento.EM_ROTA) {
+            throw new EstadoInvalidoParaEntrega(this.estado);
+        }
+        this.estado = EstadoCarregamento.ENTREGUE;
+        this.historico.add(EventoCarregamento.entregue(assinatura));
+    }
+}
+```
+
+Agora o código lê como o operador fala. Quando ele pergunta "o que acontece se o carregamento for despachado sem conferência?", o dev abre `despachar()` e responde em cinco segundos.
+
+<Aviso>
+Linguagem ubíqua não significa traduzir tudo pra português. Significa usar o vocabulário do domínio, em qualquer idioma. Se o cliente fala "fee bonificado" e isso tem significado preciso no negócio dele, o método se chama `aplicarFeeBonificado()`. Não tente traduzir pra `applyBonusDiscount()` nem normalizar pra `aplicarDescontoBonus()`. Você está apagando informação.
+</Aviso>
+
+## Bounded Context: onde um modelo termina e outro começa
+
+Bounded Context é uma fronteira explícita dentro da qual um modelo é coeso, os termos têm um significado único, e as regras de negócio formam um todo consistente.
+
+Não é fronteira física (servidor, repositório, microservice). É fronteira **conceitual**, embora frequentemente coincida com a física.
+
+O exemplo que o Fowler usa no bliki dele (Fowler, 2014): uma loja online com dois contextos, **Vendas** e **Suporte**. Ambos lidam com `Cliente` e `Produto`. Mas:
+
+- Em Vendas, `Cliente` tem histórico de compras, faixa de crédito, segmento de marketing
+- Em Suporte, `Cliente` tem tickets abertos, contratos de SLA, histórico de chamadas
+- Em Vendas, `Produto` tem preço, promoções ativas, estoque comercializável
+- Em Suporte, `Produto` tem versão de firmware, manuais técnicos, problemas conhecidos
+
+A tentação ingênua é criar uma classe `Cliente` global, com todos os atributos dos dois contextos. Resultado: 80 atributos, métodos que só fazem sentido em metade dos casos, e mudanças em Vendas quebrando Suporte de formas misteriosas.
+
+A abordagem DDD: duas classes `Cliente`, uma em cada contexto, cada uma otimizada pra sua finalidade. Podem até ter o mesmo CPF físico, mas são modelos independentes.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Bounded Context: Vendas
+package com.loja.vendas.dominio;
+
+public class Cliente {
+    private CPF cpf;
+    private String nomeComercial;
+    private FaixaCredito faixaCredito;
+    private List<Pedido> historicoPedidos;
+    private SegmentoMarketing segmento;
+
+    public boolean podeComprarAPrazo(Money valor) {
+        return this.faixaCredito.cobre(valor);
+    }
+
+    public void registrarPedido(Pedido p) {
+        this.historicoPedidos.add(p);
+        this.segmento = SegmentoMarketing.recalcular(historicoPedidos);
+    }
+}
+
+// Bounded Context: Suporte
+package com.loja.suporte.dominio;
+
+public class Cliente {
+    private CPF cpf;
+    private String nomeContato;
+    private ContratoSLA sla;
+    private List<Ticket> ticketsAbertos;
+    private List<Chamada> historicoChamadas;
+
+    public Duration tempoMaximoResposta() {
+        return this.sla.tempoMaximoResposta();
+    }
+
+    public Ticket abrirTicket(Problema p) {
+        Ticket novo = Ticket.criar(this, p, sla.prioridade(p));
+        this.ticketsAbertos.add(novo);
+        return novo;
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+// Bounded Context: Vendas
+namespace loja::vendas {
+
+class Cliente {
+    CPF cpf;
+    std::string nomeComercial;
+    FaixaCredito faixaCredito;
+    std::vector<Pedido> historicoPedidos;
+    SegmentoMarketing segmento;
+
+public:
+    bool podeComprarAPrazo(int64_t valorCentavos) const {
+        return faixaCredito.cobre(valorCentavos);
+    }
+
+    void registrarPedido(const Pedido& p) {
+        historicoPedidos.push_back(p);
+        segmento = SegmentoMarketing::recalcular(historicoPedidos);
+    }
+};
+
+} // namespace loja::vendas
+
+// Bounded Context: Suporte
+namespace loja::suporte {
+
+class Cliente {
+    CPF cpf;
+    std::string nomeContato;
+    ContratoSLA sla;
+    std::vector<Ticket> ticketsAbertos;
+    std::vector<Chamada> historicoChamadas;
+
+public:
+    std::chrono::seconds tempoMaximoResposta() const {
+        return sla.tempoMaximoResposta();
+    }
+
+    Ticket abrirTicket(const Problema& p) {
+        auto novo = Ticket::criar(*this, p, sla.prioridade(p));
+        ticketsAbertos.push_back(novo);
+        return novo;
+    }
+};
+
+} // namespace loja::suporte
+```
+
+</Code>
+
+</CodeSwap>
+
+Em produção real, use `BigDecimal` em Java e `int64_t` em centavos no C++ pra dinheiro. `double` perde precisão de forma silenciosa e você só descobre quando o financeiro acha um centavo de diferença na conciliação.
+
+## Context Map: o mapa-mundi dos contextos
+
+Saber que existem múltiplos contextos é metade do trabalho. A outra metade é entender como eles se relacionam.
+
+Context Map é o documento (diagrama, página de wiki, comentário no código, qualquer formato) que descreve:
+
+- Quais Bounded Contexts existem
+- Quem é responsável por cada um
+- Como cada contexto se conecta com os outros
+- Que padrão de integração governa cada conexão
+
+<svg viewBox="0 0 720 480" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: "720px", height: "auto" }}>
+  <defs>
+    <marker id="seta-up" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.6" />
+    </marker>
+  </defs>
+
+  <rect x="280" y="200" width="180" height="100" rx="8" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeWidth="2" />
+  <text x="370" y="232" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="15" fontWeight="600">Compensação</text>
+  <text x="370" y="252" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13">de Créditos</text>
+  <text x="370" y="276" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.65">[ CORE ]</text>
+
+  <rect x="60" y="60" width="170" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.6" />
+  <text x="145" y="92" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500">Cadastro de</text>
+  <text x="145" y="110" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500">Emissores</text>
+  <text x="145" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">[ SUPPORTING ]</text>
+
+  <rect x="490" y="60" width="170" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.6" />
+  <text x="575" y="92" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500">Inventário de</text>
+  <text x="575" y="110" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500">Créditos</text>
+  <text x="575" y="128" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.55">[ SUPPORTING ]</text>
+
+  <rect x="60" y="360" width="170" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" strokeDasharray="4 3" />
+  <text x="145" y="395" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500" fillOpacity="0.75">Notificações</text>
+  <text x="145" y="418" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">[ GENERIC ]</text>
+
+  <rect x="490" y="360" width="170" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="1" strokeOpacity="0.4" strokeDasharray="4 3" />
+  <text x="575" y="395" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" fontSize="13" fontWeight="500" fillOpacity="0.75">Relatórios</text>
+  <text x="575" y="418" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">[ GENERIC ]</text>
+
+  <line x1="220" y1="135" x2="295" y2="200" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.5" markerEnd="url(#seta-up)" />
+  <text x="225" y="180" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Customer/Supplier</text>
+  <text x="245" y="195" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">(U)</text>
+
+  <line x1="500" y1="135" x2="445" y2="200" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.5" markerEnd="url(#seta-up)" />
+  <text x="450" y="180" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Customer/Supplier</text>
+  <text x="490" y="195" fontFamily="ui-monospace, monospace" fontSize="9" fillOpacity="0.5">(U)</text>
+
+  <line x1="295" y1="295" x2="220" y2="365" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.5" markerEnd="url(#seta-up)" />
+  <text x="125" y="345" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Open Host Service</text>
+
+  <line x1="445" y1="295" x2="500" y2="365" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.5" markerEnd="url(#seta-up)" />
+  <text x="460" y="345" fontFamily="ui-monospace, monospace" fontSize="10" fillOpacity="0.7">Conformist</text>
+</svg>
+
+Esse mapa é um dos primeiros artefatos que você desenha num projeto DDD. Sem ele, cada integração vira improvisação: alguém puxa dados via REST direto, outro faz SQL no banco do contexto vizinho, e em seis meses o sistema vira spaghetti que ninguém ousa tocar.
+
+A convenção visual no diagrama usa (U) pra **upstream** e (D) pra **downstream**. Upstream é quem manda na relação (define o contrato), downstream é quem se adapta. Saber quem é quem em cada par é o que distingue uma Customer/Supplier de uma Conformist.
+
+## Os sete padrões de relação entre contextos
+
+Evans definiu sete padrões pra descrever como dois Bounded Contexts se conectam. Não são receitas; são vocabulário pra você nomear o que já está acontecendo no projeto.
+
+### Shared Kernel
+
+Dois contextos compartilham um subconjunto explícito do modelo. Tipicamente código (classes, enums, contratos), às vezes esquema de banco.
+
+Faz sentido quando duas equipes trabalham próximas e ganham mais reusando do que duplicando. O custo: nada no kernel pode mudar sem acordo das duas equipes. Isso transforma o kernel em ponto de fricção se as prioridades divergem.
+
+Exemplo: dois microservices que compartilham uma biblioteca com Value Objects fundamentais (`Money`, `CPF`, `Endereco`). A biblioteca é versionada, tem testes que ambas as equipes mantêm, e nenhuma mexe sem combinar.
+
+### Customer/Supplier Development
+
+Um contexto (Supplier) fornece dados ou capacidade pra outro (Customer). O cliente expressa necessidades; o fornecedor decide quando atender. Mas as duas equipes colaboram. O cliente tem voz nas decisões do fornecedor.
+
+Faz sentido quando as duas equipes estão sob a mesma gestão, ou pelo menos têm incentivos alinhados.
+
+Mecânica prática: o cliente escreve testes de aceitação que rodam na CI do fornecedor. Se o fornecedor quebra esses testes, ele sabe que quebrou o cliente, antes do código ir pra produção.
+
+### Conformist
+
+Cliente adere completamente ao modelo do fornecedor. Sem negociação, sem tradução. Você usa o que o fornecedor entrega, no formato que ele entrega.
+
+Faz sentido quando o modelo do fornecedor é bem feito e suficiente pra você, e o custo de tradução não compensa.
+
+NÃO faz sentido quando o modelo do fornecedor é ruim ou impõe conceitos que poluem o seu domínio. Aí você precisa do próximo padrão.
+
+### Anticorruption Layer
+
+Aqui é onde DDD encontra Clean Architecture. Quando você precisa integrar com um sistema externo (legado, terceiro, microservice de outra equipe que não cuida do modelo) mas não quer que esse modelo externo contamine o seu, você constrói uma camada entre os dois.
+
+Evans descreve a ACL como uma combinação de três patterns clássicos do GoF (Gamma et al., 1995) — Facade, Adapter e Translator — somados aos mecanismos de comunicação e transporte necessários pra falar entre sistemas (Evans, 2003, capítulo 14, seção "Anticorruption Layer"):
+
+- **Facade**: expõe ao seu modelo uma interface limpa, no vocabulário do seu domínio
+- **Adapter**: traduz chamadas entre o seu modelo e o protocolo externo
+- **Translator**: converte dados entre os dois esquemas
+- **Mecanismos de comunicação e transporte**: HTTP, mensageria, RPC, qualquer coisa que conecta fisicamente os dois lados
+
+Isso é o equivalente, em DDD estratégico, do que Clean Architecture chama de Gateway na camada de infraestrutura. A diferença é o foco: ACL é sobre modelos **conceitualmente** incompatíveis, não só sobre detalhes técnicos.
+
+<CodeSwap>
+
+<Code lang="java">
+
+```java
+// Modelo do seu domínio: limpo, no seu vocabulário
+package com.empresa.dominio;
+
+public record Pedido(
+    PedidoId id,
+    Cliente cliente,
+    List<Item> itens,
+    Money total
+) {}
+
+// Sistema legado externo: modelo confuso, datas como strings,
+// campos com nomes opacos, status numéricos
+package com.fornecedor.legado;
+
+public class LegacyOrderDTO {
+    public String ord_id;
+    public String cust_code;
+    public String items_blob;  // CSV serializado
+    public Double total_brl;
+    public int st;             // 0=draft 1=confirmed 2=paid 9=void
+}
+
+// Anticorruption Layer
+package com.empresa.acl.legado;
+
+public class PedidoLegadoACL implements RepositorioPedidos {
+    private final ClienteLegadoAPI api;
+
+    public PedidoLegadoACL(ClienteLegadoAPI api) {
+        this.api = api;
+    }
+
+    @Override
+    public Optional<Pedido> buscarPorId(PedidoId id) {
+        return api.fetchOrder(id.valor())
+                  .map(this::traduzir);
+    }
+
+    private Pedido traduzir(LegacyOrderDTO dto) {
+        return new Pedido(
+            new PedidoId(dto.ord_id),
+            traduzirCliente(dto.cust_code),
+            parsearItens(dto.items_blob),
+            Money.brl(dto.total_brl)
+        );
+    }
+
+    private List<Item> parsearItens(String blob) {
+        return Arrays.stream(blob.split(";"))
+                     .map(Item::parse)
+                     .toList();
+    }
+}
+```
+
+</Code>
+
+<Code lang="cpp">
+
+```cpp
+namespace empresa::dominio {
+
+struct Pedido {
+    PedidoId id;
+    Cliente cliente;
+    std::vector<Item> itens;
+    int64_t totalCentavos;
+};
+
+} // namespace empresa::dominio
+
+namespace fornecedor::legado {
+
+struct LegacyOrderDTO {
+    std::string ord_id;
+    std::string cust_code;
+    std::string items_blob;
+    double total_brl;
+    int st;
+};
+
+} // namespace fornecedor::legado
+
+namespace empresa::acl {
+
+class PedidoLegadoACL : public RepositorioPedidos {
+    ClienteLegadoAPI& api;
+
+public:
+    explicit PedidoLegadoACL(ClienteLegadoAPI& a) : api(a) {}
+
+    std::optional<empresa::dominio::Pedido>
+    buscarPorId(const PedidoId& id) override {
+        auto dto = api.fetchOrder(id.valor());
+        if (!dto) return std::nullopt;
+        return traduzir(*dto);
+    }
+
+private:
+    empresa::dominio::Pedido traduzir(const fornecedor::legado::LegacyOrderDTO& dto) {
+        return {
+            PedidoId{dto.ord_id},
+            traduzirCliente(dto.cust_code),
+            parsearItens(dto.items_blob),
+            static_cast<int64_t>(dto.total_brl * 100)
+        };
+    }
+
+    std::vector<empresa::dominio::Item> parsearItens(const std::string& blob) {
+        std::vector<empresa::dominio::Item> resultado;
+        std::stringstream ss(blob);
+        std::string token;
+        while (std::getline(ss, token, ';')) {
+            resultado.push_back(empresa::dominio::Item::parse(token));
+        }
+        return resultado;
+    }
+};
+
+} // namespace empresa::acl
+```
+
+</Code>
+
+</CodeSwap>
+
+O ponto da ACL: o resto do seu código nunca vê `LegacyOrderDTO`, `ord_id` nem o campo `st` com seu encoding mágico. Quem precisa de um `Pedido` recebe um `Pedido` do seu próprio modelo. Se um dia o sistema legado for substituído, só a ACL muda; o domínio fica intacto.
+
+### Open Host Service e Published Language
+
+Open Host Service é a inversão do Conformist: você expõe seu modelo como serviço público, e múltiplos clientes consomem.
+
+Pra isso não virar caos, você define uma **Published Language**: um formato estável e documentado de troca. Pode ser JSON Schema, Protocol Buffers, OpenAPI, qualquer coisa contratual.
+
+A diferença pra Customer/Supplier: aqui você não negocia com cada cliente individualmente. O contrato é público; quem quiser consumir adere às regras dele.
+
+### Separate Ways
+
+Dois contextos sem motivo pra se integrar. Cada um evolui completamente independente, sem dependências entre eles.
+
+O aviso de Evans (2003, capítulo 14): essa é a decisão mais difícil de reverter. Se daqui a dois anos você precisar integrar, vai ser caro, porque os dois modelos evoluíram sem se conhecer e sem nenhuma compatibilidade planejada.
+
+## Core Domain: onde colocar seus melhores devs
+
+Bounded Contexts não são todos iguais em importância. Evans propõe uma classificação em três tiers (Evans, 2003, capítulo 15):
+
+- **Core Domain**: a parte que diferencia seu negócio. Se errar aqui, o projeto falha. Aqui vão os melhores devs, o máximo de modelagem cuidadosa, o código mais bem testado.
+- **Supporting Subdomain**: necessário pro negócio, mas não diferenciado. Pode ser feito in-house com qualidade decente, sem investimento exagerado.
+- **Generic Subdomain**: comum a qualquer empresa do setor. Compra pronto, terceiriza, ou usa biblioteca. Não escreve do zero.
+
+A regra prática: olhe pro Context Map e pergunte "se eu apagar esse contexto, o negócio sobrevive?". Se sobrevive trivialmente, é generic. Se sobrevive mas dói, é supporting. Se não sobrevive, é core.
+
+<Insight>
+A consequência mais incômoda dessa classificação: você deveria gastar tempo de design **proporcional ao valor de negócio**, não proporcional à complexidade técnica. Um sistema de notificações por e-mail pode ser tecnicamente interessante de construir, mas se você está num negócio de logística, ele é generic. Comprar SendGrid e seguir em frente.
+</Insight>
+
+## Caso prático: Carbon Credit Compensation Platform
+
+Vamos aterrissar isso no projeto da Fatec.
+
+A plataforma compensa emissões de CO₂ comprando créditos de carbono certificados. Quatro entidades principais aparecem: emissores (empresas que querem compensar), créditos (unidades de compensação certificadas), transações (a compra propriamente dita), e relatórios (compliance, auditoria).
+
+Onde estão os Bounded Contexts?
+
+- **Compensação de Créditos** (CORE). Regras de matching entre emissão e crédito disponível, cálculo de preço, validade de certificações. É o que diferencia a plataforma de uma planilha de Excel.
+- **Cadastro de Emissores** (SUPPORTING). KYC, validação de CNPJ, gestão de perfil. Importante, mas qualquer SaaS faz algo parecido.
+- **Inventário de Créditos** (SUPPORTING). Catalogação de créditos disponíveis, certificadoras, padrões VCS e Gold Standard. Você precisa, mas o diferencial não está aqui.
+- **Notificações** (GENERIC). E-mail, push, eventos. Usa Amazon SES, SendGrid, qualquer coisa pronta.
+- **Relatórios** (GENERIC). Extratos, dashboards, exports pra contabilidade. Metabase ou Superset resolvem.
+
+Padrões de relação entre eles (referência: o Context Map mais acima):
+
+- **Compensação ↔ Cadastro de Emissores**: Customer/Supplier. A Compensação consome dados do emissor (CNPJ válido, perfil ativo), e quem trabalha no Cadastro garante que esses dados estejam disponíveis no formato que a Compensação precisa.
+- **Compensação ↔ Inventário**: Customer/Supplier. A Compensação pede créditos disponíveis com filtros (certificadora, validade, preço); o Inventário expõe queries otimizadas.
+- **Compensação → Notificações**: Open Host Service. A Compensação publica eventos no formato que ela escolhe; o serviço de notificações ouve e despacha.
+- **Relatórios → Compensação**: Conformist. O Relatórios consome o que a Compensação expuser, sem negociar. Se quiser dado novo, ele que se vire pra extrair.
+
+Detalhe importante pro grupo de vocês: nem todo contexto precisa virar microservice separado. No projeto, com in-memory repositories e sem persistência, esses contextos provavelmente vão ser pacotes Java dentro do mesmo projeto Maven. A separação física vem depois, se vier.
+
+```
+src/main/java/com/grupo/carboncredit/
+├── compensacao/        ← CORE (Bruno, Murilo)
+│   ├── dominio/
+│   ├── aplicacao/
+│   └── infraestrutura/
+├── emissores/          ← SUPPORTING (Fabiano)
+│   ├── dominio/
+│   └── ...
+├── inventario/         ← SUPPORTING (Pedro)
+│   ├── dominio/
+│   └── ...
+└── shared/             ← Shared Kernel: Money, CNPJ, EventoDominio
+    └── ...
+```
+
+Cada pacote de contexto tem sua própria estrutura interna (domínio, aplicação, infraestrutura, no estilo da lição anterior). O `shared/` é o Shared Kernel: nele moram os Value Objects que todos os contextos usam de forma idêntica. Qualquer mudança em `shared/` exige conversa com o grupo todo.
+
+## Anti-patterns que tornam DDD inútil
+
+Três armadilhas comuns matam o valor do design estratégico.
+
+**1. Forçar contexto único.** A equipe insiste numa classe `Pessoa` (ou `Cliente`, ou `Produto`) que atende todos os usos. Atributos crescem indefinidamente, métodos viram condicionais ("se o uso for X, faz Y; se for Z, faz W"). O modelo deixa de comunicar regras de negócio e vira um saco de campos.
+
+**2. Contextos sem mapa.** Times sabem que existem múltiplos contextos, mas ninguém documentou as relações. Cada integração é improvisada. Pode funcionar por um tempo, mas refatorar fica impossível porque ninguém sabe quem depende de quem.
+
+**3. Vocabulário inconsistente.** "Pedido" no código, "Order" no banco, "Encomenda" na UI, "Solicitação" na documentação do cliente. Cada tradução adiciona ambiguidade. Em seis meses, ninguém tem certeza se "Pedido" e "Encomenda" são a mesma coisa.
+
+A terceira é a pior porque é a mais sutil. Você pode ter Bounded Contexts bem desenhados e ainda assim destruir a linguagem ubíqua com sinônimos descuidados, fica parecendo que o sistema funciona até a primeira reunião onde alguém pergunta "mas o pedido é o mesmo que a encomenda?" e ninguém sabe responder.
+
+<Aviso>
+Há uma quarta armadilha que Vaughn Vernon discute em "Implementing Domain-Driven Design" (Addison-Wesley, 2013): **achar que DDD é só os padrões táticos** (Entity, Value Object, Aggregate, Repository). Se você aplica os padrões táticos sem fazer o design estratégico primeiro, está só usando uma estética de código. O valor real vem da combinação. Vernon chegou a publicar "Domain-Driven Design Distilled" em 2016 dedicando os primeiros capítulos ao estratégico justamente porque viu times pulando essa parte.
+</Aviso>
+
+## Próximos passos
+
+A próxima lição entra em DDD tático: Aggregates, Entities, Value Objects, Repositories e Factories. São os blocos de construção que compõem o interior de cada Bounded Context. É aqui que o design estratégico vira código concreto, com regras precisas sobre invariantes, identidade e ciclo de vida.
+
+---
+
+**Referências canônicas usadas nesta lição:**
+
+- Evans, Eric. *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley Professional, 2003. ISBN 0-321-12521-5.
+- Evans, Eric; Avram, Abel. *Domain-Driven Design Quickly*. InfoQ Enterprise Software Development Series, 2006. Disponível em infoq.com/minibooks/domain-driven-design-quickly.
+- Fowler, Martin. "BoundedContext". martinfowler.com/bliki/BoundedContext.html, 15 de janeiro de 2014.
+- Foote, Brian; Yoder, Joseph. "Big Ball of Mud". Apresentado em PLoP'97; publicado em *Pattern Languages of Program Design 4*, Addison-Wesley, 1999. Autores afiliados à University of Illinois at Urbana-Champaign.
+- Vernon, Vaughn. *Implementing Domain-Driven Design*. Addison-Wesley Professional, 2013. ISBN 978-0-321-83457-7.
+- Vernon, Vaughn. *Domain-Driven Design Distilled*. Addison-Wesley Professional, 2016. ISBN 978-0-13-443442-1.

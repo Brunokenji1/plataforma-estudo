@@ -1,0 +1,127 @@
+[
+  {
+    "id": "nt-01",
+    "enunciado": "Qual a IDADE aproximada e a fonte original do algoritmo de Euclides para GCD?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Inventado em 1956 por Lester Ford na RAND",
+      "Aproximadamente 2300 anos — publicado por Euclides de Alexandria em ~300 BC no Livro VII das 'Elements', Proposição 2. É um dos ALGORITMOS MAIS ANTIGOS AINDA EM USO. Evidência histórica sugere que precede até Euclides",
+      "Inventado em 1640 por Pierre de Fermat",
+      "Da década de 1970"
+    ],
+    "resposta": 1,
+    "explicacao": "Euclides de Alexandria, ~300 BC, Elements Livro VII Proposição 2. É um dos algoritmos mais antigos ainda em uso hoje, talvez O MAIS antigo em uso comum. Segundo David M. Burton em 'Elementary Number Theory' (1980), há evidência histórica de que o algoritmo PRECEDE Euclides — pode ter sido usado por matemáticos gregos anteriores. A observação central é elegante: se a > b > 0, então gcd(a, b) = gcd(a - b, b). Versão moderna substitui subtrações repetidas por divisão com resto: gcd(a, b) = gcd(b, a mod b). Complexidade O(log min(a, b)) — análise rigorosa via números de Fibonacci (pior caso é com Fibonacci consecutivos). C++17 já tem std::gcd em <numeric>; Python tem math.gcd nativo."
+  },
+  {
+    "id": "nt-02",
+    "enunciado": "Qual a IDENTIDADE DE BÉZOUT, e por que importa em ICPC?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "É uma equação que diz que números primos são infinitos",
+      "Dados a, b inteiros, existem inteiros x, y tais que a·x + b·y = gcd(a, b). Calculada pelo ALGORITMO ESTENDIDO DE EUCLIDES. Aplicação direta em ICPC: cálculo de INVERSO MODULAR quando o módulo não é primo (caso geral), base para resolver equações diofantinas e o Chinese Remainder Theorem",
+      "Uma fórmula só usada em criptografia avançada",
+      "Diz que gcd(a, b) = a × b / lcm(a, b)"
+    ],
+    "resposta": 1,
+    "explicacao": "Bézout: para quaisquer inteiros a, b, existem inteiros x, y tais que a·x + b·y = gcd(a, b). Étienne Bézout (matemático francês do séc XVIII) formalizou, embora a ideia já estivesse implícita nos trabalhos de Euclides. APLICAÇÕES PRÁTICAS em ICPC: (1) INVERSO MODULAR para módulo m não primo: extGcd(a, m) retorna x tal que a·x ≡ 1 (mod m), desde que gcd(a, m) = 1; (2) EQUAÇÕES DIOFANTINAS LINEARES: a·x + b·y = c tem solução inteira se e só se gcd(a, b) | c; (3) base para o CRT (Chinese Remainder Theorem); (4) construção de coeficientes na Inverse Number Theoretic Transform. Cálculo via algoritmo estendido de Euclides em O(log min(a, b)) — mesma complexidade do GCD normal."
+  },
+  {
+    "id": "nt-03",
+    "enunciado": "Quem inventou o CRIVO DE ERATÓSTENES, e como sobrevivemos ao paper original ter sido perdido?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Foi inventado em 1900 por matemáticos modernos",
+      "Eratóstenes de Cirene (276-194 BC), chefe da Biblioteca de Alexandria. O paper original foi PERDIDO no incêndio da biblioteca, mas conhecemos o algoritmo porque NICOMACHUS DE GERASA o descreveu em 'Introduction to Arithmetic' (séc II CE), atribuindo-o a Eratóstenes",
+      "Foi anônimo, sem autor conhecido",
+      "Pitágoras, séc VI BC"
+    ],
+    "resposta": 1,
+    "explicacao": "Eratóstenes de Cirene (276-194 BC), nascido em Cyrene (atual Líbia), estudou em Atenas, e tornou-se chefe da BIBLIOTECA DE ALEXANDRIA — o maior centro intelectual do mundo antigo. Polímata: astrônomo, geógrafo, matemático, poeta. Famoso também por CALCULAR A CIRCUNFERÊNCIA DA TERRA com precisão impressionante usando sombras de varas em Alexandria e Aswan. O paper original do crivo foi perdido — provavelmente no declínio gradual da Biblioteca de Alexandria. Conhecemos o algoritmo pelo trabalho de NICOMACHUS DE GERASA (séc I-II CE), que em sua 'Introduction to Arithmetic' atribuiu o método a Eratóstenes. O algoritmo é tão simples e poderoso que sobreviveu 2200+ anos e ainda é a forma padrão de listar primos até N em algoritmos modernos. Complexidade O(N log log N) — quase linear."
+  },
+  {
+    "id": "nt-04",
+    "enunciado": "No crivo de Eratóstenes, por que o loop interno começa em i*i em vez de 2*i?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por convenção sem razão técnica",
+      "Para economizar uma multiplicação",
+      "Porque múltiplos menores (i·2, i·3, ..., i·(i-1)) JÁ FORAM MARCADOS antes — quando processamos os primos menores que i. Começar em i² evita trabalho redundante e é uma otimização importante para a complexidade ficar O(N log log N)",
+      "Para evitar overflow de inteiros"
+    ],
+    "resposta": 2,
+    "explicacao": "Otimização crítica. Quando processamos o primo i = 7, por exemplo, os múltiplos 14 (= 2·7), 21 (= 3·7), 28 (= 4·7), 35 (= 5·7) já foram marcados como compostos quando processamos os primos 2, 3, 2 (de novo), 5. Começar em 7² = 49 evita repetir esse trabalho. Análise: ao processar primo p, marcamos apenas N/p - p números (versus N/p do approach naive). Soma sobre todos primos: complexidade é O(N log log N) — quase linear — em vez de O(N log N). CUIDADO COM OVERFLOW: i * i pode overflowar pra i > ~46000 em int 32-bit. Use (long) i * i em Java ou (long long) i * i em C++. Sem essa cautela, gera bug silencioso em problemas com N grande."
+  },
+  {
+    "id": "nt-05",
+    "enunciado": "Qual a complexidade da EXPONENCIAÇÃO MODULAR RÁPIDA (binary exponentiation), e por que importa?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(b) — linear no expoente",
+      "O(log b) — usando a REPRESENTAÇÃO BINÁRIA do expoente b. Truque essencial: a^13 = a^(1101 em binário) = a^8 · a^4 · a^1. Calcula sucessivos quadrados a, a², a⁴, a⁸, ... e multiplica apenas os correspondentes a bits 1. Para b = 10^18, são ~60 multiplicações — viável; brute force seria 10^18 — impossível",
+      "O(b log b)",
+      "O(√b)"
+    ],
+    "resposta": 1,
+    "explicacao": "O(log b). Ideia: representação binária do expoente. Exemplo: a^13 onde 13 = 1101 em binário. Então a^13 = a^8 · a^4 · a^1 (bits 1 nas posições 0, 2, 3). Algoritmo mantém duas variáveis: 'a_atual' (que faz quadrado a cada iteração, gerando a, a², a⁴, a⁸, ...) e 'resultado' (multiplica por a_atual quando o bit atual é 1). Para b = 10^18, log₂(10^18) ≈ 60, então ~60 multiplicações modulares. Versus brute force 10^18 multiplicações = impossível (10^18 segundos = 32 bilhões de anos). Esse algoritmo é PRÉ-REQUISITO de Fermat (inverso modular), CRT, hashing polinomial, RSA, e praticamente toda criptografia moderna. Atenção a overflow: se m cabe em 32 bits, a*a cabe em 64 bits. Se m até 10^18, precisa __int128 ou mulmod especial."
+  },
+  {
+    "id": "nt-06",
+    "enunciado": "Quando Pierre de Fermat enunciou o Pequeno Teorema de Fermat, e quem o provou primeiro?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Fermat enunciou em 1640 e provou no mesmo ano",
+      "Fermat enunciou em 18 de outubro de 1640 em uma carta a Frénicle de Bessy, mas NÃO PROVOU (escreveu: 'eu enviaria a demonstração se não fosse longa demais'). A primeira prova publicada foi por LEONHARD EULER, quase 100 anos depois, em 1736, no paper 'Theorematum Quorundam ad Numeros Primos Spectantium Demonstratio'",
+      "Foi descoberto e provado por Euler",
+      "Por Gauss em 1801"
+    ],
+    "resposta": 1,
+    "explicacao": "Pierre de Fermat (1607-1665) enunciou em 18 de outubro de 1640 em carta a Frénicle de Bessy (matemático francês amigo dele). A carta dizia: 'Et cette proposition est généralement vraie en toutes progressions et en tous nombres premiers; de quoi je vous envoierois la démonstration, si je n'appréhendois d'être trop long' (E esta proposição é geralmente verdadeira para todas progressões e todos primos; eu te enviaria a demonstração se não fosse muito longa). Típico Fermat — ele tinha o costume de enunciar resultados sem provar, deixando 'margens muito estreitas' para escrever a prova (vide Último Teorema de Fermat, que ficou 358 anos sem prova). A primeira prova publicada foi por LEONHARD EULER em 1736 no paper 'Theorematum Quorundam ad Numeros Primos Spectantium Demonstratio' (Comm. Acad. Petropolitanae). Quase 100 anos depois! Euler também generalizou o teorema com a função totient φ(n)."
+  },
+  {
+    "id": "nt-07",
+    "enunciado": "Como o Pequeno Teorema de Fermat permite calcular o INVERSO MODULAR rapidamente quando o módulo p é primo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Não permite — precisa sempre do Extended GCD",
+      "Fermat diz a^(p-1) ≡ 1 (mod p). Multiplicando por a^(-1): a · a^(p-2) ≡ 1 (mod p). Logo a^(-1) ≡ a^(p-2) (mod p). Calcula em O(log p) com exponenciação binária — implementação trivial em 1 linha: inverso = modExp(a, p-2, p)",
+      "Diz que o inverso é sempre 1",
+      "Funciona só para p = 2"
+    ],
+    "resposta": 1,
+    "explicacao": "Pelo Pequeno Teorema de Fermat: se p primo e a não divisível por p, então a^(p-1) ≡ 1 (mod p). Dividindo ambos os lados por a (= multiplicando por a^(-1)): a · a^(p-2) ≡ 1 (mod p), ou seja, a^(p-2) é o inverso modular de a! Implementação trivial: 'inverso = modExp(a, p-2, p)'. Complexidade O(log p) — para p ~10^9, ~30 multiplicações modulares. APLICAÇÕES EM ICPC: (1) C(n, k) mod p para coeficientes binomiais — precisa dividir, então usa inverso; (2) aritmética modular com frações; (3) hashing polinomial com módulo primo; (4) polynomial inversion. IMPORTANTE: só funciona se MÓDULO É PRIMO. Para módulo não primo, use Extended GCD (precisa gcd(a, m) = 1)."
+  },
+  {
+    "id": "nt-08",
+    "enunciado": "O que é a FUNÇÃO TOTIENT DE EULER φ(n), e qual sua propriedade essencial?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Conta divisores de n",
+      "φ(n) = quantidade de inteiros em [1, n] que são COPRIMOS com n (gcd(i, n) = 1). Propriedades: (1) se p primo, φ(p) = p-1; (2) MULTIPLICATIVA: se gcd(a,b) = 1, então φ(a·b) = φ(a)·φ(b); (3) fórmula geral: φ(n) = n · ∏(1 - 1/pi) sobre fatores primos. Definida por Euler em 1763. Base do RSA",
+      "Conta números primos menores que n",
+      "Calcula a soma dos divisores de n"
+    ],
+    "resposta": 1,
+    "explicacao": "Função totient de Euler: φ(n) = quantidade de inteiros em [1, n] coprimos com n. Exemplos: φ(1)=1, φ(7)=6 (todos os 6 menores), φ(12)=4 (apenas 1,5,7,11). PROPRIEDADES IMPORTANTES: (a) Se p primo: φ(p) = p-1 (todos os números menores são coprimos); (b) Se n = p^k: φ(p^k) = p^k - p^(k-1) = p^(k-1)(p-1); (c) MULTIPLICATIVA para coprimos: φ(a·b) = φ(a)·φ(b) quando gcd(a,b) = 1; (d) Fórmula geral via fatoração: φ(n) = n · ∏(1 - 1/p) sobre primos p que dividem n. TEOREMA DE EULER (generaliza Fermat): se gcd(a,n) = 1, então a^φ(n) ≡ 1 (mod n) — funciona para QUALQUER módulo, não só primo. Aplicações: RSA (cuja segurança depende de φ(p·q) = (p-1)(q-1)), inverso modular para módulo não primo, contar coprimos."
+  },
+  {
+    "id": "nt-09",
+    "enunciado": "Qual a origem histórica do Chinese Remainder Theorem (CRT)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Inventado em 1900 por Gauss",
+      "Apareceu primeiro no 'Sun Tzu Suan Ching' (孫子算經), tratado matemático chinês do século III-V CE, com o problema clássico: 'há objetos cuja quantidade é desconhecida — contando de 3 em 3 sobram 2, de 5 em 5 sobram 3, de 7 em 7 sobram 2. Quantos são?'. Resposta: 23. NÃO é o mesmo Sun Tzu da 'Arte da Guerra'",
+      "Foi descoberto por Euclides",
+      "Inventado em 1640 por Fermat"
+    ],
+    "resposta": 1,
+    "explicacao": "O CRT apareceu pela primeira vez no 'Sun Tzu Suan Ching' (孫子算經, 'Manual Matemático de Sun Tzu'), tratado chinês do século III-V CE. IMPORTANTE: este Sun Tzu é o MATEMÁTICO, não o autor da 'Arte da Guerra' (que viveu séc V BC, ~800 anos antes). O problema clássico: 'há certas coisas cuja quantidade é desconhecida. Contando-as de 3 em 3, sobram 2. De 5 em 5, sobram 3. De 7 em 7, sobram 2. Quantas são?'. Resposta: 23 (e também 23 + 105k para inteiros k, onde 105 = 3·5·7). Em linguagem moderna: dados módulos m_i dois-a-dois coprimos e restos a_i, existe solução única x mod M = ∏m_i para o sistema x ≡ a_i (mod m_i). Construção: x = Σ a_i · M_i · y_i mod M, onde M_i = M/m_i e y_i = M_i^(-1) mod m_i. Aplicações: problemas de calendário, RSA-CRT (otimização), reconstrução de números grandes em criptografia."
+  },
+  {
+    "id": "nt-10",
+    "enunciado": "Verdadeiro ou falso: Algoritmos de Number Theory antigos (Euclides, Eratóstenes, Fermat, Euler) são apenas curiosidades históricas — em produção de software moderno usamos algoritmos completamente diferentes.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 1,
+    "explicacao": "FALSO. Esses algoritmos com 2300+ anos de história são o CORE de toda criptografia moderna e ainda são usados literalmente em milhões de operações por segundo na internet: (1) EUCLIDES: usado em TODA implementação de cripto que precisa de GCD — incluindo OpenSSL, BouncyCastle, libsodium; (2) ERATÓSTENES: pré-cálculo de primos em libs de cripto, geração de primos pra RSA usa variantes; (3) FERMAT: a base do FERMAT PRIMALITY TEST (não 100% confiável mas rápido), e usado em CADA cálculo de inverso modular em campos primos (ECC, Diffie-Hellman); (4) EULER (totient): a função φ(n) é central no RSA — a chave privada usa φ(p·q) = (p-1)(q-1); (5) CRT: usado em RSA-CRT que acelera decriptação em ~4× — implementado em todo browser pra HTTPS; também usado em codificação de erros (Reed-Solomon). Cada vez que você abre uma página HTTPS, esses algoritmos rodam dezenas de vezes nos primeiros milissegundos do handshake TLS. Algoritmo com 2300 anos no centro de bilhões de conexões por segundo."
+  }
+]

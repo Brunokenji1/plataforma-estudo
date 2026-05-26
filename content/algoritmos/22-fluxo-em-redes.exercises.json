@@ -1,0 +1,122 @@
+[
+  {
+    "id": "flow-01",
+    "enunciado": "Qual a MOTIVAÇÃO HISTÓRICA original do problema de fluxo máximo?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Otimização de rotas de delivery na década de 1980",
+      "Análise da REDE FERROVIÁRIA SOVIÉTICA pela Força Aérea dos EUA durante a Guerra Fria — T. E. Harris e General F. S. Ross publicaram em 1955 um relatório CLASSIFICADO da RAND ('Fundamentals of a Method for Evaluating Rail Net Capacities') que motivou Ford-Fulkerson a formalizar o problema",
+      "Roteamento de pacotes na ARPANET (ancestral da Internet)",
+      "Otimização de rotas em jogos de tabuleiro"
+    ],
+    "resposta": 1,
+    "explicacao": "Em 1955, em plena Guerra Fria, T. E. Harris e General F. S. Ross (Ret.) da RAND Corporation publicaram um relatório CLASSIFICADO COMO SECRETO chamado 'Fundamentals of a Method for Evaluating Rail Net Capacities'. A Força Aérea dos EUA queria saber a capacidade máxima de tráfego das ferrovias soviéticas entre regiões industriais e fronteiras europeias — informação militar crítica. Eles modelaram a rede como grafo: vértices = estações, arestas = trechos com capacidade. Ford e Fulkerson, também na RAND, formalizaram o problema em dezembro de 1955 num memo interno, e publicaram o paper definitivo em 1956 'Maximal Flow Through a Network' (Canadian Journal of Mathematics 8). Motivação militar, resultado universal — hoje aparece em logística, redes, matching, segmentação de imagem."
+  },
+  {
+    "id": "flow-02",
+    "enunciado": "O que é uma ARESTA REVERSA (ou aresta residual reversa) no algoritmo Ford-Fulkerson?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Uma aresta original do grafo que vai no sentido oposto",
+      "Quando empurramos b unidades por aresta (u,v), criamos uma aresta REVERSA (v,u) com capacidade residual b — permite 'desfazer' parcialmente o fluxo, reencaminhando se necessário. Sem essa ideia, Ford-Fulkerson poderia ficar preso em fluxos sub-ótimos",
+      "Uma aresta que aponta para a fonte s",
+      "Uma aresta apenas conceitual sem uso prático"
+    ],
+    "resposta": 1,
+    "explicacao": "Quando empurramos b unidades pela aresta (u,v), duas coisas mudam no grafo residual: (1) capacidade residual de (u,v) DIMINUI em b; (2) capacidade da aresta REVERSA (v,u) AUMENTA em b. A aresta reversa permite 'cancelar' parte do fluxo anteriormente empurrado — efetivamente reencaminhando se uma escolha inicial bloqueou caminho melhor. SEM arestas reversas, escolhas erradas iniciais ficariam permanentes e o algoritmo encontraria fluxos sub-ótimos. A descoberta das arestas reversas é o INSIGHT GENIAL do Ford-Fulkerson — uma ideia aparentemente esquisita (criar arestas que não existem no grafo original) que garante otimização. Operacionalmente: capacity[u][v] -= b; capacity[v][u] += b."
+  },
+  {
+    "id": "flow-03",
+    "enunciado": "Enuncie o teorema MAX-FLOW MIN-CUT.",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O fluxo máximo é sempre menor que a soma das capacidades",
+      "Em qualquer rede, o valor do FLUXO MÁXIMO de s a t é EXATAMENTE IGUAL à CAPACIDADE DO CORTE MÍNIMO que separa s de t — dualidade perfeita, descoberta por Ford-Fulkerson em 1956. Toda execução do algoritmo encontra ambos os valores",
+      "Toda rede tem múltiplos fluxos máximos diferentes",
+      "Fluxo é sempre proporcional ao número de arestas"
+    ],
+    "resposta": 1,
+    "explicacao": "Max-flow min-cut: max{fluxo válido} = min{capacidade de corte (S,T)}, onde corte (S,T) é partição com s em S e t em T, e cap(S,T) = soma das capacidades das arestas saindo de S para T. Dualidade perfeita entre dois problemas aparentemente diferentes. Provado por Ford-Fulkerson em 1956 com colaboração de Claude Shannon (pai da teoria da informação). É um exemplo CANÔNICO de DUALIDADE EM OTIMIZAÇÃO — análogo direto à dualidade em programação linear (LP duality). Importância prática: toda execução do Ford-Fulkerson encontra AMBOS — o fluxo máximo E o corte mínimo (vértices alcançáveis de s no grafo residual final formam S). Min-cut tem aplicações próprias: gargalos de rede, segmentação de imagem, project selection."
+  },
+  {
+    "id": "flow-04",
+    "enunciado": "Qual a complexidade do Ford-Fulkerson clássico (com escolha arbitrária de caminhos aumentantes)?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(V·E) — sempre polinomial",
+      "O(E · f), onde f é o VALOR DO FLUXO MÁXIMO — pode ser GIGANTE se as capacidades forem grandes; com capacidades irracionais, pode até não terminar. Esse problema motivou Edmonds-Karp",
+      "O(V³) — sempre cúbico",
+      "O(log V) — logarítmico"
+    ],
+    "resposta": 1,
+    "explicacao": "O(E·f) onde f é o valor do fluxo máximo. Pra capacidades inteiras pequenas, é tranquilo. Mas pra capacidade gigante (ex: 10^6), pode ser 10^6 iterações × E operações = absurdo. Pior: com capacidades irracionais (números reais), pode NÃO TERMINAR — converge sem nunca atingir o ótimo. Exemplo clássico: grafo simples onde escolha ruim de primeiro caminho aumentante (gargalo de 1) faz o algoritmo iterar 2 milhões de vezes empurrando 1 unidade cada. Esse problema motivou Edmonds e Karp em 1972 a propor: 'use BFS pra escolher CAMINHOS AUMENTANTES MAIS CURTOS' — garantindo terminação em O(V·E) iterações independente das capacidades. Total: O(V·E²)."
+  },
+  {
+    "id": "flow-05",
+    "enunciado": "Quem inventou o algoritmo Edmonds-Karp, e qual sua ideia central?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Ford e Fulkerson, em 1956",
+      "Jack Edmonds e Richard M. Karp, em 1972 ('Theoretical improvements in algorithmic efficiency for network flow problems', J. ACM 19(2)) — Yefim Dinitz publicou variante similar em 1970. A ideia central é usar BFS (em vez de DFS) para encontrar caminhos aumentantes, garantindo complexidade POLINOMIAL O(V·E²) independente das capacidades",
+      "Tarjan, em 1975",
+      "Dinic, em 1990"
+    ],
+    "resposta": 1,
+    "explicacao": "Jack Edmonds e Richard M. Karp, em 1972, publicaram 'Theoretical improvements in algorithmic efficiency for network flow problems' no J. ACM 19(2), pp. 248-264 — um dos papers mais importantes em otimização combinatória. Yefim Dinitz (russo) publicou variante similar em 1970 (Soviet Math. Dokl. 11), conhecida como Dinic's algorithm. Karp ganhou Turing Award em 1985. Ideia central: usar BFS pra encontrar caminhos aumentantes — BFS encontra o caminho com MENOR número de arestas, garantindo que a distância de s a qualquer vértice no residual NUNCA DIMINUI (Lema 1 da prova). Resultado: cada aresta saturada no máximo V/2 vezes, total O(V·E) saturações, cada BFS O(E), total O(V·E²) — polinomial, INDEPENDENTE das capacidades. Prova é um exemplo canônico de análise amortizada + monotonicidade."
+  },
+  {
+    "id": "flow-06",
+    "enunciado": "Por que MATCHING BIPARTIDO pode ser resolvido com fluxo em redes?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Por coincidência matemática sem motivo profundo",
+      "Constrói-se grafo com fonte s e sumidouro t: arestas s→L (capacidade 1), arestas L→R originais (capacidade 1), arestas R→t (capacidade 1). Cada caminho s→l→r→t representa um par (l,r) do matching. O fluxo máximo é exatamente o TAMANHO DO MATCHING MÁXIMO",
+      "É uma forma menos eficiente de resolver, sem vantagem",
+      "Só funciona se o grafo for completo"
+    ],
+    "resposta": 1,
+    "explicacao": "Redução clássica e elegante. Constrói-se grafo direcionado com fonte s e sumidouro t: arestas s→l (cap 1) para cada l em L; arestas l→r (cap 1) para cada par compatível original; arestas r→t (cap 1) para cada r em R. Cada caminho aumentante s→l→r→t representa um par (l,r) escolhido — capacidade 1 nas arestas extremas garante que cada vértice aparece em no máximo um par. Fluxo máximo = tamanho do matching máximo. Com Dinic em grafos com capacidade unitária: O(E·√V), excelente performance prática. Aplicações: job matching (LinkedIn), atribuição de tarefas, alocação de recursos, transplantes de órgãos (doador-receptor), apps de relacionamento (variante mais complexa: matching estável)."
+  },
+  {
+    "id": "flow-07",
+    "enunciado": "O que diz o teorema de KÖNIG (1931) em grafos bipartidos?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Todo grafo bipartido tem matching perfeito",
+      "Em qualquer grafo BIPARTIDO, o tamanho do MATCHING MÁXIMO é igual ao tamanho do VERTEX COVER MÍNIMO — é equivalente ao max-flow min-cut em grafos bipartidos, mas foi DESCOBERTO 25 ANOS ANTES de Ford-Fulkerson (1956), por Dénes Kőnig, matemático húngaro",
+      "Grafos bipartidos têm pelo menos 3 cores",
+      "Toda árvore tem matching máximo igual à metade dos nós"
+    ],
+    "resposta": 1,
+    "explicacao": "Dénes Kőnig (1884-1944), matemático húngaro, provou em 1931 no paper 'Gráfok és mátrixok' (em húngaro, 'Grafos e Matrizes'): em qualquer grafo bipartido, |matching máximo| = |vertex cover mínimo|. Vertex cover = conjunto mínimo de vértices tal que toda aresta toca pelo menos um deles. Esse teorema é EQUIVALENTE ao max-flow min-cut especializado em grafos bipartidos — mas foi descoberto 25 anos ANTES do Ford-Fulkerson, usando teoria de grafos pura ao invés de otimização. Mostra como problemas profundos têm várias entradas matemáticas. Outro teorema relacionado: Philip Hall (1935) provou o 'Marriage Theorem' — existe matching perfeito de L em R se e só se, pra todo S ⊆ L, |N(S)| ≥ |S| (a quantidade de vizinhos de S em R é pelo menos |S|)."
+  },
+  {
+    "id": "flow-08",
+    "enunciado": "Como PROJECT SELECTION (seleção de projetos com dependências) é resolvido com fluxo em redes?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Backtracking, testando todos os subconjuntos",
+      "Programação dinâmica em O(2^N)",
+      "Reduz para MIN-CUT em grafo construído: fonte s conectada a projetos lucrativos (peso = lucro), projetos custosos conectados a sumidouro t (peso = |custo|), dependências como arestas com capacidade INFINITA. Min-cut = perda mínima; lucro ótimo = soma dos lucros - min-cut",
+      "Não pode ser resolvido eficientemente"
+    ],
+    "resposta": 2,
+    "explicacao": "Redução elegante. Constrói grafo: (1) fonte s → projetos LUCRATIVOS, aresta com capacidade = lucro do projeto; (2) projetos CUSTOSOS → sumidouro t, aresta com capacidade = |custo|; (3) dependência 'X requer Y' → aresta X→Y com capacidade INFINITA (proíbe cortar essa aresta no min-cut). Min-cut do grafo separa projetos em 'aceitos' (lado de s) e 'rejeitados' (lado de t). Custo do corte = projetos lucrativos rejeitados + projetos custosos aceitos = perda total. Min-cut = perda mínima. Lucro ótimo = soma dos lucros possíveis - min-cut. IMAGE SEGMENTATION é o mesmo problema: pixels = projetos, afinidade com foreground/background = lucro/custo. Magic Wand do Photoshop (variantes), GrabCut, e segmentação semântica clássica usam essa redução."
+  },
+  {
+    "id": "flow-09",
+    "enunciado": "Verdadeiro ou falso: O Ford-Fulkerson padrão pode NÃO TERMINAR se as capacidades das arestas forem números IRRACIONAIS.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. Pra capacidades inteiras ou racionais, Ford-Fulkerson sempre termina (pode ser lento, mas termina porque o fluxo aumenta em quantidades ≥ 1 / denominador comum a cada iteração). Pra capacidades IRRACIONAIS (números reais), existem exemplos construídos onde o algoritmo CONVERGE PARA UM VALOR MAS NUNCA ATINGE — em cada iteração aumenta o fluxo em quantidade decrescente, somando uma série infinita convergente mas não chegando ao máximo. Exemplos clássicos usam números relacionados à razão áurea (√5). Edmonds-Karp resolve isso usando BFS: como cada aresta só é saturada O(V) vezes independente das capacidades, o algoritmo termina em O(V·E) iterações sempre, gerando complexidade total O(V·E²) — POLINOMIAL e INDEPENDENTE de valores das capacidades. Essa é uma das motivações principais do paper de 1972."
+  },
+  {
+    "id": "flow-10",
+    "enunciado": "Verdadeiro ou falso: Algoritmos modernos de fluxo máximo conseguiram complexidade QUASE-LINEAR — pesquisa ativa até hoje.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. A pesquisa em algoritmos de fluxo é ATIVA desde 1956 e continua: (1) Dinic 1970 → O(V²·E) geral, O(E·√V) capacidade unitária; (2) Edmonds-Karp 1972 → O(V·E²); (3) Goldberg-Tarjan 1988 (Push-Relabel) → O(V²·√E) com heurísticas; (4) King-Rao-Tarjan 1994 → O(V·E · log_E/V·log V); (5) Orlin 2013 → O(V·E) — quase ótimo; (6) MADRY-CHEN-KYNG-LIAO-PENG-SACHDEVA 2022 → O((V+E)^{1+o(1)}), QUASE-LINEAR — prêmio de melhor paper em STOC. Esses avanços usam técnicas modernas como electrical flows, interior point methods, decomposição via L1-laplaceanos. Em produção e ICPC, Dinic continua sendo o padrão por simplicidade. Mas a fronteira teórica avançou muito — mostra que mesmo problemas 'clássicos' continuam tendo descobertas significativas."
+  }
+]

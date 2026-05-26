@@ -1,0 +1,127 @@
+[
+  {
+    "id": "dp-01",
+    "enunciado": "Quem inventou o termo 'Dynamic Programming' e por que esse nome?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, em 1968, para descrever otimização em compiladores",
+      "Richard Bellman, em 1953 na RAND Corporation, para soar técnico e neutro evitando palavras como 'pesquisa matemática' que o Secretário de Defesa Charles Wilson odiava",
+      "Edsger Dijkstra, em 1959, para descrever caminhos mais curtos",
+      "Tony Hoare, em 1962, baseado no nome 'static programming'"
+    ],
+    "resposta": 1,
+    "explicacao": "Richard Bellman inventou o termo em 1953 na RAND Corporation, em circunstâncias políticas peculiares. O Secretário de Defesa Charles Wilson tinha, nas palavras de Bellman, 'pathological fear and hatred of the word research'. Bellman trabalhava com 'multistage decision processes' mas precisava de um nome que não usasse 'pesquisa' nem 'matemática'. Escolheu 'dynamic' porque 'tem qualidade ativa e vigorosa, impossível de usar pejorativamente'. Escolheu 'programming' no sentido de PLANEJAMENTO (como em 'linear programming' ou 'TV programming'), não no sentido de escrever código (uso que só veio depois). História registrada em 'Eye of the Hurricane: An Autobiography' (Bellman, 1984)."
+  },
+  {
+    "id": "dp-02",
+    "enunciado": "Quais são as DUAS propriedades que um problema precisa ter para ser resolvido com Programação Dinâmica?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Recursão e iteração",
+      "Subproblemas sobrepostos e subestrutura ótima",
+      "Dados ordenados e índices inteiros",
+      "Lista ligada e árvore binária"
+    ],
+    "resposta": 1,
+    "explicacao": "(1) SUBPROBLEMAS SOBREPOSTOS: o mesmo subproblema aparece várias vezes durante a recursão (caso clássico: Fibonacci ingênuo recalcula fib(3) várias vezes). (2) SUBESTRUTURA ÓTIMA: a solução ótima do problema grande pode ser construída a partir de soluções ótimas de subproblemas menores. Sem sobreposição, DP não traz ganho (use divide-and-conquer simples, como Merge Sort). Sem subestrutura ótima, a recorrência não vale e DP não se aplica. Ambas as propriedades juntas são o que viabiliza DP."
+  },
+  {
+    "id": "dp-03",
+    "enunciado": "Qual a diferença entre TOP-DOWN (memoização) e BOTTOM-UP (tabulação) em DP?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Top-down é mais rápido sempre, bottom-up é só pra didática",
+      "Top-down começa pelo problema grande e desce recursivamente com cache; bottom-up começa pelos casos-base e constrói até o problema grande iterativamente",
+      "Bottom-up usa O(1) memória e top-down usa O(n)",
+      "Top-down só funciona em árvores e bottom-up em grafos"
+    ],
+    "resposta": 1,
+    "explicacao": "TOP-DOWN (memoização): você escreve a recursão natural e adiciona um cache. Antes de calcular um subproblema, checa se já está no cache. Lazy — calcula só o que precisa. Risco: stack overflow em problemas profundos. BOTTOM-UP (tabulação): começa pelos casos-base e preenche uma tabela iterativamente até chegar no problema grande. Sem recursão. Eager — calcula todos os subproblemas até o n. Geralmente mais rápido na prática (sem overhead de função). Ambos têm a MESMA complexidade assintótica. Bottom-up é o padrão em competição/produção; top-down é mais fácil de explicar."
+  },
+  {
+    "id": "dp-04",
+    "enunciado": "O problema 'Climbing Stairs' (subir uma escada de n degraus, podendo subir 1 ou 2 por vez, contar maneiras) tem qual recorrência?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "f(n) = 2 × f(n-1)",
+      "f(n) = f(n-1) + f(n-2) — é Fibonacci com índices deslocados",
+      "f(n) = n!",
+      "f(n) = f(n/2) + 1"
+    ],
+    "resposta": 1,
+    "explicacao": "f(n) = f(n-1) + f(n-2). É Fibonacci com nome diferente. A intuição: pra chegar no degrau n, você ou estava em n-1 (e subiu 1) ou em n-2 (e subiu 2). Não há outra forma. Soma das duas. Reconhecer DP é pattern matching: muitos problemas se reduzem a recorrências conhecidas. Pisar em pedras evitando inimigos? Também Fibonacci. Caminhos numa grade m×n? DP 2D. Lição: depois de ver vários problemas, você passa a reconhecer a estrutura de longe."
+  },
+  {
+    "id": "dp-05",
+    "enunciado": "Para o problema 'Coin Change' (menor número de moedas pra fazer um valor), por que GREEDY não funciona em geral?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Greedy só funciona com até 3 moedas",
+      "Para conjuntos arbitrários de moedas, sempre pegar a maior pode dar resultado pior que o ótimo. Exemplo: coins=[1,3,4], amount=6 — greedy: 4+1+1=3 moedas; ótimo: 3+3=2 moedas",
+      "Greedy não funciona com números inteiros",
+      "Greedy só funciona quando todas as moedas têm o mesmo valor"
+    ],
+    "resposta": 1,
+    "explicacao": "Greedy 'sempre pega a maior moeda possível' funciona para conjuntos especiais (como moedas convencionais 1, 5, 10, 25 — onde temos 'matroide'), MAS NÃO para conjuntos arbitrários. Exemplo clássico: coins=[1,3,4], amount=6. Greedy pega 4, sobra 2, então 1+1 — total de 3 moedas. Mas o ótimo é 3+3 = 2 moedas. DP testa todas as últimas moedas possíveis e pega o mínimo, garantindo otimalidade. Lição mais ampla: greedy quando funciona é mais rápido que DP, mas precisa de prova de corretude pra ter certeza. Quando em dúvida, DP."
+  },
+  {
+    "id": "dp-06",
+    "enunciado": "Qual a complexidade do algoritmo de Knapsack 0/1 com DP?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "O(n) — linear no número de itens",
+      "O(n × W) — pseudo-polinomial (depende do VALOR numérico da capacidade)",
+      "O(n²)",
+      "O(2^n) — exponencial, não há jeito melhor"
+    ],
+    "resposta": 1,
+    "explicacao": "O(n × W), onde n é número de itens e W é a capacidade da mochila. Mas atenção ao detalhe: a complexidade depende de W (o VALOR NUMÉRICO da capacidade), não do tamanho dos dados de entrada (que seria log W bits). Isso se chama PSEUDO-POLINOMIAL. Pra W pequeno (digamos, até 10⁶), DP é eficiente. Pra W muito grande (digamos, 10⁹), DP não dá conta — o problema é NP-difícil em sua versão geral. Esse detalhe sutil é importante em teoria da complexidade e aparece em entrevistas de big tech."
+  },
+  {
+    "id": "dp-07",
+    "enunciado": "O que é a otimização 'rolling array' em DP?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Usar um array circular de tamanho fixo",
+      "Reduzir a memória quando a recorrência só depende de poucos estados anteriores — em Fibonacci, dp[i] só precisa de dp[i-1] e dp[i-2], então 2 variáveis bastam (O(1) memória em vez de O(n))",
+      "Embaralhar o array antes de processar",
+      "Dividir o array em pedaços e processar cada um separadamente"
+    ],
+    "resposta": 1,
+    "explicacao": "Rolling array reduz memória quando a recorrência só consulta os k últimos estados (k pequeno e fixo). Em Fibonacci, dp[i] só precisa de dp[i-1] e dp[i-2] — então 2 variáveis (anterior, atual) bastam, eliminando o array inteiro. Em DP 2D, frequentemente dá pra manter apenas a linha atual + linha anterior, reduzindo de O(n²) pra O(n). Em problemas de ICPC com matrizes 10³ × 10³ ou maiores, essa otimização pode ser a diferença entre passar e dar Memory Limit Exceeded."
+  },
+  {
+    "id": "dp-08",
+    "enunciado": "Qual a recorrência do LCS (Longest Common Subsequence) entre duas strings s1 e s2?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "dp[i][j] = dp[i-1][j-1] + 1 sempre",
+      "dp[i][j] = dp[i-1][j-1] + 1 se s1[i-1] == s2[j-1], senão max(dp[i-1][j], dp[i][j-1])",
+      "dp[i][j] = max(s1[i], s2[j])",
+      "dp[i][j] = dp[i-1][j] + dp[i][j-1]"
+    ],
+    "resposta": 1,
+    "explicacao": "dp[i][j] = comprimento da LCS dos prefixos s1[0..i] e s2[0..j]. Se os caracteres atuais batem (s1[i-1] == s2[j-1]), eles contribuem +1 ao LCS calculado sem eles: dp[i-1][j-1] + 1. Se não batem, pula um dos dois (o que der maior): max(dp[i-1][j], dp[i][j-1]). Complexidade O(n×m). LCS está por trás do comando `diff` do Unix, comparação de versões de código (Git), análise de DNA, e detecção de plágio. É um dos algoritmos de DP mais aplicados em produção."
+  },
+  {
+    "id": "dp-09",
+    "enunciado": "Quem formalizou o conceito de Edit Distance (também chamada Levenshtein Distance) e quando?",
+    "tipo": "multipla-escolha",
+    "opcoes": [
+      "Donald Knuth, 1968, em The Art of Computer Programming",
+      "Vladimir Iosifovich Levenshtein, 1965, originalmente para teoria de códigos (correção de erros em transmissão)",
+      "Edsger Dijkstra, 1959, junto com o algoritmo de caminho mais curto",
+      "Robert Tarjan, 1972, junto com componentes fortemente conexos"
+    ],
+    "resposta": 1,
+    "explicacao": "Vladimir Iosifovich Levenshtein, matemático soviético, em 1965 no paper 'Двоичные коды с исправлением выпадений, вставок и замещений символов' (Códigos binários capazes de corrigir deleções, inserções e reversões) na Doklady Akademii Nauk SSSR — traduzido pro inglês em 1966 como 'Binary codes capable of correcting deletions, insertions, and reversals' na Soviet Physics Doklady. A motivação original era TEORIA DE CÓDIGOS (correção de erros em transmissão), não strings em geral. O algoritmo DP eficiente foi formalizado depois por Wagner e Fischer em 1974 no JACM. Curiosidade: o conceito foi redescoberto várias vezes — Damerau (1964), Vintsyuk (1968), Ulam (1972). Aplicações: autocorretor, spell-checker, diff, BLAST (bioinformática), 'did you mean' em buscas."
+  },
+  {
+    "id": "dp-10",
+    "enunciado": "Verdadeiro ou falso: a equação de Bellman (de Programação Dinâmica) é a base teórica de toda a Reinforcement Learning moderna, incluindo modelos como AlphaGo e variantes usadas em treinamento de LLMs.",
+    "tipo": "verdadeiro-falso",
+    "opcoes": ["Verdadeiro", "Falso"],
+    "resposta": 0,
+    "explicacao": "Verdadeiro. A equação de Bellman expressa o valor ótimo de um estado em função dos valores ótimos dos estados acessíveis — exatamente a estrutura recursiva de DP. Em Reinforcement Learning, isso vira a base de Q-learning, value iteration, policy iteration, SARSA, Deep Q-Networks. AlphaGo e AlphaZero usam aproximações da equação de Bellman via redes neurais. O treinamento RLHF (Reinforcement Learning from Human Feedback) usado em LLMs também tem DP por baixo. Aliás, é por isso que essa área é citada quando dizem 'IA moderna está construída sobre matemática dos anos 50' — não é exagero. Bellman desenvolveu a teoria em 1953, e ela voltou com tudo nos anos 2010 com Deep RL."
+  }
+]
